@@ -1,0 +1,53 @@
+! UOS NUCLEAR REACTOR THEORY
+! PROJECT 2
+! INITIALLY CREATED BY DONNY HARTANTO PhD (dhartanto@sharjah.ac.ae)
+
+%MODE
+FORWARD
+
+%CASE
+PROJECT
+1D  MODEL WITH 1 CM MESH SIZE IN X-DIRECTION
+
+%KERN
+FDM
+
+%ITER
+1200 5 1.e-5 1.e-5 25 40 20 80  ! Set fission interpolation interval every 25 outer iteration
+
+! Cross-sections card
+%XSEC
+2  5    ! Number of groups and number of materials
+!    sigtr     siga         nu*sigf    kap*sigf       chi         sigs_g1       sigs_g2
+!Assembly Type B0
+2.13423E-01  8.88418E-03  6.35051E-03  1.01608E-15  1.00000E+00  0.00000E+00  1.67468E-02
+9.10701E-01  8.05427E-02  1.25097E-01  2.00156E-14  0.00000E+00  0.00000E+00  0.00000E+00
+!Assembly Type B1
+2.15143E-01  9.22029E-03  6.17295E-03  7.88446E-14  1.00000E+00  0.00000E+00  1.73055E-02
+9.17557E-01  8.98616E-02  1.15639E-01  1.53587E-12  0.00000E+00  0.00000E+00  0.00000E+00
+!Assembly Type B2
+2.15251E-01  9.16554E-03  6.05043E-03  9.68066E-16  1.00000E+00  0.00000E+00  1.73944E-02
+9.17368E-01  8.83031E-02  1.12347E-01  1.79756E-14  0.00000E+00  0.00000E+00  0.00000E+00
+!Assembly Type B3
+2.15501E-01  9.35080E-03  6.15644E-03  9.85030E-16  1.00000E+00  0.00000E+00  1.74459E-02
+9.20283E-01  9.35288E-02  1.13602E-01  1.81763E-14  0.00000E+00  0.00000E+00  0.00000E+00
+!Radial Reflector XS
+2.37497E-01  2.00798E-03  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  2.93333E-02
+1.24667E+00  2.86063E-02  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00  0.00000E+00
+
+! Geometry card
+%GEOM
+5 2 2                !nx, ny, nz
+5*20.0               !x-direction assembly size in cm
+5*20                 !x-direction assembly divided into 20 (1 cm each)
+2*1.0                !y-direction assembly size in cm
+2*1                  !y-direction nodal is not divided
+2*1.0                !z-direction assembly  in cm
+2*1                  !z-direction nodal is not divided
+1                    !np number of planar type
+2*1                  !planar assignment (from bottom to top)
+! Planar
+ 5 4 3 2 1
+ 5 4 3 2 1
+! Boundary conditions (east), (west), (north), (south), (bottom), (top)
+2 1 2 2 2 2

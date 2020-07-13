@@ -1,0 +1,48 @@
+! IAEA2D input data
+! K-EFF REF       : 1.029585 (Muller paper, 1991)
+! MAX POWER ERROR : 0.17%
+
+! Mode card
+%MODE
+FORWARD
+
+! Case card
+%CASE
+IAEA2D
+IAEA2D Benchmark With  2x2 nodes/FA
+
+! Cross-sections card
+%XSEC
+2  4    ! Number of groups and number of materials
+! sigtr     siga     nu*sigf    sigf       chi    sigs_g1   sigs_g2
+0.222222  0.010120  0.000000  0.000000  1.000000  0.000000  0.020000
+0.833333  0.080032  0.135000  0.135000  0.000000  0.000000  0.000000  ! COMPOSITION 1
+0.222222  0.010120  0.000000  0.000000  1.000000  0.000000  0.020000
+0.833333  0.085032  0.135000  0.135000  0.000000  0.000000  0.000000  ! COMPOSITION 2
+0.222222  0.010120  0.000000  0.000000  1.000000  0.000000  0.020000
+0.833333  0.130032  0.135000  0.135000  0.000000  0.000000  0.000000  ! COMPOSITION 3
+0.166667  0.000160  0.000000  0.000000  1.000000  0.000000  0.040000
+1.111111  0.010024  0.000000  0.000000  0.000000  0.000000  0.000000  ! COMPOSITION 4
+! Geometry card
+%GEOM
+9 9 2                  !nx, ny, nz
+10.0   8*20.0          !x-direction assembly size in cm
+1  8*2                 !x-direction assembly divided into 2 (10 cm each)
+8*20.0 10.0            !y-direction assembly size in cm
+8*2  1                 !y-direction assembly divided into 2 (10 cm each)
+2*10.0                 !z-direction assembly  in cm
+2*1                    !z-direction nodal is not divided
+1                      !np number of planar type
+2*1                    !planar assignment (from bottom to top)
+! Planar_type_1 (Bottom Reflector)
+ 3  2  2  2  3  2  2  1  4
+ 2  2  2  2  2  2  2  1  4
+ 2  2  2  2  2  2  1  1  4
+ 2  2  2  2  2  2  1  4  4
+ 3  2  2  2  3  1  1  4  0
+ 2  2  2  2  1  1  4  4  0
+ 2  2  1  1  1  4  4  0  0
+ 1  1  1  4  4  4  0  0  0
+ 4  4  4  4  0  0  0  0  0
+! Boundary conditions (east), (west), (north), (south), (bottom), (top)
+1 2 2 1 2 2

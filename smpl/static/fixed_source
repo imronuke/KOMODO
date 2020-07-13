@@ -1,0 +1,90 @@
+! IAEA3D Fixed Source input data
+! NODE SIZE = 20 cm
+
+%MODE
+FIXEDSRC
+%CASE
+IAEA3D
+20 CM NODE SIZE
+%   XSEC
+2  5    ! Number of groups and number of materials
+! sigtr   siga   nu*sigf sigf   chi   sigs_g1  sigs_g2
+0.222222  0.010  0.000   0.000     1.0   0.1922   0.020
+0.833333  0.080  0.0675  0.0675    0.0   0.000    0.7533   ! MAT1 : Outer Fuel
+0.222222  0.010  0.000   0.000     1.0   0.1922   0.020
+0.833333  0.085  0.0675  0.0675    0.0   0.000    0.7483   ! MAT2 : Inner Fuel
+0.222222  0.0100 0.000   0.000     1.0   0.1922   0.020
+0.833333  0.1300 0.0675  0.0675    0.0   0.000    0.7033   ! MAT3 : Inner Fuel + Control Rod
+0.166667  0.000  0.000   0.000     0.0   0.1267   0.040
+1.111111  0.010  0.000   0.000     0.0   0.000    1.1011   ! MAT4 : Reflector
+0.166667  0.000  0.000   0.000     0.0   0.000    0.040
+1.111111  0.055  0.000   0.000     0.0   0.000    0.000    ! MAT5 : Reflector + Control Rod
+%GEOM
+9 9 19       !nx, ny, nz
+10. 8*20.    !x-direction assembly size in cm
+1  8*1       !x-direction assembly divided into 20 cm each
+8*20. 10.    !y-direction assembly size in cm
+8*1  1       !y-direction assembly divided into 20 cm each
+19*20.       !z-direction nodal  in cm
+19*1       !z-direction assembly divided into 20 cm each
+4          !np number of planar type
+1  13*2  4*3  4     !planar assignment (from bottom to top)
+! Planar_type_1 (Bottom Reflector)
+  4  4  4  4  4  4  4  4  4
+  4  4  4  4  4  4  4  4  4
+  4  4  4  4  4  4  4  4  4
+  4  4  4  4  4  4  4  4  4
+  4  4  4  4  4  4  4  4  0
+  4  4  4  4  4  4  4  4  0
+  4  4  4  4  4  4  4  0  0
+  4  4  4  4  4  4  0  0  0
+  4  4  4  4  0  0  0  0  0
+! Planar_type_2 (Fuel)
+  3  2  2  2  3  2  2  1  4
+  2  2  2  2  2  2  2  1  4
+  2  2  2  2  2  2  1  1  4
+  2  2  2  2  2  2  1  4  4
+  3  2  2  2  3  1  1  4  0
+  2  2  2  2  1  1  4  4  0
+  2  2  1  1  1  4  4  0  0
+  1  1  1  4  4  4  0  0  0
+  4  4  4  4  0  0  0  0  0
+! Planar_type_3 (Fuel+Partial Control Rods)
+  3  2  2  2  3  2  2  1  4
+  2  2  2  2  2  2  2  1  4
+  2  2  3  2  2  2  1  1  4
+  2  2  2  2  2  2  1  4  4
+  3  2  2  2  3  1  1  4  0
+  2  2  2  2  1  1  4  4  0
+  2  2  1  1  1  4  4  0  0
+  1  1  1  4  4  4  0  0  0
+  4  4  4  4  0  0  0  0  0
+! Planar_type_4 (Top reflectors)
+  5  4  4  4  5  4  4  4  4
+  4  4  4  4  4  4  4  4  4
+  4  4  5  4  4  4  4  4  4
+  4  4  4  4  4  4  4  4  4
+  5  4  4  4  5  4  4  4  0
+  4  4  4  4  4  4  4  4  0
+  4  4  4  4  4  4  4  0  0
+  4  4  4  4  4  4  0  0  0
+  4  4  4  4  0  0  0  0  0
+! Boundary conditions (east), (west), (north), (south), (bottom), (top)
+1 2 2 1 1 1
+%ESRC
+2         ! Number of source
+! Repeat this input segment according to the number of sources
+100000.       ! Source Density (n/cm3.s)
+1.0  0.0  ! Source energy spectrum
+10        ! z-position of the source
+2  9      ! x-y position of the source
+2  8
+1  8
+0  0      ! x-y position ends
+0         !  z-position ends
+200000.       ! Source Density (n/cm3.s)
+1.0  0.0  ! Source energy spectrum
+10        ! z-position of the source
+1  9      ! x-y position of the source
+0  0      ! x-y position ends
+0         !  z-position ends

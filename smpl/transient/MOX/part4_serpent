@@ -1,0 +1,141 @@
+%MODE
+RODEJECT
+
+! CASE CARD
+%CASE
+MOX_SER
+MOX TRANSIENT PROBLEM WITH XSEC FROM SERPENT
+
+! XTAB CARD
+%XTAB
+2  19    ! Number of groups and number of materials
+! XTAB files for each material
+/home/imronuke/ADPRES/smpl/xsec/SERPENT_CMM/u42.tab      1  !MAT  1 : u42u  0.15 GWD/TON
+/home/imronuke/ADPRES/smpl/xsec/SERPENT_CMM/u42.tab      2  !MAT  2 : u42u  17.5 GWD/TON
+/home/imronuke/ADPRES/smpl/xsec/SERPENT_CMM/u42.tab      4  !MAT  3 : u42u  22.5 GWD/TON
+/home/imronuke/ADPRES/smpl/xsec/SERPENT_CMM/u42.tab      5  !MAT  4 : u42u  32.5 GWD/TON
+/home/imronuke/ADPRES/smpl/xsec/SERPENT_CMM/u42.tab      6  !MAT  5 : u42u  35.0 GWD/TON
+/home/imronuke/ADPRES/smpl/xsec/SERPENT_CMM/u42.tab      7  !MAT  6 : u42u  37.5 GWD/TON
+/home/imronuke/ADPRES/smpl/xsec/SERPENT_CMM/u45.tab      1  !MAT  7 : u45u  0.15 GWD/TON
+/home/imronuke/ADPRES/smpl/xsec/SERPENT_CMM/u45.tab      2  !MAT  8 : u45u  17.5 GWD/TON
+/home/imronuke/ADPRES/smpl/xsec/SERPENT_CMM/u45.tab      3  !MAT  9 : u45u  20.5 GWD/TON
+/home/imronuke/ADPRES/smpl/xsec/SERPENT_CMM/u45.tab      5  !MAT  10: u45u  32.5 GWD/TON
+/home/imronuke/ADPRES/smpl/xsec/SERPENT_CMM/u45.tab      7  !MAT  11: u45u  37.5 GWD/TON
+/home/imronuke/ADPRES/smpl/xsec/SERPENT_CMM/m40.tab      1  !MAT  12: m40m  0.15 GWD/TON
+/home/imronuke/ADPRES/smpl/xsec/SERPENT_CMM/m40.tab      4  !MAT  13: m40m  22.5 GWD/TON
+/home/imronuke/ADPRES/smpl/xsec/SERPENT_CMM/m40.tab      7  !MAT  14: m40m  37.5 GWD/TON
+/home/imronuke/ADPRES/smpl/xsec/SERPENT_CMM/m43.tab      1  !MAT  15: m43m  0.15 GWD/TON
+/home/imronuke/ADPRES/smpl/xsec/SERPENT_CMM/m43.tab      2  !MAT  16: m43m  17.5 GWD/TON
+/home/imronuke/ADPRES/smpl/xsec/SERPENT_CMM/m43.tab      6  !MAT  17: m43m  35.0 GWD/TON
+/home/imronuke/ADPRES/smpl/xsec/SERPENT_CMM/refr.tab     1  !MAT  18: RADIAL REFLECTOR
+/home/imronuke/ADPRES/smpl/xsec/SERPENT_CMM/refa.tab     1  !MAT  19: AXIAL REFLECTOR
+1
+
+%GEOM
+17 17 22                !nx, ny, nz
+17*21.42                !x-direction assembly size in cm
+17*2                    !x-direction assembly division
+17*21.42                !y-direction assembly size in cm
+17*2                    !y-direction assembly ddivision
+21.42 20*18.288 21.42   !z-direction assembly size in cm
+22*1                    !z-direction assembly division
+2                       !np number of planar type
+2 20*1 2
+! Planar_type_1
+ 0  0   0   0  18  18  18  18  18  18  18  18  18   0   0   0   0
+ 0  0  18  18  18   9  17   8   4   8  17   9  18  18  18   0   0
+ 0 18  18  10   2  15   7  12   7  12   7  15   2  10  18  18   0
+ 0 18  10  15   7   9  16   4  16   4  16   9   7  15  10  18   0
+18 18   2   7   6   1   3   1  11   1   3   1   6   7   2  18  18
+18  9  15   9   1  14   1  13   7  13   1  14   1   9  15   9  18
+18 17   7  16   3   1   3  10   3  10   3   1   3  16   7  17  18
+18  8  12   4   1  13  10   2   1   2  10  13   1   4  12   8  18
+18  4   7  16  11   7   3   1   5   1   3   7  11  16   7   4  18
+18  8  12   4   1  13  10   2   1   2  10  13   1   4  12   8  18
+18 17   7  16   3   1   3  10   3  10   3   1   3  16   7  17  18
+18  9  15   9   1  14   1  13   7  13   1  14   1   9  15   9  18
+18 18   2   7   6   1   3   1  11   1   3   1   6   7   2  18  18
+ 0 18  10  15   7   9  16   4  16   4  16   9   7  15  10  18   0
+ 0 18  18  10   2  15   7  12   7  12   7  15   2  10  18  18   0
+ 0  0  18  18  18   9  17   8   4   8  17   9  18  18  18   0   0
+ 0  0   0   0  18  18  18  18  18  18  18  18  18   0   0   0   0
+! Planar_type_2
+0  0  0  0 19 19 19 19 19 19 19 19 19  0  0  0  0
+0  0 19 19 19 19 19 19 19 19 19 19 19 19 19  0  0
+0 19 19 19 19 19 19 19 19 19 19 19 19 19 19 19  0
+0 19 19 19 19 19 19 19 19 19 19 19 19 19 19 19  0
+19 19 19 19 19 19 19 19 19 19 19 19 19 19 19 19 19
+19 19 19 19 19 19 19 19 19 19 19 19 19 19 19 19 19
+19 19 19 19 19 19 19 19 19 19 19 19 19 19 19 19 19
+19 19 19 19 19 19 19 19 19 19 19 19 19 19 19 19 19
+19 19 19 19 19 19 19 19 19 19 19 19 19 19 19 19 19
+19 19 19 19 19 19 19 19 19 19 19 19 19 19 19 19 19
+19 19 19 19 19 19 19 19 19 19 19 19 19 19 19 19 19
+19 19 19 19 19 19 19 19 19 19 19 19 19 19 19 19 19
+19 19 19 19 19 19 19 19 19 19 19 19 19 19 19 19 19
+0 19 19 19 19 19 19 19 19 19 19 19 19 19 19 19  0
+0 19 19 19 19 19 19 19 19 19 19 19 19 19 19 19  0
+0  0 19 19 19 19 19 19 19 19 19 19 19 19 19 0   0
+0  0  0  0 19 19 19 19 19 19 19 19 19  0  0  0  0
+
+! Boundary conditions (east), (west), (north), (south), (bottom), (top)
+0 0 0 0 0 0
+
+! CONTROL CARD
+%CROD
+9    200.                   ! Number of CR banks and max number of banks
+21.42  1.8288                ! Zero step pos. (cm) and cm/step (total 200 steps)
+0. 0. 0. 0.  200. 200. 200. 200. 0.           ! CR Bank pos.
+0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+0  0  0  0  5  0  2  0  3  0  2  0  5  0  0  0  0
+0  0  0  0  0  7  0  6  0  6  0  7  0  0  0  0  0
+0  0  5  0  4  0  0  0  8  0  0  0  9  0  5  0  0
+0  0  0  7  0  0  0  0  0  0  0  0  0  7  0  0  0
+0  0  2  0  0  0  3  0  1  0  3  0  0  0  2  0  0
+0  0  0  6  0  0  0  0  0  0  0  0  0  6  0  0  0
+0  0  3  0  8  0  1  0  4  0  1  0  8  0  3  0  0
+0  0  0  6  0  0  0  0  0  0  0  0  0  6  0  0  0
+0  0  2  0  0  0  3  0  1  0  3  0  0  0  2  0  0
+0  0  0  7  0  0  0  0  0  0  0  0  0  7  0  0  0
+0  0  5  0  4  0  0  0  8  0  0  0  4  0  5  0  0
+0  0  0  0  0  7  0  6  0  6  0  7  0  0  0  0  0
+0  0  0  0  5  0  2  0  3  0  2  0  5  0  0  0  0
+0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+1
+
+! BORON CONCENTRATION
+%BCON
+1207.06  1208.2  ! Since %xtab exist, second number is dummy
+
+! THERMAL-HYDRAULIC CARD
+%THER
+0.0001                              ! Percent power in %
+3565.0e6                            ! Reactor thermal power for full geometry in Watt
+560.  82.121243523                  ! Inlet coolant temp. (Kelvin) and Fuel Assembly Mass flow rate (kg/s)
+3.951E-03  5.9E-05  5.73E-04  1.26E-2 ! Fuel meat rad., gap thickness, cladding thickness and pin pitch (m)
+264  25                              ! Number of fuel pin and guide tubes
+0.0                                  ! FRACTION OF HEAT DEPOSITED IN COOLANT
+1
+
+%EJCT
+! Final Bank Pos (steps)     Starts Move (seconds)     Speed (steps/seconds)
+     0.                       0.0                     0.0       ! Bank 1
+     0.                       0.0                     0.0       ! Bank 2
+     0.                       0.0                     0.0       ! Bank 3
+     0.                       0.0                     0.0       ! Bank 4
+     200.                     0.0                     0.0       ! Bank 5
+     200.                     0.0                     0.0       ! Bank 6
+     200.                     0.0                     0.0       ! Bank 7
+     200.                     0.0                     0.0       ! Bank 8
+     200.                     0.0                  2000.0       ! Bank 9
+1.0  0.002  1.0  0.002            ! (seconds) total time, 1st time step, when to start 2nd time step, 2nd time step
+1
+
+! Iteration control card (see manual or output file for description)
+%ITER
+1200 3 1.e-5 1.e-5 20 40 20 80
+
+! Flux extrapolation card
+%EXTR

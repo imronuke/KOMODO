@@ -1,0 +1,36 @@
+# Thanks to https://github.com/codecov. Got this script from there.
+language: c
+sudo: required
+
+before_install:
+  - sudo apt-get install gfortran
+  - pip install --user cpp-coveralls
+
+script:
+  - cd src
+  - gfortran -O4 -fprofile-arcs -ftest-coverage -c mod_data.f90
+  - gfortran -O4 -fprofile-arcs -ftest-coverage -c mod_io.f90
+  - gfortran -O4 -fprofile-arcs -ftest-coverage -c mod_xsec.f90
+  - gfortran -O4 -fprofile-arcs -ftest-coverage -c mod_nodal.f90
+  - gfortran -O4 -fprofile-arcs -ftest-coverage -c mod_cmfd.f90
+  - gfortran -O4 -fprofile-arcs -ftest-coverage -c mod_th.f90
+  - gfortran -O4 -fprofile-arcs -ftest-coverage -c mod_trans.f90
+  - gfortran -O4 -fprofile-arcs -ftest-coverage -c mod_control.f90
+  - gfortran -O4 -fprofile-arcs -ftest-coverage -c ADPRES.f90
+  - gfortran -O4 -fprofile-arcs -ftest-coverage *.o -o adpres
+  - ./adpres /home/travis/build/imronuke/ADPRES/smpl/static/IAEA3Ds
+  - ./adpres /home/travis/build/imronuke/ADPRES/smpl/static/FDM
+  - ./adpres /home/travis/build/imronuke/ADPRES/smpl/static/PNM
+  - ./adpres /home/travis/build/imronuke/ADPRES/smpl/static/DVP
+  - ./adpres /home/travis/build/imronuke/ADPRES/smpl/static/CBCsearch
+  - ./adpres /home/travis/build/imronuke/ADPRES/smpl/static/adjoint
+  - ./adpres /home/travis/build/imronuke/ADPRES/smpl/static/fixed_source
+  - ./adpres /home/travis/build/imronuke/ADPRES/smpl/static/MOX/part3_helios
+  - ./adpres /home/travis/build/imronuke/ADPRES/smpl/static/NEACRP/A1
+  - ./adpres /home/travis/build/imronuke/ADPRES/smpl/transient/LMW
+  - ./adpres /home/travis/build/imronuke/ADPRES/smpl/transient/MOX/part4_helios
+  - ./adpres /home/travis/build/imronuke/ADPRES/smpl/transient/NEACRP/A1t
+
+after_success:
+  - coveralls --exclude lib --exclude tests --gcov-options '\-lp'
+  - bash <(curl -s https://codecov.io/bash)

@@ -1,0 +1,144 @@
+! DVP BWR REACTOR PROBLEM
+! THIS PROBLEM IS TO DEMONSTRATE ADF FEATURE IN ADPRES
+!See:
+!=========
+! K.S. Smith, Assembly Homogenization Techniques for LWR Analysis.
+! Progress in Nuclear Energy, Vol. 17 No.3, pp. 303-335, 1986.
+!=========
+
+
+
+%MODE
+FORWARD
+%CASE
+DVP
+PROBLEM TEST
+%XSEC
+2  4    ! Number of groups and number of materials
+! sigtr    siga   nu*sigf    sigf   chi sigs_g1 sigs_g2
+! COMPOSITION 1
+0.20574  0.00654  0.00415  0.00415  1.0  0.0  0.01462
+0.68866  0.04850  0.06099  0.06099  0.0  0.0  0.00000
+! COMPOSITION 2
+0.23793  0.00944  0.00437  0.00437  1.0  0.0  0.01798
+0.85348  0.06661  0.07142  0.07142  0.0  0.0  0.00000
+! COMPOSITION 3
+0.24090  0.00696  0.00437  0.00437  1.0  0.0  0.02030
+0.88551  0.05106  0.06330  0.06330  0.0  0.0  0.00000
+! COMPOSITION 4
+0.23600  0.000038  0.00000  0.00000  1.0  0.0  0.04575
+1.36422  0.01031  0.00000  0.00000  0.0  0.0  0.00000
+%GEOM
+12 12 2        !nx, ny, nz
+12*15.313    !x-direction assembly size in cm
+12*2         !x-direction assembly divided into 20 cm each
+12*15.313    !y-direction assembly size in cm
+12*2         !y-direction assembly divided into 20 cm each
+2*15.313     !z-direction assembly size in cm
+2*1          !z-direction assembly divided into 20 cm each
+1            !np number of planar type
+1 1          !planar assignment (from bottom to top)
+! Planar_type_1
+ 4 4 4 4 4 4 4 4 0 0 0 0
+ 1 1 3 4 4 4 4 4 4 4 0 0
+ 1 3 3 1 4 4 4 4 4 4 4 0
+ 1 3 3 3 1 1 3 4 4 4 4 0
+ 1 3 3 1 1 1 3 3 4 4 4 4
+ 1 1 1 1 1 1 1 3 3 4 4 4
+ 1 1 1 1 1 1 1 3 1 4 4 4
+ 1 2 2 1 1 3 3 3 1 4 4 4
+ 1 2 2 1 1 3 3 1 3 1 4 4
+ 1 1 1 1 1 1 1 1 1 3 3 4
+ 1 1 1 1 1 1 1 1 1 3 1 4
+ 1 2 2 1 1 2 2 1 1 3 1 4
+! Boundary conditions (east), (west), (north), (south), (bottom), (top)
+0 2 0 2 2 2
+%ADF
+!g1 -> east  west  north  south
+!g2 -> east  west  north  south
+! COMPOSITION 1
+  0.9966 0.9288 0.9966 0.9288  1.0000  1.0000
+  1.1332 1.6570 1.1332 1.6570  1.0000  1.0000
+! COMPOSITION 2
+  1.0787 0.8423 1.0787 0.8423  1.0000  1.0000
+  1.6423 0.6809 1.6423 0.6809  1.0000  1.0000
+! COMPOSITION 3
+  0.9989 0.9114 0.9989 0.9114  1.0000  1.0000
+  1.1664 1.5805 1.1664 1.5805  1.0000  1.0000
+! COMPOSITION 4
+1.0000  1.0000  1.0000  1.0000  1.0000  1.0000
+1.0000  1.0000  1.0000  1.0000  1.0000  1.0000
+! ADF ROTATION DUE TO DIAGONALLY SYMMETRIC ADFs
+ 1     ! 90 degree counter clock-wise
+ 2  2  1  1  1  2
+ 2  2  3  3  1  2
+ 2  2  5  5  1  2
+ 2  2  7  7  1  2
+ 2  2  9  9  1  2
+ 2  2 11 11  1  2
+ 4  4  1  1  1  2
+ 4  4  3  3  1  2
+ 4  4  5  5  1  2
+ 4  4  7  7  1  2
+ 4  4  9  9  1  2
+ 6  6  1  1  1  2
+ 6  6  3  3  1  2
+ 6  6  5  5  1  2
+ 6  6  7  7  1  2
+ 6  6  9  9  1  2
+ 8  8  1  1  1  2
+ 8  8  3  3  1  2
+ 8  8  5  5  1  2
+ 8  8  7  7  1  2
+10 10  1  1  1  2
+10 10  3  3  1  2
+ 0  0  0  0  0  0
+ 2      ! 180 degree counter clock-wise
+ 2  2  2  2  1  2
+ 2  2  4  4  1  2
+ 2  2  6  6  1  2
+ 2  2  8  8  1  2
+ 2  2 10 10  1  2
+ 4  4  2  2  1  2
+ 4  4  4  4  1  2
+ 4  4  6  6  1  2
+ 4  4  8  8  1  2
+ 4  4 10 10  1  2
+ 6  6  2  2  1  2
+ 6  6  4  4  1  2
+ 6  6  6  6  1  2
+ 6  6  8  8  1  2
+ 8  8  2  2  1  2
+ 8  8  4  4  1  2
+ 8  8  6  6  1  2
+ 8  8  8  8  1  2
+10 10  2  2  1  2
+10 10  4  4  1  2
+ 0  0  0  0  0  0
+ 3     ! 270 degree counter clock-wise
+ 1  1  2  2  1  2
+ 1  1  4  4  1  2
+ 1  1  6  6  1  2
+ 1  1  8  8  1  2
+ 1  1 10 10  1  2
+ 3  3  2  2  1  2
+ 3  3  4  4  1  2
+ 3  3  6  6  1  2
+ 3  3  8  8  1  2
+ 3  3 10 10  1  2
+ 5  5  2  2  1  2
+ 5  5  4  4  1  2
+ 5  5  6  6  1  2
+ 5  5  8  8  1  2
+ 7  7  2  2  1  2
+ 7  7  4  4  1  2
+ 7  7  6  6  1  2
+ 7  7  8  8  1  2
+ 9  9  2  2  1  2
+ 9  9  4  4  1  2
+ 9  9  6  6  1  2
+11 11  2  2  1  2
+ 0  0  0  0  0  0
+ 0   ! ADF INPUTS END
+ ! ADF PRINT (OPTIONAL)
+ 1

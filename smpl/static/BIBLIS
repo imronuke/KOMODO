@@ -1,0 +1,58 @@
+! BIBLIS input data
+! K-EFF REF       : 1.02511
+! MAX POWER ERROR : 0.14%
+
+! Mode card
+%MODE
+FORWARD
+
+! Case card
+%CASE
+BIBLIS
+BIBLIS Benchmark With Representative of Actual Data 2x2/FA
+
+! Cross-sections card
+%XSEC
+2  8    ! Number of groups and number of materials
+! sigtr       siga     nu*sigf      sigf       chi     sigs_g1     sigs_g2
+0.2321263  0.0095042  0.0058708  0.0058708  1.0000000  0.0000000  0.0177540
+0.9170105  0.0750580  0.0960670  0.0960670  0.0000000  0.0000000  0.0000000   ! COMPOSITION 1
+0.2320293  0.0096785  0.0061908  0.0061908  1.0000000  0.0000000  0.0176210
+0.9167583  0.0784360  0.1035800  0.1035800  0.0000000  0.0000000  0.0000000   ! COMPOSITION 2
+0.2525253  0.0026562  0.0000000  0.0000000  1.0000000  0.0000000  0.0231060
+1.2025012  0.0715960  0.0000000  0.0000000  0.0000000  0.0000000  0.0000000   ! COMPOSITION 3
+0.2316584  0.0103630  0.0074527  0.0074527  1.0000000  0.0000000  0.0171010
+0.9162544  0.0914080  0.1323600  0.1323600  0.0000000  0.0000000  0.0000000   ! COMPOSITION 4
+0.2317873  0.0100030  0.0061908  0.0061908  1.0000000  0.0000000  0.0172900
+0.9095043  0.0848280  0.1035800  0.1035800  0.0000000  0.0000000  0.0000000   ! COMPOSITION 5
+0.2317229  0.0101320  0.0064285  0.0064285  1.0000000  0.0000000  0.0171920
+0.9095043  0.0873140  0.1091100  0.1091100  0.0000000  0.0000000  0.0000000   ! COMPOSITION 6
+0.2316584  0.0101650  0.0061908  0.0061908  1.0000000  0.0000000  0.0171250
+0.9060433  0.0880240  0.1035800  0.1035800  0.0000000  0.0000000  0.0000000   ! COMPOSITION 7
+0.2315941  0.0102940  0.0064285  0.0064285  1.0000000  0.0000000  0.0170270
+0.9057971  0.0905100  0.1091100  0.1091100  0.0000000  0.0000000  0.0000000   ! COMPOSITION 8
+
+
+! Geometry card
+%GEOM
+9 9 2                  !nx, ny, nz
+11.5613   8*23.1226    !x-direction assembly size in cm
+1  8*2                 !x-direction assembly divided into 2 (10 cm each)
+8*23.1226 11.5613      !y-direction assembly size in cm
+8*2  1                 !y-direction assembly divided into 2 (10 cm each)
+2*11.5613              !z-direction assembly  in cm
+2*1                    !z-direction nodal is not divided
+1                      !np number of planar type
+2*1                    !planar assignment (from bottom to top)
+! Planar_type_1 (Bottom Reflector)
+ 1  8  2  6  1  7  1  4  3
+ 8  1  8  2  8  1  1  4  3
+ 2  8  1  8  2  7  1  4  3
+ 6  2  8  2  8  1  8  4  3
+ 1  8  2  8  2  5  4  3  3
+ 7  1  7  1  5  4  4  3  0
+ 1  1  1  8  4  4  3  3  0
+ 4  4  4  4  3  3  3  0  0
+ 3  3  3  3  3  0  0  0  0
+! Boundary conditions (east), (west), (north), (south), (bottom), (top)
+1 2 2 1 2 2
