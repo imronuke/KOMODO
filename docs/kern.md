@@ -6,7 +6,7 @@ filename: kern
 
 # %KERN Card
 
-This card is used to choose other nodal kernel. By default, ADPRES uses Semi-Analytic Nodal Method.
+This card is used to choose other nodal kernel. By default, KOMODO uses Semi-Analytic Nodal Method.
 
 | `%KERN` | Variable | Description | Available options |
 | --- | --- | --- | --- |

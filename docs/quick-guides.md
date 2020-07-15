@@ -6,13 +6,13 @@ filename: quick-guides
 
 # Quick Guides
 ## Writing Input
-ADPRES input is designed to be self-explanatory. It has several input cards marked by `%`, for example: `%mode`, `%geom`, `%xsec`, and so on. Some cards are mandatory for any problems. While some cards are conditional depending on the problems at hand and some cards are optional. Comments are marked by `!`. For example, the following is the [IAEA3D input](https://github.com/imronuke/ADPRES/blob/master/smpl/static/IAEA3Ds), where you can find its specification [here](https://engineering.purdue.edu/PARCS/Code/TestSuite/CalculationMode/StandAloneMode/Eigenvalue/IAEA3DPWR).
+KOMODO input is designed to be self-explanatory. It has several input cards marked by `%`, for example: `%mode`, `%geom`, `%xsec`, and so on. Some cards are mandatory for any problems. While some cards are conditional depending on the problems at hand and some cards are optional. Comments are marked by `!`. For example, the following is the [IAEA3D input](https://github.com/imronuke/KOMODO/blob/master/smpl/static/IAEA3Ds), where you can find its specification [here](https://engineering.purdue.edu/PARCS/Code/TestSuite/CalculationMode/StandAloneMode/Eigenvalue/IAEA3DPWR).
 
 ```
 ! IAEA3D input data
 ! NODE SIZE = 10 cm
 ! PARCS K-EFF  : 1.029096
-! ADPRES K-EFF : 1.029082 (ERROR = 1.4 PCM)
+! KOMODO K-EFF : 1.029082 (ERROR = 1.4 PCM)
 
 ! Mode card
 %MODE
@@ -102,34 +102,34 @@ In the above example, there are
 2. One conditional card: `%XSEC`
 3. One optional card   : `%CASE`
 
-You find the detailed description for each card [here](https://imronuke.github.io/ADPRES/card-desc), but we will explain them briefly now
-### [%MODE Card](https://imronuke.github.io/ADPRES/mode)
-This is the mode of ADPRES calculation. Since here we want to calculate static forward calculation (eigenvalue problem) the calculation mode is `FORWARD`. The detailed description of this card is [here](https://imronuke.github.io/ADPRES/mode).
-### [%CASE Card](https://imronuke.github.io/ADPRES/case)
-This card is optional. This describes the problem at hand. The detailed description of this card is [here](https://imronuke.github.io/ADPRES/case).
-### [%XSEC Card](https://imronuke.github.io/ADPRES/xsec)
-This card is conditional, necessary only if `%XTAB` card is not present. This card tells ADPRES the cross sections data for the problem. The cross section data must be given for each group and for each material as shown in the example. The description of the cross sections data can be seen in the comments. The detailed description of this card is [here](https://imronuke.github.io/ADPRES/xsec).
-### [%GEOM Card](https://imronuke.github.io/ADPRES/geom)
-This card is describes the geometry of the problem. It quite similar to other reactor core simulator which you can easily understand if you have background on nuclear engineering. The description of the inputs given in the comments. The detailed description of this card is [here](https://imronuke.github.io/ADPRES/geom).
+You find the detailed description for each card [here](https://imronuke.github.io/KOMODO/card-desc), but we will explain them briefly now
+### [%MODE Card](https://imronuke.github.io/KOMODO/mode)
+This is the mode of KOMODO calculation. Since here we want to calculate static forward calculation (eigenvalue problem) the calculation mode is `FORWARD`. The detailed description of this card is [here](https://imronuke.github.io/KOMODO/mode).
+### [%CASE Card](https://imronuke.github.io/KOMODO/case)
+This card is optional. This describes the problem at hand. The detailed description of this card is [here](https://imronuke.github.io/KOMODO/case).
+### [%XSEC Card](https://imronuke.github.io/KOMODO/xsec)
+This card is conditional, necessary only if `%XTAB` card is not present. This card tells KOMODO the cross sections data for the problem. The cross section data must be given for each group and for each material as shown in the example. The description of the cross sections data can be seen in the comments. The detailed description of this card is [here](https://imronuke.github.io/KOMODO/xsec).
+### [%GEOM Card](https://imronuke.github.io/KOMODO/geom)
+This card is describes the geometry of the problem. It quite similar to other reactor core simulator which you can easily understand if you have background on nuclear engineering. The description of the inputs given in the comments. The detailed description of this card is [here](https://imronuke.github.io/KOMODO/geom).
 
 
 ## Running a Test
-In Linux or other Unix based OS, you can run ADPRES using command
+In Linux or other Unix based OS, you can run KOMODO using command
 
 ```
-adpres [INPUT_FILE_PATH_NAME]
+komodo [INPUT_FILE_PATH_NAME]
 ```
 
-for example, you can run [`IAEA3Ds`](https://github.com/imronuke/ADPRES/blob/master/smpl/static/IAEA3Ds) input by
+for example, you can run [`IAEA3Ds`](https://github.com/imronuke/KOMODO/blob/master/smpl/static/IAEA3Ds) input by
 
 ```
-adpres /home/imronuke/smpl/static/IAEA3Ds
+komodo /home/imronuke/smpl/static/IAEA3Ds
 ```
 
 While in Windows, for example, you can run as follow
 
 ```
-adpres C:\Users\imronuke\Downloads\ADPRES-master\smpl\static\IAEA3Ds
+komodo C:\Users\imronuke\Downloads\KOMODO-master\smpl\static\IAEA3Ds
 ```
 
 
@@ -139,7 +139,7 @@ After you run a test, you should see in the summary of the output in terminal as
 
 ```
            ###########################################################
-           #                     ADPRES 1.2                          #
+           #                     KOMODO 1.2                          #
            #        ABU DHABI POLYTECHNIC REACTOR SIMULATOR          #
            ###########################################################
 
@@ -200,9 +200,9 @@ MAX. CHANGE IN NODAL COUPLING COEF.=  3.16843E-01 AT NODE I =  6, J =  4, K = 19
     ------------------------------------------
     Total time           :    0.1565
 
-  ADPRES EXIT NORMALLY
+  KOMODO EXIT NORMALLY
   ```
 
-  If you get `ADPRES EXIT NORMALLY` in the end of the terminal output, it means you successfully run ADPRES. Since it is a forward (eigenvalue) problem, you will see the outer iterations as they evolve and you will see also the effective multiplication factor as well as CPU time breakdown. The detailed output, such as radial and axial power distribution, can be found in the same file name as input but with an `.out` extension.
+  If you get `KOMODO EXIT NORMALLY` in the end of the terminal output, it means you successfully run KOMODO. Since it is a forward (eigenvalue) problem, you will see the outer iterations as they evolve and you will see also the effective multiplication factor as well as CPU time breakdown. The detailed output, such as radial and axial power distribution, can be found in the same file name as input but with an `.out` extension.
 
-  It is always a good idea to see this output file to ensure that you had written input correctly. ADPRES echoes your input and redescribe the input to make sure that this is the problem you want to solve.  ADPRES may run well without any error but it gives you wrong results. This might happen if the input is not consistent with the problem specification.
+  It is always a good idea to see this output file to ensure that you had written input correctly. KOMODO echoes your input and re-describe the input to make sure that this is the problem you want to solve. KOMODO may run well without any error but it gives you wrong results. This might happen if the input is not consistent with the problem specification.

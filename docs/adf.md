@@ -6,7 +6,7 @@ filename: adf
 
 # %ADF Card
 
-ADF card can be incorporated into ADPRES input, if any, to make the solution more accurate.
+ADF card can be incorporated into KOMODO input, if any, to make the solution more accurate.
 
 | %ADF | Variable | Description | Remarks or examples |
 | --- | --- | --- | --- |
