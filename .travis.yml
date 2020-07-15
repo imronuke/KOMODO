@@ -16,20 +16,20 @@ script:
   - gfortran -O4 -fprofile-arcs -ftest-coverage -c mod_th.f90
   - gfortran -O4 -fprofile-arcs -ftest-coverage -c mod_trans.f90
   - gfortran -O4 -fprofile-arcs -ftest-coverage -c mod_control.f90
-  - gfortran -O4 -fprofile-arcs -ftest-coverage -c KOMODO.f90
-  - gfortran -O4 -fprofile-arcs -ftest-coverage *.o -o KOMODO
-  - ./KOMODO /home/travis/build/imronuke/KOMODO/smpl/static/IAEA3Ds
-  - ./KOMODO /home/travis/build/imronuke/KOMODO/smpl/static/FDM
-  - ./KOMODO /home/travis/build/imronuke/KOMODO/smpl/static/PNM
-  - ./KOMODO /home/travis/build/imronuke/KOMODO/smpl/static/DVP
-  - ./KOMODO /home/travis/build/imronuke/KOMODO/smpl/static/CBCsearch
-  - ./KOMODO /home/travis/build/imronuke/KOMODO/smpl/static/adjoint
-  - ./KOMODO /home/travis/build/imronuke/KOMODO/smpl/static/fixed_source
-  - ./KOMODO /home/travis/build/imronuke/KOMODO/smpl/static/MOX/part3_helios
-  - ./KOMODO /home/travis/build/imronuke/KOMODO/smpl/static/NEACRP/A1
-  - ./KOMODO /home/travis/build/imronuke/KOMODO/smpl/transient/LMW
-  - ./KOMODO /home/travis/build/imronuke/KOMODO/smpl/transient/MOX/part4_helios
-  - ./KOMODO /home/travis/build/imronuke/KOMODO/smpl/transient/NEACRP/A1t
+  - gfortran -O4 -fprofile-arcs -ftest-coverage -c komodo.f90
+  - gfortran -O4 -fprofile-arcs -ftest-coverage *.o -o komodo
+  - ./komodo /home/travis/build/imronuke/KOMODO/smpl/static/IAEA3Ds
+  - ./komodo /home/travis/build/imronuke/KOMODO/smpl/static/FDM
+  - ./komodo /home/travis/build/imronuke/KOMODO/smpl/static/PNM
+  - ./komodo /home/travis/build/imronuke/KOMODO/smpl/static/DVP
+  - ./komodo /home/travis/build/imronuke/KOMODO/smpl/static/CBCsearch
+  - ./komodo /home/travis/build/imronuke/KOMODO/smpl/static/adjoint
+  - ./komodo /home/travis/build/imronuke/KOMODO/smpl/static/fixed_source
+  - ./komodo /home/travis/build/imronuke/KOMODO/smpl/static/MOX/part3_helios
+  - ./komodo /home/travis/build/imronuke/KOMODO/smpl/static/NEACRP/A1
+  - ./komodo /home/travis/build/imronuke/KOMODO/smpl/transient/LMW
+  - ./komodo /home/travis/build/imronuke/KOMODO/smpl/transient/MOX/part4_helios
+  - ./komodo /home/travis/build/imronuke/KOMODO/smpl/transient/NEACRP/A1t
 
 after_success:
   - coveralls --exclude lib --exclude tests --gcov-options '\-lp'
