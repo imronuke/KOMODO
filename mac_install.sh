@@ -1,7 +1,7 @@
 #!/bin/bash
 # start
 
-echo "ADPRES compilation starts"
+echo "KOMODO compilation starts"
 
 set FORT=gfotran
 
@@ -22,18 +22,18 @@ echo "Compiling src/mod_trans.f90"
 gfortran -O4 -c src/mod_trans.f90
 echo "Compiling src/mod_control.f90"
 gfortran -O4 -c src/mod_control.f90
-echo "Compiling src/ADPRES.f90"
-gfortran -O4 -c src/ADPRES.f90
+echo "Compiling src/KOMODO.f90"
+gfortran -O4 -c src/KOMODO.f90
 echo "Combining all together"
-gfortran *.o -o adpres -static-libgfortran
+gfortran *.o -o komodo -static-libgfortran
 
 echo " "
-echo "Copy adpres to /usr/local/bin"
-sudo cp adpres /usr/local/bin
+echo "Copy komodo to /usr/local/bin"
+sudo cp komodo /usr/local/bin
 
 echo " "
 echo "Deleted unnecessary files"
-rm *.o *.mod 
+rm *.o *.mod
 
 echo " "
-echo "ADPRES successfully compiled"
+echo "KOMODO successfully compiled"
