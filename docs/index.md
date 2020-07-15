@@ -26,7 +26,7 @@ You may raise an issue or contact me at
 * makrus.imron[at]gmail.com
 
 # About KOMODO
-KOMODO is continuation of [APDRES](https://github.com/imronuke/ADPRES) with intention that more contributors are expected to join on this project since KOMODO name is consdired more neutral and institution-independent.
+KOMODO is continuation of [ADPRES](https://github.com/imronuke/ADPRES) with intention that more contributors are expected to join on this project since KOMODO name is consdired more neutral and institution-independent.
 
 # How to cite
 If you find this work helpful and use this work for a publication, you may cite as
