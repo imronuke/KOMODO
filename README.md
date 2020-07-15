@@ -1,5 +1,7 @@
 ![Language](https://raw.githubusercontent.com/imronuke/KOMODO/master/docs/images/fortran.png) [![Build Status](https://travis-ci.com/imronuke/KOMODO.svg?branch=master)](https://travis-ci.com/imronuke/KOMODO) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/imronuke/KOMODO/blob/master/LICENSE)  [![codecov](https://codecov.io/gh/imronuke/KOMODO/branch/master/graph/badge.svg)](https://codecov.io/gh/imronuke/KOMODO)
 
+# KOMODO
+## An Open Nuclear Reactor Simulator and Reactor Core Analysis Tool 
 
 **Documentation available at**: https://imronuke.github.io/KOMODO/
 
@@ -39,7 +41,7 @@ You may raise an issue or contact me at
 * makrus.imron[at]gmail.com
 
 # About KOMODO
-KOMODO is continuation of [APDRES](https://github.com/imronuke/ADPRES) with intention that more contributors are expected to join on this project since KOMODO name is consdired more neutral and institution independent.
+KOMODO is continuation of [APDRES](https://github.com/imronuke/ADPRES) with intention that more contributors are expected to join on this project since KOMODO name is consdired more neutral and institution-independent.
 
 # How to cite
 If you find this work helpful and use this work for a publication, you may cite as
