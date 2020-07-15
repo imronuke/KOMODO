@@ -81,9 +81,9 @@ end if
 1130 format (4X,'Total time           :', F10.4)
 
 WRITE(*,*)
-WRITE(*,*) "  ADPRES EXIT NORMALLY"
+WRITE(*,*) "  KOMODO EXIT NORMALLY"
 
-! ADPRES stop to prevent remain memory not allocated for g95 compiler
+! KOMODO stop to prevent remaining memory not allocated for g95 compiler
 stop
 
 END PROGRAM

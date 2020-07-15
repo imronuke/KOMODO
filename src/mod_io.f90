@@ -437,8 +437,8 @@ DO
 END DO
 
 2409 FORMAT(11X, '###########################################################')
-2411 FORMAT(11X, '#                     ADPRES 1.2                          #')
-2412 FORMAT(11X, '#        ABU DHABI POLYTECHNIC REACTOR SIMULATOR          #')
+2411 FORMAT(11X, '#                 KOMODO Version: 0.1                     #')
+2412 FORMAT(11X, '#       OPEN NUCLEAR SIMULATOR AND ANALYSIS TOOL          #')
 
 1001 FORMAT (2X, I4, ': ', A200)
 1002 FORMAT    (2X, '=============================INPUT DATA',A7, &
@@ -4082,7 +4082,7 @@ DO i = 1, nskip
 END DO
 
 1131 FORMAT(2X, 'ERROR: END OF FILE REACHED FOR XTAB FILE IN MATERIAL NUMBER ', I3)
-1132 FORMAT(2X, 'ADPRES IS STOPPING')
+1132 FORMAT(2X, 'KOMODO IS STOPPING')
 
 END SUBROUTINE skipRead
 

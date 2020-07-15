@@ -137,7 +137,7 @@ contains
       write(*,*)"perhaps by making nodal update less frequent."
       write(*,*)"Or increase number inner iteration per outer iteration."
       write(*,*)"If this error persists, contact me at makrus.imron@gmail.com"
-      write(*,*)"Thank you for using ADPRES"
+      write(*,*)"Thank you for using KOMODO"
       stop
     end if
 
@@ -268,7 +268,7 @@ contains
       write(*,*)"perhaps by making nodal update less frequent."
       write(*,*)"Or increase number inner iteration per outer iteration."
       write(*,*)"If this error persists, contact me at makrus.imron@gmail.com"
-      write(*,*)"Thank you for using ADPRES"
+      write(*,*)"Thank you for using KOMODO"
       stop
     end if
 

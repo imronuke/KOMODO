@@ -13,24 +13,24 @@ PWR Transient UO2/MOX Benchmark (with XS benchmark) - Part2
 %XTAB
 2  18    ! Number of groups and number of materials
 ! XTAB files for each material
-/home/imronuke/ADPRES/smpl/xsec/HELIOS/2G_XSEC_u42   1  !MAT  1 : u42u  0.15 GWD/TON
-/home/imronuke/ADPRES/smpl/xsec/HELIOS/2G_XSEC_u42   2  !MAT  2 : u42u  17.5 GWD/TON
-/home/imronuke/ADPRES/smpl/xsec/HELIOS/2G_XSEC_u42   4  !MAT  3 : u42u  22.5 GWD/TON
-/home/imronuke/ADPRES/smpl/xsec/HELIOS/2G_XSEC_u42   5  !MAT  4 : u42u  32.5 GWD/TON
-/home/imronuke/ADPRES/smpl/xsec/HELIOS/2G_XSEC_u42   6  !MAT  5 : u42u  35.0 GWD/TON
-/home/imronuke/ADPRES/smpl/xsec/HELIOS/2G_XSEC_u42   7  !MAT  6 : u42u  37.5 GWD/TON
-/home/imronuke/ADPRES/smpl/xsec/HELIOS/2G_XSEC_u45   1  !MAT  7 : u45u  0.15 GWD/TON
-/home/imronuke/ADPRES/smpl/xsec/HELIOS/2G_XSEC_u45   2  !MAT  8 : u45u  17.5 GWD/TON
-/home/imronuke/ADPRES/smpl/xsec/HELIOS/2G_XSEC_u45   3  !MAT  9 : u45u  20.5 GWD/TON
-/home/imronuke/ADPRES/smpl/xsec/HELIOS/2G_XSEC_u45   5  !MAT  10: u45u  32.5 GWD/TON
-/home/imronuke/ADPRES/smpl/xsec/HELIOS/2G_XSEC_u45   7  !MAT  11: u45u  37.5 GWD/TON
-/home/imronuke/ADPRES/smpl/xsec/HELIOS/2G_XSEC_m40   1  !MAT  12: m40m  0.15 GWD/TON
-/home/imronuke/ADPRES/smpl/xsec/HELIOS/2G_XSEC_m40   4  !MAT  13: m40m  22.5 GWD/TON
-/home/imronuke/ADPRES/smpl/xsec/HELIOS/2G_XSEC_m40   7  !MAT  14: m40m  37.5 GWD/TON
-/home/imronuke/ADPRES/smpl/xsec/HELIOS/2G_XSEC_m43   1  !MAT  15: m43m  0.15 GWD/TON
-/home/imronuke/ADPRES/smpl/xsec/HELIOS/2G_XSEC_m43   2  !MAT  16: m43m  17.5 GWD/TON
-/home/imronuke/ADPRES/smpl/xsec/HELIOS/2G_XSEC_m43   6  !MAT  17: m43m  35.0 GWD/TON
-/home/imronuke/ADPRES/smpl/xsec/HELIOS/2G_XSEC_refl  1  !MAT  18: REFLECTOR
+/home/imronuke/KOMODO/smpl/xsec/HELIOS/2G_XSEC_u42   1  !MAT  1 : u42u  0.15 GWD/TON
+/home/imronuke/KOMODO/smpl/xsec/HELIOS/2G_XSEC_u42   2  !MAT  2 : u42u  17.5 GWD/TON
+/home/imronuke/KOMODO/smpl/xsec/HELIOS/2G_XSEC_u42   4  !MAT  3 : u42u  22.5 GWD/TON
+/home/imronuke/KOMODO/smpl/xsec/HELIOS/2G_XSEC_u42   5  !MAT  4 : u42u  32.5 GWD/TON
+/home/imronuke/KOMODO/smpl/xsec/HELIOS/2G_XSEC_u42   6  !MAT  5 : u42u  35.0 GWD/TON
+/home/imronuke/KOMODO/smpl/xsec/HELIOS/2G_XSEC_u42   7  !MAT  6 : u42u  37.5 GWD/TON
+/home/imronuke/KOMODO/smpl/xsec/HELIOS/2G_XSEC_u45   1  !MAT  7 : u45u  0.15 GWD/TON
+/home/imronuke/KOMODO/smpl/xsec/HELIOS/2G_XSEC_u45   2  !MAT  8 : u45u  17.5 GWD/TON
+/home/imronuke/KOMODO/smpl/xsec/HELIOS/2G_XSEC_u45   3  !MAT  9 : u45u  20.5 GWD/TON
+/home/imronuke/KOMODO/smpl/xsec/HELIOS/2G_XSEC_u45   5  !MAT  10: u45u  32.5 GWD/TON
+/home/imronuke/KOMODO/smpl/xsec/HELIOS/2G_XSEC_u45   7  !MAT  11: u45u  37.5 GWD/TON
+/home/imronuke/KOMODO/smpl/xsec/HELIOS/2G_XSEC_m40   1  !MAT  12: m40m  0.15 GWD/TON
+/home/imronuke/KOMODO/smpl/xsec/HELIOS/2G_XSEC_m40   4  !MAT  13: m40m  22.5 GWD/TON
+/home/imronuke/KOMODO/smpl/xsec/HELIOS/2G_XSEC_m40   7  !MAT  14: m40m  37.5 GWD/TON
+/home/imronuke/KOMODO/smpl/xsec/HELIOS/2G_XSEC_m43   1  !MAT  15: m43m  0.15 GWD/TON
+/home/imronuke/KOMODO/smpl/xsec/HELIOS/2G_XSEC_m43   2  !MAT  16: m43m  17.5 GWD/TON
+/home/imronuke/KOMODO/smpl/xsec/HELIOS/2G_XSEC_m43   6  !MAT  17: m43m  35.0 GWD/TON
+/home/imronuke/KOMODO/smpl/xsec/HELIOS/2G_XSEC_refl  1  !MAT  18: REFLECTOR
 1
 
 %GEOM

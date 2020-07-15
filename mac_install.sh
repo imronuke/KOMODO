@@ -22,8 +22,8 @@ echo "Compiling src/mod_trans.f90"
 gfortran -O4 -c src/mod_trans.f90
 echo "Compiling src/mod_control.f90"
 gfortran -O4 -c src/mod_control.f90
-echo "Compiling src/KOMODO.f90"
-gfortran -O4 -c src/KOMODO.f90
+echo "Compiling src/komodo.f90"
+gfortran -O4 -c src/komodo.f90
 echo "Combining all together"
 gfortran *.o -o komodo -static-libgfortran
 

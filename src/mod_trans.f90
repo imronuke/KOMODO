@@ -512,7 +512,7 @@ do i = 1, 10
    CALL outer(0)
    if (ABS(Ke-1._DP) < 1.e-5_DP) EXIT
 end do
-if (i == 10) STOP "K-EFF STILL NOT EQUAL TO ONE. ADPRES IS STOPPING"
+if (i == 10) STOP "K-EFF STILL NOT EQUAL TO ONE. KOMODO IS STOPPING"
 
 
 end subroutine KNE1
