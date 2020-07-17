@@ -883,8 +883,8 @@ end subroutine print_keff
 
   ! Purpose:
      ! To update get external source for transient fixed source problem
-     ! This external source is the terms that do not appear in ..
-     ! static calculation
+     ! This external source contain the terms that appear in the kinetic 
+     ! calculations but do not appear in static calculation
 
   implicit none
 

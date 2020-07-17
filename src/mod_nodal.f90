@@ -9,7 +9,7 @@ module nodal
   real(dp), dimension(:), allocatable    :: An, Bn, En, Fn, Gn, Hn
   real(dp), dimension(:), allocatable    :: Ap, Bp, Ep, Fp, Gp, Hp
   real(dp), dimension(:), allocatable    :: Lm2                ! Second order source
-  real(dp), dimension(:,:), allocatable :: S1, S2, S3          ! zeroth order source in x, y, and z directions
+  real(dp), dimension(:,:), allocatable :: Sx, Sy, Sz          ! zeroth order source in x, y, and z directions
 
 contains
 
@@ -18,7 +18,6 @@ contains
   subroutine nodal_update(cal_mode)
 
     !Purpose: to calculate flux expansion coefficients using SANM
-
 
     use sdata, only: ng, xyz, ystag, xstag, nyy, nzz, nxx, &
     a1n, a2n, a3n, a4n, a1p, a2p, a3p, a4p, ndmax, &
@@ -152,7 +151,6 @@ contains
 
     !Purpose: to calculate flux expansion coefficients using PNM
 
-
     use sdata, only: ng, xyz, ystag, xstag, nyy, nzz, nxx, &
     a1n, a2n, a3n, a4n, a1p, a2p, a3p, a4p, ndmax, &
     Ln1, Lp1, xeast, xwest, ysouth, ynorth, zbott, ztop
@@ -283,7 +281,6 @@ contains
 
     !Purpose: to update nodal coupling coefficients
 
-
     use sdata, only: ng, ix, iy, iz, D, xdel, ydel, zdel, nod, f0, &
     ndmax, im, jm, km
 
@@ -376,7 +373,6 @@ contains
 
     !Purpose: to calculate flux expansion coefficients
 
-
     use sdata, only: ng, a1p, a2p, a3p, a4p, Lp1
 
     implicit none
@@ -411,7 +407,6 @@ contains
 
     !Purpose: to calculate flux expansion coefficients
 
-
     use sdata, only: ng, a1n, a2n, a3n, a4n, a2p, a4p, Ln1
 
     implicit none
@@ -442,7 +437,6 @@ contains
   subroutine get_coefs(u, n, p)
 
     !Purpose: to calculate flux expansion coefficients
-
 
     use sdata, only: ng, a1n, a2n, a3n, a4n, a2p, a4p, Ln1
 
@@ -483,7 +477,6 @@ contains
   subroutine get_a1matvec_first(bc, u, p, a2p, a4p, A, b)
 
     !Purpose: To get matrix vector to calculate a1 for most left node
-
 
     use sdata, only: ng, xdel, ydel, zdel, ix, iy, iz, f0, D, Lp1, dc
 
@@ -557,7 +550,6 @@ contains
 
     !Purpose: To get matrix vector to calculate a1 for most right node
 
-
     use sdata, only: ng, xdel, ydel, zdel, ix, iy, iz, f0, D, Lp1, Ln1, dc
 
     implicit none
@@ -583,7 +575,6 @@ contains
       dn = zdel(iz(n))
       sf = 5
     end if
-
 
     do g = 1, ng
       Ln1(g) = Lp1(g)
@@ -631,7 +622,6 @@ contains
 
     !Purpose: To setup 2Gx2G matrix and 2G vector to get a1 expansion coefficients
 
-
     use sdata, only: ng, xdel, ydel, zdel, ix, iy, iz, D, f0, Ln1, Lp1, dc
 
     implicit none
@@ -676,9 +666,7 @@ contains
       end do
       b(g) = Pn(g) * (3._dp*a2n(g) + Gn(g)*a4n(g) + Fn(g)*Ln1(g)) &
            + Pp(g) * (3._dp*a2p(g) + Gp(g)*a4p(g) - Fp(g)*Lp1(g))
-      ! write(*,*) Fn(g)*Ln1(g)
     end do
-    ! stop
     do g = 1, ng
       do h = 1, ng
         if (h == g) then
@@ -703,11 +691,10 @@ contains
 
     !Purpose: To  get a3 expansion coefficients
 
-
     use sdata, only: ng
     implicit none
 
-    integer, intent(in)                 :: cp       ! to indicate left or right node
+    integer, intent(in)                 :: cp       ! to indicate whether it is first node (=2 means first node)
     real(dp), dimension(:), intent(in)  :: a1       ! a1 expansion coefficients
     real(dp), dimension(:), intent(in)  :: Lmn1     ! First transverse leakage moments
     real(dp), dimension(ng)             :: a3       ! a3 expansion coefficients
@@ -721,7 +708,7 @@ contains
       Bc = Bcn
       Ac = An
     else
-      Bc = Bcp
+      Bc = Bcp    ! Take buckling values from the left node
       Ac = Ap
     end if
 
@@ -741,9 +728,7 @@ contains
 
     !Purpose: To  get a4 expansion coefficients
 
-
     use sdata, only: ng
-
 
     implicit none
 
@@ -770,7 +755,6 @@ contains
 
     !Purpose: To setup GxG matrix and b vector to get a2 expansion coefficients
 
-
     use sdata, only: ng, D, f0, exsrc, xdel, ydel, zdel, ix, iy, iz
 
     implicit none
@@ -789,19 +773,19 @@ contains
       !update zeroth source
       if (cmode == 2) then
         if (u == 1) then
-          S = 0.25_dp * xdel(ix(n))**2 / D(n,g) * S1(n,g)
+          S = 0.25_dp * xdel(ix(n))**2 / D(n,g) * Sx(n,g)
         else if (u == 2) then
-          S = 0.25_dp * ydel(iy(n))**2 / D(n,g) * S2(n,g)
+          S = 0.25_dp * ydel(iy(n))**2 / D(n,g) * Sy(n,g)
         else
-          S = 0.25_dp * zdel(iz(n))**2 / D(n,g) * S3(n,g)
+          S = 0.25_dp * zdel(iz(n))**2 / D(n,g) * Sz(n,g)
         end if
       else
         if (u == 1) then
-          S = 0.25_dp * xdel(ix(n))**2 / D(n,g) * (S1(n,g) - exsrc(n,g))
+          S = 0.25_dp * xdel(ix(n))**2 / D(n,g) * (Sx(n,g) - exsrc(n,g))
         else if (u == 2) then
-          S = 0.25_dp * ydel(iy(n))**2 / D(n,g) * (S2(n,g) - exsrc(n,g))
+          S = 0.25_dp * ydel(iy(n))**2 / D(n,g) * (Sy(n,g) - exsrc(n,g))
         else
-          S = 0.25_dp * zdel(iz(n))**2 / D(n,g) * (S3(n,g) - exsrc(n,g))
+          S = 0.25_dp * zdel(iz(n))**2 / D(n,g) * (Sz(n,g) - exsrc(n,g))
         end if
       end if
 
@@ -1020,7 +1004,7 @@ contains
   logical  :: first = .true.
 
   if (first) then
-    allocate(S1(nnod,ng), S2(nnod,ng), S3(nnod,ng))
+    allocate(Sx(nnod,ng), Sy(nnod,ng), Sz(nnod,ng))
     first = .false.
   end if
 
@@ -1029,13 +1013,13 @@ contains
       call Lxyz(n,g,L1,L2,L3)
 
       if (cmode == 2) then
-        S1(n,g) =  L2 + L3 - exsrc(n,g)
-        S2(n,g) =  L1 + L3 - exsrc(n,g)
-        S3(n,g) =  L1 + L2 - exsrc(n,g)
+        Sx(n,g) =  L2 + L3 - exsrc(n,g)
+        Sy(n,g) =  L1 + L3 - exsrc(n,g)
+        Sz(n,g) =  L1 + L2 - exsrc(n,g)
       else
-        S1(n,g) =  L2 + L3
-        S2(n,g) =  L1 + L3
-        S3(n,g) =  L1 + L2
+        Sx(n,g) =  L2 + L3
+        Sy(n,g) =  L1 + L3
+        Sz(n,g) =  L1 + L2
       end if
     end do
   end do
@@ -1077,11 +1061,11 @@ contains
         p1m = tm + 1._dp; p2m = 2._dp*tm + 1._dp
         p1p = tp + 1._dp
         hp = 2._dp * p1m * p1p* (tm + tp + 1._dp)
-        Lmom1 = (p1m * p2m * (S1(p,g) - S1(n,g))) / hp
+        Lmom1 = (p1m * p2m * (Sx(p,g) - Sx(n,g))) / hp
       else
         tp = xdel(i+1)/xdel(i)
         p1p = tp + 1._dp
-        Lmom1 = (S1(p,g) - S1(n,g)) / p1p
+        Lmom1 = (Sx(p,g) - Sx(n,g)) / p1p
       end if
     else if (i == ystag(j)%smax) then
       if (xeast == 2) then
@@ -1090,11 +1074,11 @@ contains
         p1m = tm + 1._dp
         p1p = tp + 1._dp; p2p = 2._dp*tp + 1._dp
         hp = 2._dp * p1m * p1p* (tm + tp + 1._dp)
-        Lmom1 = (p1p * p2p * (S1(n,g) - S1(m,g))) / hp
+        Lmom1 = (p1p * p2p * (Sx(n,g) - Sx(m,g))) / hp
       else
         tm = xdel(i-1)/xdel(i)
         p1m = tm + 1._dp
-        Lmom1 = (S1(n,g) - S1(m,g)) / p1m
+        Lmom1 = (Sx(n,g) - Sx(m,g)) / p1m
       end if
     else
       tm = xdel(i-1)/xdel(i)
@@ -1102,8 +1086,8 @@ contains
       p1m = tm + 1._dp; p2m = 2._dp*tm + 1._dp
       p1p = tp + 1._dp; p2p = 2._dp*tp + 1._dp
       hp = 2._dp * p1m * p1p* (tm + tp + 1._dp)
-      Lmom1 = (p1m * p2m * (S1(p,g) - S1(n,g)) &
-            +  p1p * p2p * (S1(n,g) - S1(m,g))) / hp
+      Lmom1 = (p1m * p2m * (Sx(p,g) - Sx(n,g)) &
+            +  p1p * p2p * (Sx(n,g) - Sx(m,g))) / hp
     end if
 
     Lmom1 = 0.25_dp * xdel(i)**2 / D(n,g) * Lmom1
@@ -1120,11 +1104,11 @@ contains
         p1m = tm + 1._dp; p2m = 2._dp*tm + 1._dp
         p1p = tp + 1._dp
         hp = 2._dp * p1m * p1p* (tm + tp + 1._dp)
-        Lmom1 = (p1m * p2m * (S2(p,g) - S2(n,g))) / hp
+        Lmom1 = (p1m * p2m * (Sy(p,g) - Sy(n,g))) / hp
       else
         tp = ydel(j+1)/ydel(j)
         p1p = tp + 1._dp
-        Lmom1 = (S2(p,g) - S2(n,g)) / p1p
+        Lmom1 = (Sy(p,g) - Sy(n,g)) / p1p
       end if
     else if (j == xstag(i)%smax) then
       if (ynorth == 2) then
@@ -1133,11 +1117,11 @@ contains
         p1m = tm + 1._dp
         p1p = tp + 1._dp; p2p = 2._dp*tp + 1._dp
         hp = 2._dp * p1m * p1p* (tm + tp + 1._dp)
-        Lmom1 = (p1p * p2p * (S2(n,g) - S2(m,g))) / hp
+        Lmom1 = (p1p * p2p * (Sy(n,g) - Sy(m,g))) / hp
       else
         tm = ydel(j-1)/ydel(j)
         p1m = tm + 1._dp
-        Lmom1 = (S2(n,g) - S2(m,g)) / p1m
+        Lmom1 = (Sy(n,g) - Sy(m,g)) / p1m
       end if
     else
       tm = ydel(j-1)/ydel(j)
@@ -1145,8 +1129,8 @@ contains
       p1m = tm + 1._dp; p2m = 2._dp*tm + 1._dp
       p1p = tp + 1._dp; p2p = 2._dp*tp + 1._dp
       hp = 2._dp * p1m * p1p* (tm + tp + 1._dp)
-      Lmom1 = (p1m * p2m * (S2(p,g) - S2(n,g)) &
-            +  p1p * p2p * (S2(n,g) - S2(m,g))) / hp
+      Lmom1 = (p1m * p2m * (Sy(p,g) - Sy(n,g)) &
+            +  p1p * p2p * (Sy(n,g) - Sy(m,g))) / hp
     end if
 
     Lmom1 = 0.25_dp * ydel(j)**2 / D(n,g) * Lmom1
@@ -1163,11 +1147,11 @@ contains
         p1m = tm + 1._dp; p2m = 2._dp*tm + 1._dp
         p1p = tp + 1._dp
         hp = 2._dp * p1m * p1p* (tm + tp + 1._dp)
-        Lmom1 = (p1m * p2m * (S3(p,g) - S3(n,g))) / hp
+        Lmom1 = (p1m * p2m * (Sz(p,g) - Sz(n,g))) / hp
       else
         tp = zdel(k+1)/zdel(k)
         p1p = tp + 1._dp
-        Lmom1 = (S3(p,g) - S3(n,g)) / p1p
+        Lmom1 = (Sz(p,g) - Sz(n,g)) / p1p
       end if
     else if (k == nzz) then
       if (ztop == 2) then
@@ -1176,11 +1160,11 @@ contains
         p1m = tm + 1._dp
         p1p = tp + 1._dp; p2p = 2._dp*tp + 1._dp
         hp = 2._dp * p1m * p1p* (tm + tp + 1._dp)
-        Lmom1 = (p1p * p2p * (S3(n,g) - S3(m,g))) / hp
+        Lmom1 = (p1p * p2p * (Sz(n,g) - Sz(m,g))) / hp
       else
         tm = zdel(k-1)/zdel(k)
         p1m = tm + 1._dp
-        Lmom1 = (S3(n,g) - S3(m,g)) / p1m
+        Lmom1 = (Sz(n,g) - Sz(m,g)) / p1m
       end if
     else
       tm = zdel(k-1)/zdel(k)
@@ -1188,8 +1172,8 @@ contains
       p1m = tm + 1._dp; p2m = 2._dp*tm + 1._dp
       p1p = tp + 1._dp; p2p = 2._dp*tp + 1._dp
       hp = 2._dp * p1m * p1p* (tm + tp + 1._dp)
-      Lmom1 = (p1m * p2m * (S3(p,g) - S3(n,g)) &
-            +  p1p * p2p * (S3(n,g) - S3(m,g))) / hp
+      Lmom1 = (p1m * p2m * (Sz(p,g) - Sz(n,g)) &
+            +  p1p * p2p * (Sz(n,g) - Sz(m,g))) / hp
     end if
 
     Lmom1 = 0.25_dp * zdel(k)**2 / D(n,g) * Lmom1
@@ -1233,7 +1217,7 @@ contains
         p1m = tm + 1._dp
         p1p = tp + 1._dp
         hp = 2._dp * p1m * p1p* (tm + tp + 1._dp)
-        Lmom2 = (p1m * (S1(p,g) - S1(n,g))) / hp
+        Lmom2 = (p1m * (Sx(p,g) - Sx(n,g))) / hp
       else
         Lmom2 = 0._dp
       end if
@@ -1244,7 +1228,7 @@ contains
         p1m = tm + 1._dp
         p1p = tp + 1._dp
         hp = 2._dp * p1m * p1p* (tm + tp + 1._dp)
-        Lmom2 = (p1p * (S1(m,g) - S1(n,g))) / hp
+        Lmom2 = (p1p * (Sx(m,g) - Sx(n,g))) / hp
       else
         Lmom2 = 0._dp
       end if
@@ -1254,7 +1238,7 @@ contains
       p1m = tm + 1._dp
       p1p = tp + 1._dp
       hp = 2._dp * p1m * p1p* (tm + tp + 1._dp)
-      Lmom2 = (p1m * (S1(p,g) - S1(n,g)) +  p1p * (S1(m,g) - S1(n,g))) / hp
+      Lmom2 = (p1m * (Sx(p,g) - Sx(n,g)) +  p1p * (Sx(m,g) - Sx(n,g))) / hp
     end if
 
     Lmom2 = 0.25_dp * xdel(i)**2 / D(n,g) * Lmom2
@@ -1271,7 +1255,7 @@ contains
         p1m = tm + 1._dp
         p1p = tp + 1._dp
         hp = 2._dp * p1m * p1p* (tm + tp + 1._dp)
-        Lmom2 = (p1m * (S2(p,g) - S2(n,g))) / hp
+        Lmom2 = (p1m * (Sy(p,g) - Sy(n,g))) / hp
       else
         Lmom2 = 0._dp
       end if
@@ -1282,7 +1266,7 @@ contains
         p1m = tm + 1._dp
         p1p = tp + 1._dp
         hp = 2._dp * p1m * p1p* (tm + tp + 1._dp)
-        Lmom2 = (p1p * (S2(m,g) - S2(n,g))) / hp
+        Lmom2 = (p1p * (Sy(m,g) - Sy(n,g))) / hp
       else
         Lmom2 = 0._dp
       end if
@@ -1292,7 +1276,7 @@ contains
       p1m = tm + 1._dp
       p1p = tp + 1._dp
       hp = 2._dp * p1m * p1p* (tm + tp + 1._dp)
-      Lmom2 = (p1m * (S2(p,g) - S2(n,g)) +  p1p * (S2(m,g) - S2(n,g))) / hp
+      Lmom2 = (p1m * (Sy(p,g) - Sy(n,g)) +  p1p * (Sy(m,g) - Sy(n,g))) / hp
     end if
 
     Lmom2 = 0.25_dp * ydel(j)**2 / D(n,g) * Lmom2
@@ -1309,7 +1293,7 @@ contains
         p1m = tm + 1._dp
         p1p = tp + 1._dp
         hp = 2._dp * p1m * p1p* (tm + tp + 1._dp)
-        Lmom2 = (p1m * (S3(p,g) - S3(n,g))) / hp
+        Lmom2 = (p1m * (Sz(p,g) - Sz(n,g))) / hp
       else
         Lmom2 = 0._dp
       end if
@@ -1320,7 +1304,7 @@ contains
         p1m = tm + 1._dp
         p1p = tp + 1._dp
         hp = 2._dp * p1m * p1p* (tm + tp + 1._dp)
-        Lmom2 = (p1p * (S3(m,g) - S3(n,g))) / hp
+        Lmom2 = (p1p * (Sz(m,g) - Sz(n,g))) / hp
       else
         Lmom2 = 0._dp
       end if
@@ -1330,7 +1314,7 @@ contains
       p1m = tm + 1._dp
       p1p = tp + 1._dp
       hp = 2._dp * p1m * p1p* (tm + tp + 1._dp)
-      Lmom2 = (p1m * (S3(p,g) - S3(n,g)) +  p1p * (S3(m,g) - S3(n,g))) / hp
+      Lmom2 = (p1m * (Sz(p,g) - Sz(n,g)) +  p1p * (Sz(m,g) - Sz(n,g))) / hp
     end if
 
     Lmom2 = 0.25_dp * zdel(k)**2 / D(n,g) * Lmom2
@@ -1344,7 +1328,7 @@ contains
 
   function get_B(u,n) result (B)
 
-    !Purpose: To  Buckling for node n and direction u
+    !Purpose: To calculate Buckling for node n and direction u
 
 
     use sdata, only: ng, xdel, ydel, zdel, ix, iy, iz, Ke, &
@@ -1412,7 +1396,7 @@ contains
 
   ! Purpose:
      ! To calaculate A,B,E,F,G,H paramters used to calculate matrix elements for
-     ! nodal update
+     ! semi-analytic nodal update
 
   implicit none
 
