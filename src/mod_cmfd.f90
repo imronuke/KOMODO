@@ -726,7 +726,7 @@ end subroutine print_keff
   real(dp), dimension(nnod) :: errn, erro            ! current and past error vectors
   logical  :: first = .true.
   real(dp) :: st, fn
-  logical  :: lnupd
+  logical  :: lnupd = .true.
 
   st = get_time()
 
@@ -883,7 +883,7 @@ end subroutine print_keff
 
   ! Purpose:
      ! To update get external source for transient fixed source problem
-     ! This external source contain the terms that appear in the kinetic 
+     ! This external source contain the terms that appear in the kinetic
      ! calculations but do not appear in static calculation
 
   implicit none
