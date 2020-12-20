@@ -49,7 +49,7 @@ DO l = 1, mx_iter
     END IF
 
     ! Perform outer inner iteration
-    CALL outer_th(nth)
+    CALL outer_th()
 
     !Get start th_time
     st = get_time()

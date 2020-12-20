@@ -700,7 +700,7 @@ end subroutine print_keff
 
   !****************************************************************************!
 
-  subroutine outer_th(maxn)
+  subroutine outer_th()
 
   !
   ! Purpose:
@@ -713,8 +713,6 @@ end subroutine print_keff
   USE nodal, ONLY: nodal_update
 
   implicit none
-
-  integer, intent(in) :: maxn                        ! Max. number of outer iteration
 
   real(dp)                     :: Keo                !Old Multiplication factor (Keff)
   real(dp), dimension(nnod)    :: fs0c               !old fission source
@@ -753,7 +751,7 @@ end subroutine print_keff
   if (biter == 0) nupd = int(nth/2)
 
   !Start outer iteration
-  do p=1, maxn
+  do p=1, nth
     st = get_time()
     fc   = f         ! Save old integrated fission source
     fs0c = fs0       ! Save old fission source
