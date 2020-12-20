@@ -14,9 +14,9 @@ contains
   !    To update XS for given TH paramaters and rod position
   !
 
-  use io, only: bbcon, bftem, bmtem, bcden, bcrod, bcbcs
-  use sdata, only: get_time, xs_time
-
+  USE sdata, ONLY : nnod, mat, sigtr, siga, nuf, sigf, sigs, dc, &
+  get_time, xs_time
+  use io, only: bbcon, bftem, bmtem, bcden, bcrod, bcbcs, bcrod, bxtab
 
   IMPLICIT NONE
 
@@ -26,17 +26,28 @@ contains
   REAL(DP), DIMENSION(:), INTENT(IN) :: xcden  ! Provided coolant density
   REAL(DP), DIMENSION(:), INTENT(IN) :: xbpos  ! Provided control rod bank position
 
+  integer :: n
+
   REAL(DP) :: st, fn
 
   st = get_time()
 
-  CALL base_updt()
-  IF (bbcon == 1 .OR. bcbcs == 1) CALL bcon_updt(xbcon)
-  IF (bftem == 1) CALL ftem_updt(xftem)
-  IF (bmtem == 1) CALL mtem_updt(xmtem)
-  IF (bcden == 1) CALL cden_updt(xcden)
-  IF (bcrod == 1) CALL crod_updt(xbpos)
-  CALL Dsigr_updt()
+  if (bxtab == 0) then
+    CALL base_updt()
+    IF (bbcon == 1 .OR. bcbcs == 1) CALL bcon_updt(xbcon)
+    IF (bftem == 1) CALL ftem_updt(xftem)
+    IF (bmtem == 1) CALL mtem_updt(xmtem)
+    IF (bcden == 1) CALL cden_updt(xcden)
+    IF (bcrod == 1) CALL crod_updt(xbpos)
+    CALL Dsigr_updt()
+  else
+    DO n = 1, nnod
+      CALL brInterp(0, mat(n), xcden(n),  xbcon, xftem(n), xmtem(n), sigtr(n,:), &
+      siga(n,:), nuf(n,:), sigf(n,:), sigs(n,:,:), dc(n,:,:))
+    END DO
+    IF (bcrod == 1) CALL crod_tab_updt(xbpos)
+    CALL Dsigr_updt()
+  end if
 
   call check_xs()
 
@@ -44,46 +55,6 @@ contains
   xs_time = xs_time + (fn-st)
 
   END SUBROUTINE XS_updt
-
-  !******************************************************************************!
-
-  SUBROUTINE XStab_updt (xbcon, xftem, xmtem, xcden, xbpos)
-  !
-  ! Purpose:
-  !    To update XS for given TH paramaters and rod position (when xtab file exist)
-  !
-
-  USE sdata, ONLY : nnod, mat, sigtr, siga, nuf, sigf, sigs, dc
-  use io,    only : bcrod
-  use sdata, only: get_time, xs_time
-
-  IMPLICIT NONE
-
-  REAL(DP), INTENT(IN) :: xbcon  ! Provided Boron Concentration
-  REAL(DP), DIMENSION(:), INTENT(IN) :: xftem  ! Provided fuel temperature
-  REAL(DP), DIMENSION(:), INTENT(IN) :: xmtem  ! Provided moderator temperature
-  REAL(DP), DIMENSION(:), INTENT(IN) :: xcden  ! Provided coolant density
-  REAL(DP), DIMENSION(:), INTENT(IN) :: xbpos  ! Provided control rod bank position
-
-  INTEGER :: n
-  REAL(DP) :: st, fn
-
-  st = get_time()
-
-  DO n = 1, nnod
-    CALL brInterp(0, mat(n), xcden(n),  xbcon, xftem(n), xmtem(n), sigtr(n,:), &
-    siga(n,:), nuf(n,:), sigf(n,:), sigs(n,:,:), dc(n,:,:))
-  END DO
-  IF (bcrod == 1) CALL crod_tab_updt(xbpos)
-  CALL Dsigr_updt()
-
-  call check_xs()
-
-  fn = get_time()
-  xs_time = xs_time + (fn-st)
-
-
-  END SUBROUTINE XStab_updt
 
   !******************************************************************************!
 

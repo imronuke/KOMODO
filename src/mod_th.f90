@@ -18,8 +18,8 @@ USE sdata, ONLY: nnod, ftem, mtem, cden, bcon, bpos, npow, pow, ppow,  &
                  zdel, node_nf, ix, iy, iz, th_err, node_nf, ix, iy, iz, &
                  th_niter, nth, fer, ferc, ser, serc, get_time, th_time
 USE cmfd, ONLY: outer_th, PowDis
-USE io, ONLY: bxtab, ounit
-USE xsec, ONLY: XS_updt, XStab_updt
+USE io, ONLY: ounit
+USE xsec, ONLY: XS_updt
 
 IMPLICIT NONE
 
@@ -41,12 +41,7 @@ DO l = 1, mx_iter
     ! Save old fuel temp
     otem = ftem
 
-    ! Update XS
-    IF (bxtab == 1) THEN
-      CALL XStab_updt(bcon, ftem, mtem, cden, bpos)
-    ELSE
-      CALL XS_updt(bcon, ftem, mtem, cden, bpos)
-    END IF
+    CALL XS_updt(bcon, ftem, mtem, cden, bpos)
 
     ! Perform outer inner iteration
     CALL outer_th()

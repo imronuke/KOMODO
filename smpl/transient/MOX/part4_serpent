@@ -130,7 +130,7 @@ MOX TRANSIENT PROBLEM WITH XSEC FROM SERPENT
      200.                     0.0                     0.0       ! Bank 7
      200.                     0.0                     0.0       ! Bank 8
      200.                     0.0                  2000.0       ! Bank 9
-1.0  0.002  1.0  0.002            ! (seconds) total time, 1st time step, when to start 2nd time step, 2nd time step
+0.02  0.002  0.02  0.002            ! (seconds) total time, 1st time step, when to start 2nd time step, 2nd time step
 1
 
 ! Iteration control card (see manual or output file for description)

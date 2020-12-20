@@ -341,7 +341,7 @@ USE sdata, ONLY: ng, nnod, sigr, bcon, ftem, mtem, cden, &
                  f0, ft, fst, fs0, omeg, tranw, ix, iy, iz, pow, &
                  tfm, zdel, ppow, node_nf, m, mat, dfis, ctbeta, sth, sigrp
 USE io, ONLY: ounit, bxtab
-USE xsec, ONLY: XS_updt, XStab_updt
+USE xsec, ONLY: XS_updt
 USE cmfd, ONLY: outer_tr, outer, powdis
 use th, only : th_trans, par_ave, par_max
 
@@ -388,11 +388,7 @@ do n = 1, nb
  end do
 
  ! Calculate xsec after pertubation
- IF (bxtab == 0) THEN
-   CALL XS_updt(bcon, ftem, mtem, cden, bpos)
- ELSE
-   CALL XStab_updt(bcon, ftem, mtem, cden, bpos)
- END IF
+ CALL XS_updt(bcon, ftem, mtem, cden, bpos)
 
  ! Modify removal xsec
   sigrp = sigr    ! Save sigr to sigrp
