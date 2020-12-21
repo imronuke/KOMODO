@@ -1302,7 +1302,7 @@ end subroutine print_keff
   integer :: g, n
   real(dp) :: tpow, pow
 
-  p = 0._DP
+  p = 0._dp
   do g= 1, ng
       do n= 1, nnod
         pow = f0(n,g) * sigf(n,g) * vdel(n)

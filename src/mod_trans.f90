@@ -170,7 +170,7 @@ subroutine rod_eject_th()
 
 USE sdata, ONLY: ng, nnod, sigr, nf, ttot, tdiv, tstep1, tstep2, Ke, &
                  tfm, ppow, m, ftem, mtem, bpos, nb, iBeta, &
-                 f0, ft, c0, tbeta, omeg, npow, ctbeta, nmat, L
+                 f0, ft, c0, tbeta, omeg, npow, ctbeta, nmat, L, th_niter
 USE io, ONLY: ounit, bextr, bxtab, scr
 USE xsec, ONLY: XS_updt
 USE cmfd, ONLY: outer_tr, outer, outer_ad
@@ -199,7 +199,7 @@ allocate(npow(nnod))
 allocate(L(nnod,ng))
 
 ! Determine th paramters distribution
-CALL th_iter(0)
+CALL th_iter(th_niter, 0)
 if (scr) then
   write(*,*)
   write(*,*) ' steady state calculation ... done'

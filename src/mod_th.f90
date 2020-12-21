@@ -8,7 +8,7 @@ SAVE
 
 CONTAINS
 
-SUBROUTINE th_iter(ind)
+SUBROUTINE th_iter(maxIter, oupt)
 !
 ! Purpose:
 !    To do thermal-hydrailics iteration
@@ -16,28 +16,22 @@ SUBROUTINE th_iter(ind)
 
 USE sdata, ONLY: nnod, ftem, mtem, cden, bcon, bpos, npow, pow, ppow,  &
                  zdel, node_nf, ix, iy, iz, th_err, node_nf, ix, iy, iz, &
-                 th_niter, nth, fer, ferc, ser, serc, get_time, th_time
+                 th_niter, fer, ferc, ser, serc, get_time, th_time, Ke
 USE cmfd, ONLY: outer_th, PowDis
-USE io, ONLY: ounit
+USE io, ONLY: ounit, scr
 USE xsec, ONLY: XS_updt
 
 IMPLICIT NONE
 
-INTEGER, INTENT(IN), OPTIONAL :: ind    ! if iteration reaching th_iter and ind = 0 then STOP
+INTEGER, INTENT(IN) :: maxIter    ! maximum number of th iteration
+INTEGER, INTENT(IN) :: oupt       ! print ouput option
 REAL(DP), DIMENSION(nnod) :: pline
 REAL(DP), DIMENSION(nnod) :: otem
-INTEGER :: mx_iter, n, l
+INTEGER :: n, i
 REAL(DP) :: st, fn
 
-! Determine maximum iteration
-IF (PRESENT(ind)) THEN
-  mx_iter = th_niter
-ELSE
-  mx_iter = 2
-END IF
-
 th_err = 1.
-DO l = 1, mx_iter
+DO i = 1, maxIter
     ! Save old fuel temp
     otem = ftem
 
@@ -68,12 +62,17 @@ DO l = 1, mx_iter
     fn = get_time()
     th_time = th_time + (fn-st)
 
+    if (oupt > 0) then
+      write(ounit,'(I5,F13.6,3ES15.5)') i, Ke, ser, fer, th_err        ! Write outer iteration evolution
+      if (scr) write(*,'(I5,F13.6,3ES15.5)') i, Ke, ser, fer, th_err   ! Write outer iteration evolution
+    end if
+
     ! If error is small enough
-    IF (th_err < 0.01 .and. fer < ferc .and. ser < serc .and. present(ind)) EXIT
+    IF (th_err < 0.01 .and. fer < ferc .and. ser < serc) EXIT
 
 END DO
 
-IF (PRESENT(ind) .AND. l-1 == th_niter) THEN
+IF (i-1 == th_niter) THEN
   WRITE(ounit,*) '  MAXIMUM TH ITERATION REACHED.'
   WRITE(ounit,*) '  CALCULATION MIGHT BE NOT CONVERGED OR CHANGE ITERATION CONTROL'
   WRITE(*,*) '  MAXIMUM TH ITERATION REACHED.'
@@ -85,6 +84,7 @@ END IF
 
 END SUBROUTINE th_iter
 
+!****************************************************************************!
 
 SUBROUTINE AbsE(newF, oldF, rel)
 
@@ -113,6 +113,7 @@ END DO
 
 END SUBROUTINE AbsE
 
+!****************************************************************************!
 
 SUBROUTINE par_ave(par, ave)
 !
@@ -141,6 +142,7 @@ ave = dum / dum2
 
 END SUBROUTINE par_ave
 
+!****************************************************************************!
 
 SUBROUTINE par_ave_out(par, ave)
 !
@@ -188,6 +190,7 @@ ave = dum / dum2
 
 END SUBROUTINE par_ave_out
 
+!****************************************************************************!
 
 SUBROUTINE par_max(par, pmax)
 !
@@ -210,6 +213,7 @@ END DO
 
 END SUBROUTINE par_max
 
+!****************************************************************************!
 
 SUBROUTINE getent(t,ent)
 !
@@ -252,6 +256,7 @@ END DO
 
 END SUBROUTINE getent
 
+!****************************************************************************!
 
 SUBROUTINE gettd(ent,t,rho,prx,kvx,tcx,Rx)
 !
@@ -307,10 +312,9 @@ IF (PRESENT(Rx)) THEN
   Rx = 1000._DP * (stab(i2,2) - stab(i1,2)) / (stab(i2,3) - stab(i1,3))
 END IF
 
-
-
 END SUBROUTINE gettd
 
+!****************************************************************************!
 
 REAL(DP) FUNCTION getkc(t)
 !
@@ -326,6 +330,7 @@ getkc = 7.51_DP + 2.09e-2_DP*t - 1.45e-5_DP*t**2 + 7.67e-9_DP*t**3
 
 END FUNCTION getkc
 
+!****************************************************************************!
 
 REAL(DP) FUNCTION getkf(t)
 !
@@ -341,6 +346,7 @@ getkf = 1.05_DP + 2150.0_DP / (t - 73.15_DP)
 
 END FUNCTION getkf
 
+!****************************************************************************!
 
 REAL(DP) FUNCTION getcpc(t)
 !
@@ -356,6 +362,7 @@ getcpc = 252.54_DP + 0.11474_DP*t
 
 END FUNCTION getcpc
 
+!****************************************************************************!
 
 REAL(DP) FUNCTION getcpf(t)
 !
@@ -371,6 +378,7 @@ getcpf = 162.3_DP + 0.3038_DP*t - 2.391e-4_DP*t**2 + 6.404e-8_DP*t**3
 
 END FUNCTION getcpf
 
+!****************************************************************************!
 
 SUBROUTINE TridiaSolve(a,b,c,d,x)
 !
@@ -403,7 +411,7 @@ END DO
 
 END SUBROUTINE TridiaSolve
 
-
+!****************************************************************************!
 
 REAL(DP) FUNCTION geths(xden, tc, kv, Pr)
 !
@@ -430,7 +438,7 @@ geths = (tc / dh) * Nu                        ! Calculate heat transfer coeffici
 
 END FUNCTION geths
 
-
+!****************************************************************************!
 
 SUBROUTINE th_trans(xpline, h)
 
@@ -585,6 +593,7 @@ th_time = th_time + (fn-st)
 
 END SUBROUTINE th_trans
 
+!****************************************************************************!
 
 SUBROUTINE th_upd(xpline)
 
@@ -692,266 +701,5 @@ END DO
 
 
 END SUBROUTINE th_upd
-
-
-SUBROUTINE print_head()
-
-!
-! Purpose:
-!    To print critical boron concentration header output
-!
-
-USE io, ONLY: ounit, scr, bther
-
-IMPLICIT NONE
-
-if (bther == 0) then
-  ! File Output
-  WRITE(ounit,*); WRITE(ounit,*)
-  WRITE(ounit,2176); WRITE(ounit,2177); WRITE(ounit,2176)
-  WRITE(ounit,*); WRITE(ounit,2178); WRITE(ounit,2179)
-  if (scr) then
-    ! Terminal Output
-    WRITE(*,*); WRITE(*,*)
-    WRITE(*,2176); WRITE(*,2177); WRITE(*,2176)
-    WRITE(*,*); WRITE(*,2178); WRITE(*,2179)
-  end if
-else
-  ! File Output
-  WRITE(ounit,*); WRITE(ounit,*)
-  WRITE(ounit,1176); WRITE(ounit,1177); WRITE(ounit,1176)
-  WRITE(ounit,*); WRITE(ounit,1178); WRITE(ounit,1179)
-  if (scr) then
-    ! Terminal Output
-    WRITE(*,*); WRITE(*,*)
-    WRITE(*,1176); WRITE(*,1177); WRITE(*,1176)
-    WRITE(*,*); WRITE(*,1178); WRITE(*,1179)
-  end if
-end if
-
-2176 format(' ============================================================')
-2177 format(12X,'CRITICAL BORON CONCENTRATION SEARCH')
-2178 format('Itr  Boron Conc.   K-EFF     FLUX ERROR   FISS. SRC. ERROR')
-2179 format(' -----------------------------------------------------------')
-1176 format &
-(' =========================================================================')
-1177 format(19X,'CRITICAL BORON CONCENTRATION SEARCH')
-1178 format &
-('Itr  Boron Conc.   K-EFF     FLUX ERR.    FISS. SRC. ERR.  DOPPLER ERR.')
-1179 format &
-(' -----------------------------------------------------------------------')
-
-END SUBROUTINE print_head
-
-
-SUBROUTINE cbsearch()
-
-!
-! Purpose:
-!    To search critical boron concentration
-!
-
-USE sdata, ONLY: Ke, rbcon, ftem, mtem, cden, bpos, nnod, f0, fer, ser, &
-                 aprad, apaxi, afrad, npow
-USE io, ONLY: ounit, AsmFlux, AsmPow, AxiPow
-USE cmfd, ONLY: outer, powdis
-USE xsec, ONLY: XS_updt
-
-IMPLICIT NONE
-
-REAL(DP)  :: bc1, bc2, bcon     ! Boron Concentration
-REAL(DP) :: ke1, ke2
-INTEGER :: n
-
-call print_head()
-
-bcon = rbcon
-CALL XS_updt(bcon, ftem, mtem, cden, bpos)
-CALL outer(0)
-bc1 = bcon
-ke1 = Ke
-
-WRITE(ounit,1791) 1, bc1, Ke1, ser, fer
-WRITE(*,1791) 1, bc1, Ke1, ser, fer
-
-bcon = bcon + (Ke - 1.) * bcon   ! Guess next critical boron concentration
-CALL XS_updt(bcon, ftem, mtem, cden, bpos)
-CALL outer(0)
-bc2 = bcon
-ke2 = Ke
-
-WRITE(ounit,1791) 2, bc2, Ke2, ser, fer
-WRITE(*,1791) 2, bc2, Ke2, ser, fer
-
-n = 3
-DO
-  bcon = bc2 + (1._DP - ke2) / (ke1 - ke2) * (bc1 - bc2)
-  CALL XS_updt(bcon, ftem, mtem, cden, bpos)
-  CALL outer(0)
-  bc1 = bc2
-  bc2 = bcon
-  ke1 = ke2
-  ke2 = ke
-  WRITE(ounit,1791) n, bcon, Ke, ser, fer
-  WRITE(*,1791) n, bcon, Ke, ser, fer
-    IF ((ABS(Ke - 1._DP) < 1.e-5_DP) .AND. (ser < 1.e-5_DP) .AND. (fer < 1.e-5_DP)) EXIT
-    n = n + 1
-    IF (bcon > 3000.) THEN
-        WRITE(ounit,*) '  CRITICAL BORON CONCENTRATION EXCEEDS THE LIMIT(3000 ppm)'
-        WRITE(ounit,*) '  KOMODO IS STOPPING'
-        WRITE(*,*) '  CRITICAL BORON CONCENTRATION EXCEEDS THE LIMIT(3000 ppm)'
-        STOP
-    END IF
-    IF (bcon < 0.) THEN
-        WRITE(ounit,*) '  CRITICAL BORON CONCENTRATION IS NOT FOUND (LESS THAN ZERO)'
-        WRITE(ounit,*) '  KOMODO IS STOPPING'
-        WRITE(*,*) '  CRITICAL BORON CONCENTRATION IS NOT FOUND (LESS THAN ZERO)'
-        STOP
-    END IF
-    IF (n == 20) THEN
-        WRITE(ounit,*) '  MAXIMUM ITERATION FOR CRITICAL BORON SEARCH IS REACHING MAXIMUM'
-        WRITE(ounit,*) '  KOMODO IS STOPPING'
-        WRITE(*,*) '  MAXIMUM ITERATION FOR CRITICAL BORON SEARCH IS REACHING MAXIMUM'
-        STOP
-    END IF
-END DO
-
-ALLOCATE(npow(nnod))
-IF (aprad == 1 .OR. apaxi == 1) THEN
-    CALL PowDis(npow)
-END IF
-
-IF (aprad == 1) CALL AsmPow(npow)
-
-IF (apaxi == 1) CALL AxiPow(npow)
-
-IF (afrad == 1) CALL AsmFlux(f0, 1._DP)
-
-1791 format(I3, F10.2, F14.5, ES14.5, ES13.5)
-
-END SUBROUTINE cbsearch
-
-
-SUBROUTINE cbsearcht()
-
-!
-! Purpose:
-!    To search critical boron concentration with thermal feedback
-!
-
-USE sdata, ONLY: Ke, ftem, mtem, cden, bcon, rbcon, npow, nnod, &
-                 f0, ser, fer, tfm, aprad, apaxi, afrad, npow, th_err, &
-                 serc, ferc
-USE io, ONLY: ounit, AsmFlux, AsmPow, AxiPow, scr
-USE cmfd, ONLY: powdis, outer
-
-IMPLICIT NONE
-
-REAL(DP)  :: bc1, bc2    ! Boron Concentration
-REAL(DP) :: ke1, ke2
-INTEGER :: n
-REAL(DP) :: tf, tm, mtm, mtf, otm, cd, ocd
-
-call print_head()
-
-ALLOCATE(npow(nnod))
-
-bcon = rbcon
-CALL th_iter()  ! Start thermal hydarulic iteration with current paramters
-bc1 = bcon
-ke1 = Ke
-
-WRITE(ounit,1792) 1, bc1, Ke1, ser, fer, th_err
-WRITE(*,1792) 1, bc1, Ke1, ser, fer, th_err
-
-IF (bcon < 1.e-5) THEN
-  bcon = 500.
-ELSE
-  bcon = bcon + (Ke - 1.) * bcon   ! Guess next critical boron concentration
-END IF
-CALL th_iter()                 ! Perform second thermal hydarulic iteration with updated parameters
-bc2 = bcon
-ke2 = Ke
-
-WRITE(ounit,1792) 2, bc2, Ke2, ser, fer, th_err
-WRITE(*,1792) 2, bc2, Ke2, ser, fer, th_err
-
-n = 3
-DO
-    bcon = bc2 + (1._DP - ke2) / (ke1 - ke2) * (bc1 - bc2)
-    CALL th_iter()
-    bc1 = bc2
-    bc2 = bcon
-    ke1 = ke2
-    ke2 = ke
-    WRITE(ounit,1792) n, bcon, Ke, ser, fer, th_err
-    WRITE(*,1792) n, bcon, Ke, ser, fer, th_err
-    IF ((ABS(Ke - 1._DP) < 1.e-5_DP) .AND. (ser < serc) .AND. (fer < ferc)) EXIT
-    n = n + 1
-    IF (bcon > 3000.) THEN
-        WRITE(ounit,*) '  CRITICAL BORON CONCENTRATION EXCEEDS THE LIMIT(3000 ppm)'
-        WRITE(ounit,*) '  KOMODO IS STOPPING'
-        WRITE(*,*) '  CRITICAL BORON CONCENTRATION EXCEEDS THE LIMIT(3000 ppm)'
-        STOP
-    END IF
-    IF (bcon < 0.) THEN
-        WRITE(ounit,*) '  CRITICAL BORON CONCENTRATION IS NOT FOUND (LESS THAN ZERO)'
-        WRITE(ounit,*) '  KOMODO IS STOPPING'
-        WRITE(*,*) '  CRITICAL BORON CONCENTRATION IS NOT FOUND (LESS THAN ZERO)'
-        STOP
-    END IF
-    IF (n == 30) THEN
-        WRITE(ounit,*) '  MAXIMUM ITERATION FOR CRITICAL BORON SEARCH IS REACHING MAXIMUM'
-        WRITE(ounit,*) '  KOMODO IS STOPPING'
-        WRITE(*,*) '  MAXIMUM ITERATION FOR CRITICAL BORON SEARCH IS REACHING MAXIMUM'
-        STOP
-    END IF
-END DO
-
-IF (aprad == 1 .OR. apaxi == 1) THEN
-    CALL PowDis(npow)
-END IF
-
-IF (aprad == 1) CALL AsmPow(npow)
-
-IF (apaxi == 1) CALL AxiPow(npow)
-
-IF (afrad == 1) CALL AsmFlux(f0, 1._DP)
-
-CALL par_ave(ftem, tf)
-CALL par_ave(mtem, tm)
-
-CALL par_max(tfm(:,1), mtf)
-CALL par_max(mtem, mtm)
-
-CALL par_ave_out(mtem, otm)
-CALL par_ave(cden, cd)
-CALL par_ave_out(cden, ocd)
-
-! Write Output
-WRITE(ounit,*)
-WRITE(ounit, 5001) tf, tf-273.15; WRITE(ounit, 5002)  mtf, mtf-273.15
-WRITE(ounit, 5003) tm, tm-273.15; WRITE(ounit, 5004) mtm, mtm-273.15
-WRITE(ounit, 5005) otm, otm-273.15; WRITE(ounit, 5006) cd * 1000., cd
-WRITE(ounit, 5007) ocd * 1000., ocd
-if (scr) then
-  WRITE(*,*)
-  WRITE(*, 5001) tf, tf-273.15; WRITE(*, 5002)  mtf, mtf-273.15
-  WRITE(*, 5003) tm, tm-273.15; WRITE(*, 5004) mtm, mtm-273.15
-  WRITE(*, 5005) otm, otm-273.15; WRITE(*, 5006) cd * 1000., cd
-  WRITE(*, 5007) ocd * 1000., ocd
-end if
-
-5001 FORMAT(2X, 'AVERAGE DOPPLER TEMPERATURE     : ', F7.1, ' K (', F7.1, ' C)')
-5002 FORMAT(2X, 'MAX FUEL CENTERLINE TEMPERATURE : ', F7.1, ' K (', F7.1, ' C)')
-5003 FORMAT(2X, 'AVERAGE MODERATOR TEMPERATURE   : ', F7.1, ' K (', F7.1, ' C)')
-5004 FORMAT(2X, 'MAXIMUM MODERATOR TEMPERATURE   : ', F7.1, ' K (', F7.1, ' C)')
-5005 FORMAT(2X, 'OUTLET MODERATOR TEMPERATURE    : ', F7.1, ' K (', F7.1, ' C)')
-5006 FORMAT(2X, 'AVERAGE MODERATOR DENSITY       : ', F7.1, ' kg/m3 (', F7.3, ' g/cc)')
-5007 FORMAT(2X, 'OUTLET MODERATOR DENSITY        : ', F7.1, ' kg/m3 (', F7.3, ' g/cc)')
-1792 format(I3, F9.2, F14.5, ES14.5, ES13.5, ES17.5)
-
-END SUBROUTINE cbsearcht
-
 
 END MODULE th

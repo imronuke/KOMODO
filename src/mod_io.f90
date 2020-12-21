@@ -257,11 +257,7 @@ IF (biter == 1) CALL inp_iter (uiter)
 IF (bthet == 1) CALL inp_thet (uthet)
 
 !!CARD THER
-IF (bther == 1 .AND. mode == 'FORWARD') THEN
-    WRITE(ounit,*)'   ERROR: %THER CARD NOT VALID FOR FORWARD CALCULATION MODE'
-    WRITE(*,*)'   ERROR: %THER CARD NOT VALID FOR FORWARD CALCULATION MODE'
-    STOP
-ELSE IF (bther == 1 .AND. mode == 'FIXEDSRC') THEN
+IF (bther == 1 .AND. mode == 'FIXEDSRC') THEN
     WRITE(ounit,*)'   ERROR: %THER CARD NOT VALID FOR FIXED SOURCE CALCULATION MODE'
     WRITE(*,*)'   ERROR: %THER CARD NOT VALID FOR FIXED SOURCE CALCULATION MODE'
     STOP
@@ -437,8 +433,8 @@ DO
 END DO
 
 2409 FORMAT(11X, '###########################################################')
-2411 FORMAT(11X, '#                 KOMODO Version: 0.1                     #')
-2412 FORMAT(11X, '#       OPEN NUCLEAR SIMULATOR AND ANALYSIS TOOL          #')
+2411 FORMAT(11X, '#                 KOMODO Version: 0.2                     #')
+2412 FORMAT(11X, '#           OPEN NUCLEAR REACTOR SIMULATOR                #')
 
 1001 FORMAT (2X, I4, ': ', A200)
 1002 FORMAT    (2X, '=============================INPUT DATA',A7, &

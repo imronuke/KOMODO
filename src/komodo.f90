@@ -3,9 +3,8 @@ PROGRAM main
 USE sdata,   ONLY: dp, mode, tranw, fdm_time, nod_time, xs_time, &
 inp_time, th_time, get_time
 USE io,      ONLY: ounit, scr, inp_read, bther
-USE control, ONLY: forward, adjoint, fixedsrc
+USE control, ONLY: forward, adjoint, fixedsrc, cbsearch, cbsearcht
 USE trans, ONLY: rod_eject, rod_eject_th
-USE th, ONLY: cbsearch, cbsearcht
 
 IMPLICIT NONE
 
