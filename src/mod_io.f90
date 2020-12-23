@@ -3518,7 +3518,7 @@ REAL(DP) :: summ, vsumm
 REAL(DP), DIMENSION(nxx, nyy, ng) :: fnode
 REAL(DP), DIMENSION(nx, ny, ng) :: fasm
 REAL(DP), DIMENSION(ng) :: totp
-CHARACTER(LEN=10), DIMENSION(nx, ny) :: cflx
+CHARACTER(LEN=10), DIMENSION(nx, ny, ng) :: cflx
 
 INTEGER, PARAMETER :: xm = 12
 INTEGER :: ip, ipr
@@ -3601,40 +3601,45 @@ WRITE(ounit,*) '  =============================='
 ip = nx/xm
 ipr = MOD(nx,xm) - 1
 
+!!! Convert to character (zero flux convert to blank spaces)
 DO g = 1, ng
-    WRITE(ounit,'(A,I3)') '    Group : ', g
-    !!! Convert to character (zero flux convert to blank spaces)
-    DO j = 1, ny
-        DO i = 1, nx
-            IF ((fasm(i,j,g) - 0.) < 1.e-5_DP) THEN
-                cflx(i,j) = '         '
-            ELSE
-                WRITE (cflx(i,j),'(ES10.3)') fasm(i,j,g)
-                cflx(i,j) = TRIM(ADJUSTL(cflx(i,j)))
-            END IF
-        END DO
-    END DO
-
-    xs = 1; xf = xm
-    DO k = 1, ip
-        WRITE(ounit,'(3X,100I11)') (i, i = xs, xf)
-        DO j= ny, 1, -1
-            WRITE(ounit,'(2X,I4,2X,100A11)') j, (cflx(i,j), i=xs, xf)
-        END DO
-        WRITE(ounit,*)
-        xs = xs + xm
-        xf = xf + xm
-    END DO
-
-    WRITE(ounit,'(3X,100I11)') (i, i = xs, xs+ipr)
-    IF (xs+ipr > xs) THEN
-        DO j= ny, 1, -1
-            WRITE(ounit,'(2X,I4,2X,100A11)') j, (cflx(i,j), i=xs, xs+ipr)
-        END DO
-    END IF
-   WRITE(ounit,*)
-
+  DO j = 1, ny
+      DO i = 1, nx
+          IF ((fasm(i,j,g) - 0.) < 1.e-5_DP) THEN
+              cflx(i,j, g) = '         '
+          ELSE
+              WRITE (cflx(i,j,g),'(ES10.3)') fasm(i,j,g)
+              cflx(i,j,g) = TRIM(ADJUSTL(cflx(i,j,g)))
+          END IF
+      END DO
+  END DO
 END DO
+
+! Print flux
+xs = 1; xf = xm
+DO k = 1, ip
+    WRITE(ounit,'(3X,100I11)') (i, i = xs, xf)
+    DO j= ny, 1, -1
+        WRITE(ounit,'(2X,I4,2X,100A11)') j, (cflx(i,j,1), i=xs, xf)
+        DO g = 2, ng
+          WRITE(ounit,'(8X,100A11)')(cflx(i,j,g), i=xs, xf)
+        END DO
+    END DO
+    WRITE(ounit,*)
+    xs = xs + xm
+    xf = xf + xm
+END DO
+
+WRITE(ounit,'(3X,100I11)') (i, i = xs, xs+ipr)
+IF (xs+ipr > xs) THEN
+    DO j= ny, 1, -1
+        WRITE(ounit,'(2X,I4,2X,100A11)') j, (cflx(i,j,1), i=xs, xs+ipr)
+        DO g = 2, ng
+          WRITE(ounit,'(8X,100A11)') (cflx(i,j,g), i=xs, xs+ipr)
+        END DO
+    END DO
+END IF
+WRITE(ounit,*)
 
 
 END SUBROUTINE AsmFlux
