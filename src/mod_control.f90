@@ -15,12 +15,12 @@ contains
     !    To solve forward (normal) problems
     !
 
-    use sdata, only: nnod, f0, aprad, apaxi, afrad, ftem, mtem, cden, &
+    use sdata, only: nnod, aprad, apaxi, afrad, ftem, mtem, cden, &
     bcon, bpos, npow, th_niter
     use io,    only: AsmPow, AxiPow, AsmFlux, inp_read, bther
     use xsec,  only: XS_updt
-    use cmfd,  only: outer, powdis
-    use th,  only: th_iter
+    use cmfd,  only: outer
+    use th,  only: th_iter, powdis
 
     IMPLICIT NONE
 
@@ -49,7 +49,7 @@ contains
 
     IF (apaxi == 1) CALL AxiPow(pow)
 
-    IF (afrad == 1) CALL AsmFlux(f0, 1.e0_DP)
+    IF (afrad == 1) CALL AsmFlux(1.e0_DP)
 
 
   END SUBROUTINE forward
@@ -63,10 +63,11 @@ contains
     !    To solve adjoint problems
     !
 
-    use sdata, only: nnod, f0, aprad, apaxi, afrad, ftem, mtem, cden, bcon, bpos
+    use sdata, only: nnod, aprad, apaxi, afrad, ftem, mtem, cden, bcon, bpos
     use io,    only: AsmPow, AxiPow, AsmFlux, inp_read
     use xsec,  only: XS_updt
-    use cmfd,  only: outer_ad, powdis
+    use cmfd,  only: outer_ad
+    use th,    only: powdis
 
     IMPLICIT NONE
 
@@ -89,7 +90,7 @@ contains
 
     IF (apaxi == 1) CALL AxiPow(pow)
 
-    IF (afrad == 1) CALL AsmFlux(f0, 1.e0_DP)
+    IF (afrad == 1) CALL AsmFlux(1.e0_DP)
 
   END SUBROUTINE adjoint
 
@@ -102,10 +103,11 @@ contains
     !    To solve fixed source problems
     !
 
-    use sdata, only: nnod, f0, aprad, apaxi, afrad, ftem, mtem, cden, bcon, bpos
+    use sdata, only: nnod, aprad, apaxi, afrad, ftem, mtem, cden, bcon, bpos
     use io,    only: AsmPow, AxiPow, AsmFlux, inp_read
     use xsec,  only: XS_updt
-    use cmfd,  only: outer_fs, powdis
+    use cmfd,  only: outer_fs
+    use th,    only: powdis
 
     IMPLICIT NONE
 
@@ -128,7 +130,7 @@ contains
 
     IF (apaxi == 1) CALL AxiPow(pow)
 
-    IF (afrad == 1) CALL AsmFlux(f0)
+    IF (afrad == 1) CALL AsmFlux()
 
   END SUBROUTINE fixedsrc
 
@@ -141,11 +143,12 @@ contains
   !    To search critical boron concentration
   !
 
-  USE sdata, ONLY: Ke, rbcon, ftem, mtem, cden, bpos, nnod, f0, fer, ser, &
+  USE sdata, ONLY: Ke, rbcon, ftem, mtem, cden, bpos, nnod, fer, ser, &
                    aprad, apaxi, afrad, npow
   USE io, ONLY: ounit, AsmFlux, AsmPow, AxiPow
-  USE cmfd, ONLY: outer, powdis
+  USE cmfd, ONLY: outer
   USE xsec, ONLY: XS_updt
+  use th,    only: powdis
 
   IMPLICIT NONE
 
@@ -198,7 +201,7 @@ contains
 
   IF (apaxi == 1) CALL AxiPow(npow)
 
-  IF (afrad == 1) CALL AsmFlux(f0, 1._DP)
+  IF (afrad == 1) CALL AsmFlux(1._DP)
 
   1791 format(I3, F10.2, F14.5, ES14.5, ES13.5)
 
@@ -214,11 +217,12 @@ contains
   !
 
   USE sdata, ONLY: Ke, bcon, rbcon, npow, nnod, &
-                   f0, ser, fer, aprad, apaxi, afrad, npow, th_err, &
+                   ser, fer, aprad, apaxi, afrad, npow, th_err, &
                    serc, ferc
   USE io, ONLY: ounit, AsmFlux, AsmPow, AxiPow
-  USE cmfd, ONLY: powdis, outer
+  USE cmfd, ONLY: outer
   use th, only : th_iter
+  use th,    only: powdis
 
   IMPLICIT NONE
 
@@ -273,7 +277,7 @@ contains
 
   IF (apaxi == 1) CALL AxiPow(npow)
 
-  IF (afrad == 1) CALL AsmFlux(f0, 1._DP)
+  IF (afrad == 1) CALL AsmFlux(1._DP)
 
   call print_tail()
 

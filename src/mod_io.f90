@@ -791,7 +791,7 @@ WRITE(ounit,*) ' ...Macroscopic CX Card is successfully read...'
 
 1009 FORMAT(5X, 'MATERIAL', I3)
 1011 FORMAT(2X, A7, A12, A11, A12, A9, A11, A11, A14)
-1010 FORMAT(2X, I6, F13.6, F10.6, F11.6, F12.6, 2F11.6, F10.6)
+1010 FORMAT(2X, I6, F13.6, F10.6, F11.6, F12.6, F11.6, ES12.5, F10.6)
 1015 FORMAT(4X, I3, F16.6, 20F12.6)
 1020 FORMAT(2X, 'ERROR: Transport cross section (sigtr)is zero or negative in material: ', I3, ' ;group: ', I3)
 
@@ -3495,20 +3495,19 @@ END SUBROUTINE AxiPow
 
 !******************************************************************************!
 
-SUBROUTINE  AsmFlux(fn, norm)
+SUBROUTINE  AsmFlux(norm)
 
 !
 ! Purpose:
 !    To print axially averaged assembly-wise flux distribution
 !
 
-USE sdata, ONLY: ng, nx, ny, nxx, nyy, nzz, zdel, &
+USE sdata, ONLY: f0, ng, nx, ny, nxx, nyy, nzz, zdel, &
                 xdel, ydel, ystag, nnod, ix, iy, iz, &
                 xdiv, ydiv
 
 IMPLICIT NONE
 
-REAL(DP), DIMENSION(:,:), INTENT(IN) :: fn
 REAL(DP), OPTIONAL, INTENT(IN) :: norm
 
 REAL(DP), DIMENSION(nxx, nyy, nzz, ng) :: fx
@@ -3524,10 +3523,12 @@ INTEGER, PARAMETER :: xm = 12
 INTEGER :: ip, ipr
 INTEGER :: negf
 
+if (bther == 1) call flux_atpower()
+
 fx = 0._DP
 DO g = 1, ng
     DO n = 1, nnod
-        fx(ix(n), iy(n), iz(n), g) = fn(n,g)
+        fx(ix(n), iy(n), iz(n), g) = f0(n,g)
     END DO
 END DO
 
@@ -3580,7 +3581,7 @@ DO g = 1, ng
 END DO
 
 ! Normalize Flux to norm
-IF (PRESENT(norm)) THEN
+IF (PRESENT(norm) .and. bther /= 1) THEN
     DO g = 1, ng
         DO j = 1, ny
             DO i = 1, nx
@@ -3595,8 +3596,13 @@ END IF
 WRITE(ounit,*)
 IF (negf > 0) WRITE(ounit,*) '    ....WARNING: NEGATIVE FLUX ENCOUNTERED....'
 WRITE(ounit,*)
-WRITE(ounit,*) '    Radial Flux Distribution'
-WRITE(ounit,*) '  =============================='
+if (bther == 1) then
+  WRITE(ounit,*) '    Radial Flux Distribution [#neutrons/(cm2.second)]'
+  WRITE(ounit,*) '  ===================================================='
+else
+  WRITE(ounit,*) '    Radial Flux Distribution'
+  WRITE(ounit,*) '  ============================'
+end if
 
 ip = nx/xm
 ipr = MOD(nx,xm) - 1
@@ -3624,6 +3630,7 @@ DO k = 1, ip
         DO g = 2, ng
           WRITE(ounit,'(8X,100A11)')(cflx(i,j,g), i=xs, xf)
         END DO
+        WRITE(ounit,*)
     END DO
     WRITE(ounit,*)
     xs = xs + xm
@@ -3637,12 +3644,55 @@ IF (xs+ipr > xs) THEN
         DO g = 2, ng
           WRITE(ounit,'(8X,100A11)') (cflx(i,j,g), i=xs, xs+ipr)
         END DO
+        WRITE(ounit,*)
     END DO
 END IF
 WRITE(ounit,*)
 
 
 END SUBROUTINE AsmFlux
+
+!****************************************************************************!
+
+subroutine flux_atpower()
+
+!
+! Purpose:
+!    To calculate flux at given power level
+!
+
+
+USE sdata, ONLY: ng, nnod, sigf, f0, vdel, pow, ppow
+
+implicit none
+
+real(dp), dimension(nnod,ng) :: npow   !node power for node n and group g
+integer :: g, n
+real(dp) :: tpow
+
+! Get node power distribution
+tpow = 0._dp
+do g= 1, ng
+    do n= 1, nnod
+      npow(n,g) = f0(n,g) * sigf(n,g) * vdel(n)
+      tpow = tpow + npow(n,g)
+    end do
+end do
+
+!Normalize to 1 then Get node power for given power level
+do g= 1, ng
+  do n = 1, nnod
+      npow(n,g) = npow(n,g) / tpow         ! Normalize to 1
+      npow(n,g) = npow(n,g) * pow * ppow   ! Get node power level
+      if (sigf(n,g) > 0._dp) then
+        f0(n,g) = npow(n,g) / (sigf(n,g) * vdel(n))
+      else
+        f0(n,g) = 0._dp
+      end if
+  end do
+end do
+
+end subroutine flux_atpower
 
 !******************************************************************************!
 

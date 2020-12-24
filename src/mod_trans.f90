@@ -342,8 +342,8 @@ USE sdata, ONLY: ng, nnod, sigr, bcon, ftem, mtem, cden, &
                  tfm, zdel, ppow, node_nf, m, mat, dfis, ctbeta, sth, sigrp
 USE io, ONLY: ounit, bxtab
 USE xsec, ONLY: XS_updt
-USE cmfd, ONLY: outer_tr, outer, powdis
-use th, only : th_trans, par_ave, par_max
+USE cmfd, ONLY: outer_tr, outer
+use th, only : th_trans, par_ave, par_max, powdis
 
 
 implicit none

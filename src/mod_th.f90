@@ -17,7 +17,7 @@ SUBROUTINE th_iter(maxIter, oupt)
 USE sdata, ONLY: nnod, ftem, mtem, cden, bcon, bpos, npow, pow, ppow,  &
                  zdel, node_nf, ix, iy, iz, th_err, node_nf, ix, iy, iz, &
                  th_niter, fer, ferc, ser, serc, get_time, th_time, Ke
-USE cmfd, ONLY: outer_th, PowDis
+USE cmfd, ONLY: outer_th
 USE io, ONLY: ounit, scr
 USE xsec, ONLY: XS_updt
 
@@ -83,6 +83,53 @@ END IF
 
 
 END SUBROUTINE th_iter
+
+!****************************************************************************!
+
+subroutine PowDis (p)
+
+!
+! Purpose:
+!    To calculate power for each nodes
+!
+
+
+USE sdata, ONLY: ng, nnod, sigf, f0, vdel, mode
+USE io,    ONLY: ounit
+
+implicit none
+
+real(dp), dimension(:), intent(out) :: p
+integer :: g, n
+real(dp) :: tpow, pow
+
+p = 0._dp
+do g= 1, ng
+    do n= 1, nnod
+      pow = f0(n,g) * sigf(n,g) * vdel(n)
+      if (pow < 0.) pow = 0.
+      p(n) = p(n) + pow
+    end do
+end do
+
+! Normalize to 1._DP
+tpow = 0._DP
+do n = 1, nnod
+    tpow = tpow + p(n)
+end do
+
+if (tpow <= 0 .AND. mode /= 'FIXEDSRC') THEN
+   write(ounit, *) '   ERROR: TOTAL NODES POWER IS ZERO OR LESS'
+   write(ounit, *) '   STOP IN subroutine POWDIS'
+   STOP
+end if
+
+do n = 1, nnod
+    p(n) = p(n) / tpow
+end do
+
+
+end subroutine PowDis
 
 !****************************************************************************!
 
