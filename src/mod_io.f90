@@ -3523,7 +3523,7 @@ INTEGER, PARAMETER :: xm = 12
 INTEGER :: ip, ipr
 INTEGER :: negf
 
-if (bther == 1) call flux_atpower()
+if (bther == 1) call flux_atpower()  !calculate actual flux at given power level
 
 fx = 0._DP
 DO g = 1, ng
@@ -3540,8 +3540,8 @@ DO g = 1, ng
             summ = 0._DP
             vsumm = 0._DP
             DO k = 1, nzz
-                summ = summ + fx(i,j,k,g)*xdel(i)*ydel(j)*zdel(k)
-                vsumm = vsumm + xdel(i)*ydel(j)*zdel(k)
+                summ = summ + fx(i,j,k,g)*zdel(k)
+                vsumm = vsumm + zdel(k)
             END DO
             fnode(i,j,g)= summ/vsumm
         END DO
@@ -3611,11 +3611,11 @@ ipr = MOD(nx,xm) - 1
 DO g = 1, ng
   DO j = 1, ny
       DO i = 1, nx
-          IF ((fasm(i,j,g) - 0.) < 1.e-5_DP) THEN
-              cflx(i,j, g) = '         '
+          IF (fasm(i,j,g) > 0.) THEN
+            WRITE (cflx(i,j,g),'(ES10.3)') fasm(i,j,g)
+            cflx(i,j,g) = TRIM(ADJUSTL(cflx(i,j,g)))
           ELSE
-              WRITE (cflx(i,j,g),'(ES10.3)') fasm(i,j,g)
-              cflx(i,j,g) = TRIM(ADJUSTL(cflx(i,j,g)))
+            cflx(i,j, g) = '         '
           END IF
       END DO
   END DO
@@ -3683,7 +3683,7 @@ end do
 do g= 1, ng
   do n = 1, nnod
       npow(n,g) = npow(n,g) / tpow         ! Normalize to 1
-      npow(n,g) = npow(n,g) * pow * ppow   ! Get node power level
+      npow(n,g) = npow(n,g) * pow * ppow * 0.01_dp   ! Get node power level
       if (sigf(n,g) > 0._dp) then
         f0(n,g) = npow(n,g) / (sigf(n,g) * vdel(n))
       else
