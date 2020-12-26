@@ -57,7 +57,7 @@ FILE /home/imronuke/KOMODO/smpl/static/NEACRP/neacrp_xsec
 
 # Card Description
 
-KOMODO has several input cards. Card is a keyword marked with `%`. Each card can be placed arbitrarily in the input deck. Two cards are mandatory for any problems, while the rest are optional and conditional depend on the nature problem being solved. The description of input for each card is explained in this subsection. Following table lists all cards used in KOMODO. You can click each cards to get their description
+KOMODO has several input cards. Card is a keyword marked with `%`. Each card can be placed arbitrarily in the input deck. Two cards are mandatory for any problems, while the rest are optional and conditional depend on the nature problem being solved. The description of input for each card is explained in this subsection. Following table lists all cards used in KOMODO. You can click each card to get their description
 
 
 | **No.** | **Cards** | **Description** | **Remark** |
