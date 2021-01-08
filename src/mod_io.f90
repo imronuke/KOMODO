@@ -3674,21 +3674,14 @@ real(dp) :: tpow
 tpow = 0._dp
 do g= 1, ng
     do n= 1, nnod
-      npow(n,g) = f0(n,g) * sigf(n,g) * vdel(n)
-      tpow = tpow + npow(n,g)
+      tpow = tpow + f0(n,g) * sigf(n,g) * vdel(n)
     end do
 end do
 
 !Normalize to 1 then Get node power for given power level
 do g= 1, ng
   do n = 1, nnod
-      npow(n,g) = npow(n,g) / tpow         ! Normalize to 1
-      npow(n,g) = npow(n,g) * pow * ppow * 0.01_dp   ! Get node power level
-      if (sigf(n,g) > 0._dp) then
-        f0(n,g) = npow(n,g) / (sigf(n,g) * vdel(n))
-      else
-        f0(n,g) = 0._dp
-      end if
+    f0(n,g) = f0(n,g) * pow * ppow * 0.01_dp / tpow
   end do
 end do
 
