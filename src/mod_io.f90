@@ -3670,7 +3670,7 @@ real(dp), dimension(nnod,ng) :: npow   !node power for node n and group g
 integer :: g, n
 real(dp) :: tpow
 
-! Get node power distribution
+! Get total power
 tpow = 0._dp
 do g= 1, ng
     do n= 1, nnod
@@ -3678,7 +3678,7 @@ do g= 1, ng
     end do
 end do
 
-!Normalize to 1 then Get node power for given power level
+!Get flux at given power level
 do g= 1, ng
   do n = 1, nnod
     f0(n,g) = f0(n,g) * pow * ppow * 0.01_dp / tpow
