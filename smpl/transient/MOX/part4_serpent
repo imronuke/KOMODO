@@ -83,7 +83,7 @@ MOX TRANSIENT PROBLEM WITH XSEC FROM SERPENT
 
 ! CONTROL CARD
 %CROD
-9    200.                   ! Number of CR banks and max number of banks
+9    200.                   ! Number of CR banks and max number of steps
 21.42  1.8288                ! Zero step pos. (cm) and cm/step (total 200 steps)
 0. 0. 0. 0.  200. 200. 200. 200. 0.           ! CR Bank pos.
 0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
