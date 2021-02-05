@@ -69,7 +69,7 @@ PWR Transient UO2/MOX Benchmark (with XS benchmark) - Part3
 
 ! CONTROL CARD
 %CROD
-8    200.                   ! Number of CR banks and max number of banks
+8    200.                   ! Number of CR banks and max number of steps
 21.42  1.8288                ! Zero step pos. (cm) and cm/step (total 200 steps)
 0. 0. 0. 0.  200. 200. 200. 200.           ! CR Bank pos.
 0  0  0  0  0  0  0  0  0

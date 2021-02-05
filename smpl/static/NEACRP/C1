@@ -74,7 +74,7 @@ FILE /home/imronuke/KOMODO/smpl/static/NEACRP/neacrp_cden
 
 ! CONTROL CARD
 %CROD
-8  228.                        ! Number of CR banks and max number of banks
+8  228.                        ! Number of CR banks and max number of steps
 37.7 1.5942237                ! Zero step pos. (cm) and cm/step (total 228 steps)
 0.  0.  0.  228.  0.  228.  0.  0.           ! CR Bank pos.
 0  0  3  0  0  0  2  0  1  0  2  0  0  0  8  0  0
