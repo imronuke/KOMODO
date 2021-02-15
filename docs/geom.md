@@ -8,11 +8,11 @@ filename: geom
 
 This card is used to describe the problem geometry in rectangular coordinate system. This card is mandatory. The coordinate system used in ADPRES is shown in the following figure
 
-![alt text](https://raw.githubusercontent.com/imronuke/ADPRES/master/docs/images/geom_1.png "ADPRES 3D coordinate system")
+![alt text](https://raw.githubusercontent.com/imronuke/KOMODO/master/docs/images/geom_1.png "KOMODO 3D coordinate system")
 
 The point of origin is located at the corner between west, bottom and south sides. The next figure shows the coordinate system for radial planar map (seen from top) which typically used for two-dimensional problems.
 
-![alt text](https://raw.githubusercontent.com/imronuke/ADPRES/master/docs/images/geom_2.png "ADPRES 2D coordinate system")
+![alt text](https://raw.githubusercontent.com/imronuke/KOMODO/master/docs/images/geom_2.png "KOMODO 2D coordinate system")
 
 Below you can find various %GEOM card examples for one, two and three-dimensional problems.
 
