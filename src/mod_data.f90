@@ -196,7 +196,7 @@ TYPE(MBRANCH), DIMENSION(:), ALLOCATABLE :: m
 real(dp), dimension(:), allocatable   :: a1n, a2n, a3n, a4n  ! Nodal expansion coefficients for current node
 real(dp), dimension(:), allocatable   :: a1p, a2p, a3p, a4p  ! Nodal expansion coefficients for following node
 real(dp), dimension(:), allocatable   :: Ln1, Lp1            ! First Transverse leakages moments
-real(dp)                              :: ndmax               ! Maximum nodal coupling coefficients
+real(dp)                              :: ndmax               ! Maximum change in nodal coupling coefficients
 character(len=4)                      :: kern = 'SANM'
 integer                               :: im, jm, km
 

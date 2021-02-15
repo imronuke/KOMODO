@@ -123,25 +123,11 @@ contains
       end do
     end do
 
+    call check_stability(ndmax)
+
     deallocate(Ln1, Lp1,  Bcp, Bcn, Lm2)
     deallocate(An, Bn, En, Fn, Gn, Hn)
     deallocate(Ap, Bp, Ep, Fp, Gp, Hp)
-
-    if (ndmax > 1.e3) then
-      write(*,*)
-      write(*,1236) ndmax
-      write(*,*)"The two-node nonlinear iteration seems not stable."
-      write(*,*)"Try to reduce time step size for transient..."
-      write(*,*)"and/or change iteration control using %ITER card, ..."
-      write(*,*)"perhaps by making nodal update less frequent."
-      write(*,*)"Or increase number inner iteration per outer iteration."
-      write(*,*)"If this error persists, contact me at makrus.imron@gmail.com"
-      write(*,*)"Thank you for using KOMODO"
-      stop
-    end if
-
-    1236 format(" Error: Max. change in nodal coupling coefficient = ", F10.1)
-
 
   end subroutine nodal_update
 
@@ -253,29 +239,49 @@ contains
       end do
     end do
 
+    call check_stability(ndmax)
+
     deallocate(Ln1, Lp1,  Bcp, Bcn, Lm2)
     deallocate(An, Bn, En, Fn, Gn, Hn)
     deallocate(Ap, Bp, Ep, Fp, Gp, Hp)
 
-    if (ndmax > 1.e3) then
-      write(*,*)
-      write(*,1236) ndmax
-      write(*,*)"The two-node nonlinear iteration seems not stable."
-      write(*,*)"Try to reduce time step size for transient..."
-      write(*,*)"and/or change iteration control using %ITER card, ..."
-      write(*,*)"perhaps by making nodal update less frequent."
-      write(*,*)"Or increase number inner iteration per outer iteration."
-      write(*,*)"If this error persists, contact me at makrus.imron@gmail.com"
-      write(*,*)"Thank you for using KOMODO"
-      stop
-    end if
-
-    1236 format(" Error: Max. change in nodal coupling coefficient = ", F10.1)
-
-
   end subroutine nodal_update_pnm
 
   !****************************************************************************!
+
+  subroutine check_stability(ndmax)
+
+  !
+  ! Purpose:
+  !    To check the stability of the two-node non linear iteration. If it's not
+  !    stable provide an error message and how to overcome the error
+
+  implicit none
+
+  ! Maximum change in nodal coupling coefficients, if large means not stable
+  real(dp), intent(in) :: ndmax
+
+  if (ndmax > 1.e3) then
+    write(*,*)
+    write(*,1236) ndmax
+    write(*,*)"The two-node nonlinear iteration seems not stable. Try these:"
+    write(*,*)"1. Change iteration control using %ITER card, "
+    write(*,*)"   Perhaps by making nodal update less frequent,"
+    write(*,*)"   or increase number inner iteration per outer iteration."
+    write(*,*)"2. Ensure the node sizes in all directions are as uniform as possible. "
+    write(*,*)"   Also try smaller node size."
+    write(*,*)"3. For transient problem, try to reduce time step size."
+    write(*,*)
+    write(*,*)"If this error persists, contact me at makrus.imron@gmail.com"
+    write(*,*)"Thank you for using KOMODO"
+    stop
+  end if
+
+  1236 format(" Error: Max. change in nodal coupling coefficient = ", F10.1)
+
+  end subroutine check_stability
+
+  !******************************************************************************!
 
   subroutine nodal_coup_upd(u, a1, a2, a3, a4, n, p)
 
