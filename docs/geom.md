@@ -220,7 +220,7 @@ In the example above, the node size for bottom reflector is 70 cm, while the nod
 19*20.0                                !y-direction assembly size is 20 cm
 19*2                                   !y-direction assembly division (node size 10 cm) -> GOOD
 70.0 15.240 20*17.526 15.240 4*20.0    !z-direction assembly size in cm
-7  2  20*2  2  4*2                     !z-direction assembly division -> BAD
+7  2  20*2  2  4*2                     !z-direction assembly division -> GOOD
 4                                      !np number of planar type
 1  2  20*3  2  4*4
 ..
