@@ -37,7 +37,7 @@ Below you can find various %GEOM card examples for one, two and three-dimensiona
 |   | ZBOTT | Bottom boundary conditions |
 |   | ZTOP | Top boundary conditions |
 
-## Example for 3D problem
+## Example of a good %GEOM card for 3D problem
 Three-dimensional problem with 2x2 nodes per FA
 ```
 ! Typical %GEOM CARD for 3D problem with 2x2 nodes per FA
@@ -52,7 +52,7 @@ Three-dimensional problem with 2x2 nodes per FA
 4              !np number of planar type
 1  13*2  4*3  4     !planar assignment (from bottom to top)
 ! Planar_type_1 (Bottom Reflector)
-  4  4  4  4  4  4  4  4  4            (LINE 10)
+  4  4  4  4  4  4  4  4  4
   4  4  4  4  4  4  4  4  4
   4  4  4  4  4  4  4  4  4
   4  4  4  4  4  4  4  4  4
@@ -62,7 +62,7 @@ Three-dimensional problem with 2x2 nodes per FA
   4  4  4  4  4  4  0  0  0
   4  4  4  4  0  0  0  0  0
 ! Planar_type_2 (Fuel)
-  3  2  2  2  3  2  2  1  4            (LINE 10)
+  3  2  2  2  3  2  2  1  4
   2  2  2  2  2  2  2  1  4
   2  2  2  2  2  2  1  1  4
   2  2  2  2  2  2  1  4  4
@@ -72,7 +72,7 @@ Three-dimensional problem with 2x2 nodes per FA
   1  1  1  4  4  4  0  0  0
   4  4  4  4  0  0  0  0  0
 ! Planar_type_3 (Fuel+Partial Control Rods)
-  3  2  2  2  3  2  2  1  4           (LINE 10)
+  3  2  2  2  3  2  2  1  4
   2  2  2  2  2  2  2  1  4
   2  2  3  2  2  2  1  1  4
   2  2  2  2  2  2  1  4  4
@@ -82,7 +82,7 @@ Three-dimensional problem with 2x2 nodes per FA
   1  1  1  4  4  4  0  0  0
   4  4  4  4  0  0  0  0  0
 ! Planar_type_4 (Top reflectors)
-  5  4  4  4  5  4  4  4  4           (LINE 10)  
+  5  4  4  4  5  4  4  4  4
   4  4  4  4  4  4  4  4  4
   4  4  5  4  4  4  4  4  4
   4  4  4  4  4  4  4  4  4
@@ -99,7 +99,7 @@ Three-dimensional problem with 2x2 nodes per FA
    1       2       2        1        1        1
 ```
 
-## Example for 2D problem
+## Example of good %GEOM cards for 2D problems
 Two-dimensional problem with 2x2 nodes per FA
 ```
 ! Typical %GEOM CARD for 2D problem with 2x2 nodes per FA
@@ -131,7 +131,7 @@ Two-dimensional problem with 2x2 nodes per FA
    1       2       2        1        2        2
 ```
 
-Two-dimensional problem with 16x16 nodes per FA
+Two-dimensional problem with 16x16 nodes per FA. Normally for Finite Difference Method (FDM) calculations
 ```
 ! Typical %GEOM CARD for 2D problem with 16x16 nodes per FA
 %GEOM
@@ -162,7 +162,7 @@ Two-dimensional problem with 16x16 nodes per FA
    1       2       2        1        2        2
 ```
 
-## Example for 1D problem
+## Example of a good %GEOM card for 1D problem
 One-dimensional problem with 1 cm node or mesh size
 ```
 ! Typical %GEOM CARD for 1D problem with 1 cm node or mesh size
@@ -186,3 +186,47 @@ One-dimensional problem with 1 cm node or mesh size
 (east), (west), (north), (south), (bottom), (top)
    2       1       2        2        2        2
 ```
+
+# IMPORTANT
+It is recommended to make the node sizes (assemblies sizes and how you divide them) are as uniform as possible to improve the stability of the calculations. An example of a **BAD** %GEOM card is
+```
+! A BAD EXAMPLE OF %GEOM CARD
+
+%GEOM
+19 19 27                               !nx, ny, nz
+19*20.0                                !x-direction assembly size is 20 cm
+19*2                                   !x-direction assembly division (node size 10 cm) -> GOOD
+19*20.0                                !y-direction assembly size is 20 cm
+19*2                                   !y-direction assembly division (node size 10 cm) -> GOOD
+70.0 15.240 20*17.526 15.240 4*20.0    !z-direction assembly size in cm
+1  1  20*1  1  4*1                     !z-direction assembly division -> BAD
+4                                      !np number of planar type
+1  2  20*3  2  4*4
+..
+..
+..
+(TILL END)
+```
+
+In the example above, the node size for bottom reflector is 70 cm, while the node size in z-direction as well as other x- and y-directions are between 10 cm - 20 cm. This %GEOM card can lead to instability of the calculations. That %GEOM card can be changed as follow to make the calculation stable
+
+```
+! A GOOD EXAMPLE OF %GEOM CARD
+
+%GEOM
+19 19 27                               !nx, ny, nz
+19*20.0                                !x-direction assembly size is 20 cm
+19*2                                   !x-direction assembly division (node size 10 cm) -> GOOD
+19*20.0                                !y-direction assembly size is 20 cm
+19*2                                   !y-direction assembly division (node size 10 cm) -> GOOD
+70.0 15.240 20*17.526 15.240 4*20.0    !z-direction assembly size in cm
+7  2  20*2  2  4*2                     !z-direction assembly division -> BAD
+4                                      !np number of planar type
+1  2  20*3  2  4*4
+..
+..
+..
+(TILL END)
+```
+
+We now made the node sizes more uniform. First, we divided the 70 cm bottom reflector into 7 nodes (means 10 cm node size). We also divided other z-direction assembly size two each to make them more uniform.
