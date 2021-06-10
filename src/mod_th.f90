@@ -94,14 +94,14 @@ subroutine PowDis (p)
 !
 
 
-USE sdata, ONLY: ng, nnod, sigf, f0, vdel, mode
+USE sdata, ONLY: ng, nnod, sigf, f0, vdel, powtot, mode
 USE io,    ONLY: ounit
 
 implicit none
 
 real(dp), dimension(:), intent(out) :: p
 integer :: g, n
-real(dp) :: tpow, pow
+real(dp) :: pow
 
 p = 0._dp
 do g= 1, ng
@@ -113,21 +113,22 @@ do g= 1, ng
 end do
 
 ! Normalize to 1._DP
-tpow = 0._DP
+powtot = 0._DP
 do n = 1, nnod
-    tpow = tpow + p(n)
+    powtot = powtot + p(n)
 end do
 
-if (tpow <= 0 .AND. mode /= 'FIXEDSRC') THEN
+if (powtot <= 0 .AND. mode /= 'FIXEDSRC') THEN
    write(ounit, *) '   ERROR: TOTAL NODES POWER IS ZERO OR LESS'
    write(ounit, *) '   STOP IN subroutine POWDIS'
    STOP
 end if
 
-do n = 1, nnod
-    p(n) = p(n) / tpow
-end do
-
+if (powtot > 0.0) then
+   do n = 1, nnod
+       p(n) = p(n) / powtot
+   end do
+end if
 
 end subroutine PowDis
 

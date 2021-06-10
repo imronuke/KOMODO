@@ -71,11 +71,11 @@ if (scr) then
   WRITE(*,1130)tot_time
 end if
 1123 format (2X,'CPU time breakdown in seconds')
-1124 format (4X,'Input reading time   :', F10.4, '  (', F4.1,'%)')
-1125 format (4X,'XSEC processing time :', F10.4, '  (', F4.1,'%)')
-1126 format (4X,'CMFD time            :', F10.4, '  (', F4.1,'%)')
-1127 format (4X,'Nodal update time    :', F10.4, '  (', F4.1,'%)')
-1128 format (4X,'T-H time             :', F10.4, '  (', F4.1,'%)')
+1124 format (4X,'Input reading time   :', F10.4, '  (', F5.1,'%)')
+1125 format (4X,'XSEC processing time :', F10.4, '  (', F5.1,'%)')
+1126 format (4X,'CMFD time            :', F10.4, '  (', F5.1,'%)')
+1127 format (4X,'Nodal update time    :', F10.4, '  (', F5.1,'%)')
+1128 format (4X,'T-H time             :', F10.4, '  (', F5.1,'%)')
 1129 format (4X,'------------------------------------------')
 1130 format (4X,'Total time           :', F10.4)
 

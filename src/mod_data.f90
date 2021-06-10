@@ -73,6 +73,7 @@ TYPE(STAGGERED), DIMENSION(:), ALLOCATABLE :: ystag, xstag
 
 ! Extra Sources
 REAL(DP), DIMENSION(:,:), ALLOCATABLE :: exsrc
+REAL(DP) :: powtot
 
 ! Iteration Control
 REAL(DP) :: ferc = 1.e-5    ! Flux Error Criteria
