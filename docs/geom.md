@@ -6,7 +6,7 @@ filename: geom
 
 # %GEOM Card
 
-This card is used to describe the problem geometry in rectangular coordinate system. This card is mandatory. The coordinate system used in ADPRES is shown in the following figure
+This card is used to describe the problem geometry in the rectangular coordinate system. This card is mandatory. The coordinate system used in ADPRES is shown in the following figure
 
 ![alt text](https://raw.githubusercontent.com/imronuke/KOMODO/master/docs/images/geom_1.png "KOMODO 3D coordinate system")
 
@@ -14,7 +14,7 @@ The point of origin is located at the corner between west, bottom and south side
 
 ![alt text](https://raw.githubusercontent.com/imronuke/KOMODO/master/docs/images/geom_2.png "KOMODO 2D coordinate system")
 
-Below you can find various %GEOM card examples for one, two and three-dimensional problems.
+Following is the description of the `%GEOM` card
 
 | `%GEOM` | Variable    | Description | Remarks |
 | --- | --- | --- | --- |
@@ -37,7 +37,9 @@ Below you can find various %GEOM card examples for one, two and three-dimensiona
 |   | ZBOTT | Bottom boundary conditions |
 |   | ZTOP | Top boundary conditions |
 
-## Example of a good %GEOM card for 3D problem
+Below you can find various %GEOM card examples for one, two and three-dimensional problems.
+
+## Example of a %GEOM card for 3D problem
 Three-dimensional problem with 2x2 nodes per FA
 ```
 ! Typical %GEOM CARD for 3D problem with 2x2 nodes per FA
@@ -99,7 +101,7 @@ Three-dimensional problem with 2x2 nodes per FA
    1       2       2        1        1        1
 ```
 
-## Example of good %GEOM cards for 2D problems
+## Example of %GEOM card for 2D problems
 Two-dimensional problem with 2x2 nodes per FA
 ```
 ! Typical %GEOM CARD for 2D problem with 2x2 nodes per FA
@@ -162,7 +164,7 @@ Two-dimensional problem with 16x16 nodes per FA. Normally for Finite Difference 
    1       2       2        1        2        2
 ```
 
-## Example of a good %GEOM card for 1D problem
+## Example of good %GEOM card for 1D problems
 One-dimensional problem with 1 cm node or mesh size
 ```
 ! Typical %GEOM CARD for 1D problem with 1 cm node or mesh size
@@ -229,4 +231,4 @@ In the example above, the node size for bottom reflector is 70 cm, while the nod
 (TILL END)
 ```
 
-We now made the node sizes more uniform. First, we divided the 70 cm bottom reflector into 7 nodes (means 10 cm node size). We also divided other z-direction assembly size two each to make them more uniform.
+We just made the node sizes more uniform now. First, we divided the 70 cm bottom reflector into 7 nodes (means 10 cm node size). We also divided other z-direction assembly size two each to make them more uniform.

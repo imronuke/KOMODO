@@ -15,9 +15,9 @@ Some general rules for KOMODO inputs:
 0.68866  0.04850  0.06099  0.06099  0.0  0.0  0.00000  !Group 2
 ```
 
-3.	KOMODO input is modular, where it is broken into several cards. Cards’ keywords shall be uppercase and marked by `%`. Example:
+3.	KOMODO input is modular, where it is split into several cards. Cards’ keywords shall be uppercase and marked by `%`. Example:
 ```
-%MODE
+%MODE    ! Calculation mode card
 FORWARD
 %XSEC    ! Cross section card                                                                                                                                  
 2 4      ! Number of groups and number of materials
@@ -31,10 +31,10 @@ FORWARD
 
 4.	Numbers can be repeated using `*` mark. For example
 ```
-10.0 8*20.0  !is equivalent to  10.0 20.0 20.0 20.0 20.0 20.0 20.0 20.0 20.0
+10.0 8*20.0  !This line is equivalent to  10.0 20.0 20.0 20.0 20.0 20.0 20.0 20.0 20.0
 ```
 
-5. If you have identical cards for several main inputs, it is a good idea to place those cards in separated card files. In the main inputs, you just need to put location of the card files. For example, all cases in NEACRP benchmark have identical cross section data; hence we may place `%XSEC` card in a separated named `neacrp_xsec`
+5. If you have identical cards for several inputs, it is a good idea to place those cards in separated card files. In the main inputs, you just need to put location of the card files. For example, all cases in NEACRP benchmark have identical cross section data; hence we may place `%XSEC` card in a separated named `neacrp_xsec` which has the following content
 ```
 ! XSEC CARD FILE
 2  11    ! Number of groups and number of materials
@@ -47,7 +47,7 @@ FORWARD
 7.64704E-01  8.85488E-02  1.12635E-01  1.47876E-12  0.0  0.0  0.00000E+00  !COMP 11
 ```
 
-In the main input we may refer to the `neacrp_xsec` file by telling KOMODO the location of `neacrp_xsec`
+In the main input, we may refer to the `neacrp_xsec` file by telling KOMODO the location of `neacrp_xsec` preceded by `FILE` keyword 
 ```
 ! XSEC CARD
 %XSEC

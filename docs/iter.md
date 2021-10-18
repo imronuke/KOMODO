@@ -6,7 +6,7 @@ filename: iter
 
 # %ITER Card
 
-This card can be used to control the iterations in KOMODO calculation
+This card can be used to control the iterations in KOMODO calculations. You may use this if the default iteration parameters lead to calculation instability.
 
 | %ITER | Variable | Description | Remarks |
 | --- | --- | --- | --- |

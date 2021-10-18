@@ -6,7 +6,7 @@ filename: xsec
 
 # %XSEC Card
 
-This card is used to describe the cross section data. This card is conditional : either `%XSEC` or `XTAB` card must be present
+This card is used to describe the cross section data. This card is conditional : either `%XSEC` or [`%XTAB`](https://imronuke.github.io/KOMODO/xtab) card must be present
 
 | `%XSEC` | Variable | Description | Remarks |
 | --- | --- | --- | --- |
