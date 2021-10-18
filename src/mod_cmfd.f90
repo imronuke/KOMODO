@@ -384,7 +384,7 @@ end subroutine nodal_upd
 
 !****************************************************************************!
 
-subroutine print_keff(popt)
+subroutine print_keff()
 
 !
 ! Purpose:
@@ -395,15 +395,11 @@ USE io,    ONLY: ounit, scr
 
 implicit none
 
-integer, intent(in) :: popt
-
-if (popt > 0) then
-  write(ounit,*)
-  write(ounit,1146) Ke
-  if (scr) then
-    write(*,*)
-    write(*,1146) Ke
-  end if
+write(ounit,*)
+write(ounit,1146) Ke
+if (scr) then
+  write(*,*)
+  write(*,1146) Ke
 end if
 
 1146 format(2X,'MULTIPLICATION EFFECTIVE (K-EFF) = ', F9.6)
@@ -503,8 +499,6 @@ end subroutine print_keff
     write(*,*) '  KOMODO IS STOPING...'
     STOP
   end if
-
-  call print_keff(popt)
 
   end subroutine outer
 
@@ -693,8 +687,6 @@ end subroutine print_keff
     write(*,*) '  KOMODO IS STOPING...'
     STOP
   end if
-
-  call print_keff(popt)
 
   end subroutine outer_ad
 

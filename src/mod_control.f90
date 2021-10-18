@@ -19,7 +19,7 @@ contains
     bcon, bpos, npow, th_niter
     use io,    only: AsmPow, AxiPow, AsmFlux, inp_read, bther
     use xsec,  only: XS_updt
-    use cmfd,  only: outer
+    use cmfd,  only: outer,print_keff
     use th,  only: th_iter, powdis
 
     IMPLICIT NONE
@@ -39,6 +39,8 @@ contains
       call th_iter(th_niter, 1)
       call print_tail()
     end if
+
+    call print_keff()
 
     IF (aprad == 1 .OR. apaxi == 1) THEN
         ALLOCATE(pow(nnod))
@@ -66,7 +68,7 @@ contains
     use sdata, only: nnod, aprad, apaxi, afrad, ftem, mtem, cden, bcon, bpos
     use io,    only: AsmPow, AxiPow, AsmFlux, inp_read
     use xsec,  only: XS_updt
-    use cmfd,  only: outer_ad
+    use cmfd,  only: outer_ad,print_keff
     use th,    only: powdis
 
     IMPLICIT NONE
@@ -80,6 +82,8 @@ contains
 
     !Outer iteration
     CALL outer_ad(1)
+
+    call print_keff()
 
     IF (aprad == 1 .OR. apaxi == 1) THEN
         ALLOCATE(pow(nnod))
