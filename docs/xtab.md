@@ -14,6 +14,7 @@ This card is used for branch calculations. The format library used in KOMODO is 
 |        | NMAT | Number materials |
 | LINE 2 | FNAME | The path of the library | Repeat  this line NMAT times.(See example below) |
 |  | FNUM | Number of the material inside the library FNAME |
+| LINE 3 | POPT | Print option if users want to print this card | Optional |
 
 Example:
 ```

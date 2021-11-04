@@ -16,7 +16,7 @@ If the problems have control rods inserted, users can use this card. This card i
 |   | SSIZE | step size (cm/step) |
 | LINE 3 | BPOS(1:NB) | Control Rod Bank position (step) **0 step means full inserted** |  |
 | LINE 4 | BMAP(1:NX) | Control Rod Bank Map | Repeat this line NY times (see example the input below) |
-| LINE 5 | DISGTR(g) | Macroscopic Cross Section changes due to control rods insertion | Repeat LINE 2 NG times. And again repeat this input segment NMAT times. **This line is not necessary if `%XTAB` card present** |
+| LINE 5 | DISGTR(g) | Macroscopic Cross Section changes due to control rods insertion | Repeat LINE 5 NG times. And again repeat this input segment NMAT times. **This line is not necessary if `%XTAB` card present** |
 |   | DSIGA(g) |
 |   | DNUF(g) |
 |   | DSIGF(g) |

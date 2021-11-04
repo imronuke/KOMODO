@@ -11,13 +11,13 @@ This card is used to input coolant density parameters.
 | `%CDEN` | Variable | Description | Remarks |
 | --- | --- | --- | --- |
 | LINE 1 | CCDEN | Uniform distribution of coolant density in g/cm3 | Used as guess if `%THER` card active |
-| LINE 2 | RCDEN | Coolant density reference in g/cm3 from which the interpolation is done | Dummy if `%XTAB` card present |
-| LINE 3 | LSGTR(g) | Macroscopic Cross Section changes due to changes of coolant density in g/cm3  | Repeat LINE 2 NG times. And again repeat this input segment NMAT times. **This line is not necessary if `%XTAB` card present** |
+|        | RCDEN | Coolant density reference in g/cm3 from which the interpolation is done | Dummy if `%XTAB` card present |
+| LINE 2 | LSGTR(g) | Macroscopic Cross Section changes due to changes of coolant density in g/cm3  | Repeat LINE 2 NG times. And again repeat this input segment NMAT times. **This line is not necessary if `%XTAB` card present** |
 |   | LSIGA(g) |
 |   | LNUF(g) |
 |   | LSIGF(g) |
 |   | LSIGS(g,1:NG) |
-| LINE 4 | POPT | Print option if users want to print this card | Optional |
+| LINE 3 | POPT | Print option if users want to print this card | Optional |
 
 Example:
 ```

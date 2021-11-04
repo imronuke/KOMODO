@@ -47,7 +47,7 @@ FORWARD
 7.64704E-01  8.85488E-02  1.12635E-01  1.47876E-12  0.0  0.0  0.00000E+00  !COMP 11
 ```
 
-In the main input, we may refer to the `neacrp_xsec` file by telling KOMODO the location of `neacrp_xsec` preceded by `FILE` keyword 
+In the main input, we may refer to the `neacrp_xsec` file by telling KOMODO the location of `neacrp_xsec` preceded by `FILE` keyword
 ```
 ! XSEC CARD
 %XSEC
@@ -67,18 +67,18 @@ KOMODO has several input cards. Card is a keyword marked with `%`. Each card can
 | 3. | [`%XSEC`](https://imronuke.github.io/KOMODO/xsec) | Cross Sections | Conditional |
 | 4. | [`%CASE`](https://imronuke.github.io/KOMODO/case) | Problem case | Optional |
 | 5. | [`%ESRC`](https://imronuke.github.io/KOMODO/esrc) | Extra source | Conditional |
-| 7. | [`%ITER`](https://imronuke.github.io/KOMODO/iter) | Iteration Control | Optional |
-| 8. | [`%PRNT`](https://imronuke.github.io/KOMODO/prnt) | Output print control | Optional |
-| 9. | [`%ADF`](https://imronuke.github.io/KOMODO/adf) | Assembly Discontinuity Factor | Optional |
-| 10. | [`%CROD`](https://imronuke.github.io/KOMODO/crod) | Control rods | Conditional |
-| 11. | [`%EJCT`](https://imronuke.github.io/KOMODO/ejct) | Control rods ejection and/or insertion | Conditional |
-| 12. | [`%FTEM`](https://imronuke.github.io/KOMODO/ftem) | Fuel temperature input card | Conditional |
-| 13. | [`%MTEM`](https://imronuke.github.io/KOMODO/mtem) | Moderator/Coolant temperature input card | Conditional |
-| 14. | [`%CDEN`](https://imronuke.github.io/KOMODO/cden) | Coolant density input card | Conditional |
-| 15. | [`%BCON`](https://imronuke.github.io/KOMODO/bcon) | Boron concentration input card | Conditional |
-| 16. | [`%CBCS`](https://imronuke.github.io/KOMODO/cbcs) | Critical boron concentration input card | Conditional |
-| 17. | [`%THER`](https://imronuke.github.io/KOMODO/ther) | TH input card | Conditional |
-| 18. | [`%XTAB`](https://imronuke.github.io/KOMODO/xtab) | XSEC library for branch calculations | Conditional |
-| 19. | [`%KERN`](https://imronuke.github.io/KOMODO/kern) | Nodal kernel options | Optional |
-| 20. | [`%EXTR`](https://imronuke.github.io/KOMODO/extr) | Exponential flux transformation option card for transient problem | Optional |
-| 21. | [`%THET`](https://imronuke.github.io/KOMODO/thet) | Used to set theta value for transient problem | Optional |
+| 6. | [`%ITER`](https://imronuke.github.io/KOMODO/iter) | Iteration Control | Optional |
+| 7. | [`%PRNT`](https://imronuke.github.io/KOMODO/prnt) | Output print control | Optional |
+| 8. | [`%ADF`](https://imronuke.github.io/KOMODO/adf) | Assembly Discontinuity Factor | Optional |
+| 9. | [`%CROD`](https://imronuke.github.io/KOMODO/crod) | Control rods | Conditional |
+| 10. | [`%EJCT`](https://imronuke.github.io/KOMODO/ejct) | Control rods ejection and/or insertion | Conditional |
+| 11. | [`%FTEM`](https://imronuke.github.io/KOMODO/ftem) | Fuel temperature input card | Conditional |
+| 12. | [`%MTEM`](https://imronuke.github.io/KOMODO/mtem) | Moderator/Coolant temperature input card | Conditional |
+| 13. | [`%CDEN`](https://imronuke.github.io/KOMODO/cden) | Coolant density input card | Conditional |
+| 14. | [`%BCON`](https://imronuke.github.io/KOMODO/bcon) | Boron concentration input card | Conditional |
+| 15. | [`%CBCS`](https://imronuke.github.io/KOMODO/cbcs) | Critical boron concentration input card | Conditional |
+| 16. | [`%THER`](https://imronuke.github.io/KOMODO/ther) | TH input card | Conditional |
+| 17. | [`%XTAB`](https://imronuke.github.io/KOMODO/xtab) | XSEC library for branch calculations | Conditional |
+| 18. | [`%KERN`](https://imronuke.github.io/KOMODO/kern) | Nodal kernel options | Optional |
+| 19. | [`%EXTR`](https://imronuke.github.io/KOMODO/extr) | Exponential flux transformation option card for transient problem | Optional |
+| 20. | [`%THET`](https://imronuke.github.io/KOMODO/thet) | Used to set theta value for transient problem | Optional |

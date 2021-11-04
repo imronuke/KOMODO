@@ -11,13 +11,13 @@ This card is used to input moderator or coolant temperature parameters.
 | `%MTEM` | Variable | Description | Remarks |
 | --- | --- | --- | --- |
 | LINE 1 | CMTEM | Uniform distribution of the moderator temperature in Kelvin | Used as guess if `%THER` card active |
-| LINE 2 | RMTEM | Moderator temperature reference in Kelvin from which the interpolation is done | Dummy if `%XTAB` card active |
-| LINE 3 | MISGTR(g) | Macroscopic Cross Section changes due to changes of moderator temperature in Kelvin  | Repeat LINE 2 NG times. And again repeat this input segment NMAT times. **This line is not necessary if `%XTAB` card present** |
+|     | RMTEM | Moderator temperature reference in Kelvin from which the interpolation is done | Dummy if `%XTAB` card active |
+| LINE 2 | MISGTR(g) | Macroscopic Cross Section changes due to changes of moderator temperature in Kelvin  | Repeat LINE 2 NG times. And again repeat this input segment NMAT times. **This line is not necessary if `%XTAB` card present** |
 |   | MSIGA(g) |
 |   | MNUF(g) |
 |   | MSIGF(g) |
 |   | MSIGS(g,1:NG) |
-| LINE 4 | POPT | Print option if users want to print this card | Optional |
+| LINE 3 | POPT | Print option if users want to print this card | Optional |
 
 Example:
 ```

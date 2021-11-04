@@ -23,6 +23,7 @@ This card is used to set the T-H parameters. It also activates T-H feedback. Whe
 | LINE 5 | NFPIN | Number of fuel pin for each assembly |  |
 |        | NGT | Number of guide tubes    |  |
 | LINE 6 | CF | Fraction of heat deposited in the coolant |  |
+| LINE 7 | POPT | Print option if users want to print this card | Optional |
 
 Example:
 ```

@@ -4,20 +4,20 @@ theme: _config.yml
 filename: ftem
 ---
 
-# %THER Card
+# %FTEM Card
 
 This card is used to input fuel temperature parameters.
 
 | `%FTEM` | Variable | Description | Remarks |
 | --- | --- | --- | --- |
 | LINE 1 | CFTEM | Uniform distribution of the fuel temperature in Kelvin | Used as guess if `%THER` card active |
-| LINE 2 | RFTEM | Fuel temperature reference in Kelvin from which the interpolation is done | Dummy if `%XTAB` card is active |
-| LINE 3 | FISGTR(g) | Macroscopic Cross Section changes due to changes of fuel temperature in Kelvin  | Repeat LINE 2 NG times. And again repeat this input segment NMAT times. **This line is not necessary if `%XTAB` card present** |
+|        | RFTEM | Fuel temperature reference in Kelvin from which the interpolation is done | Dummy if `%XTAB` card is active |
+| LINE 2 | FISGTR(g) | Macroscopic Cross Section changes due to changes of fuel temperature in Kelvin  | Repeat LINE 2 NG times. And again repeat this input segment NMAT times. **This line is not necessary if `%XTAB` card present** |
 |   | FSIGA(g) |
 |   | FNUF(g) |
 |   | FSIGF(g) |
 |   | FSIGS(g,1:NG) |
-| LINE 4 | POPT | Print option if users want to print this card | Optional |
+| LINE 3 | POPT | Print option if users want to print this card | Optional |
 
 Example:
 ```
