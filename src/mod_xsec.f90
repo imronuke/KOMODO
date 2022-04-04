@@ -4,6 +4,17 @@ module xsec
   implicit none
   save
 
+  !Define + and - operators for XBRANCH type addition and substitution respectively
+  INTERFACE OPERATOR (.add.)
+    MODULE PROCEDURE brAdd
+  END INTERFACE
+  INTERFACE OPERATOR (.subs.)
+    MODULE PROCEDURE brSubst
+  END INTERFACE
+  INTERFACE OPERATOR (.mult.)
+    MODULE PROCEDURE brRealMult
+  END INTERFACE
+
 contains
 
   !******************************************************************************!
@@ -510,17 +521,6 @@ contains
   INTEGER :: i
   REAL(DP) :: radx
 
-  !Define + and - operators for XBRANCH type addition and substitution respectively
-  INTERFACE OPERATOR (+)
-    MODULE PROCEDURE brAdd
-  END INTERFACE
-  INTERFACE OPERATOR (-)
-    MODULE PROCEDURE brSubst
-  END INTERFACE
-  INTERFACE OPERATOR (*)
-    MODULE PROCEDURE brRealMult
-  END INTERFACE
-
   ! Set to default
   s1=1; s2=1; t1=1; t2=1; u1=1; u2=1; v1=1; v2=1
 
@@ -643,22 +643,22 @@ contains
     !interpolation on Moderator Temperature
     IF (m(mn)%nm > 1) THEN
       radx = (xmtem - m(mn)%pm(v1)) / (m(mn)%pm(v2) - m(mn)%pm(v1))
-      xs(1) = m(mn)%xsec(s1,t1,u1,v1) + &
-      radx * (m(mn)%xsec(s1,t1,u1,v2) - m(mn)%xsec(s1,t1,u1,v1))
-      xs(2) = m(mn)%xsec(s1,t1,u2,v1) + &
-      radx * (m(mn)%xsec(s1,t1,u2,v2) - m(mn)%xsec(s1,t1,u2,v1))
-      xs(3) = m(mn)%xsec(s1,t2,u1,v1) + &
-      radx * (m(mn)%xsec(s1,t2,u1,v2) - m(mn)%xsec(s1,t2,u1,v1))
-      xs(4) = m(mn)%xsec(s1,t2,u2,v1) + &
-      radx * (m(mn)%xsec(s1,t2,u2,v2) - m(mn)%xsec(s1,t2,u2,v1))
-      xs(5) = m(mn)%xsec(s2,t1,u1,v1) + &
-      radx * (m(mn)%xsec(s2,t1,u1,v2) - m(mn)%xsec(s2,t1,u1,v1))
-      xs(6) = m(mn)%xsec(s2,t1,u2,v1) + &
-      radx * (m(mn)%xsec(s2,t1,u2,v2) - m(mn)%xsec(s2,t1,u2,v1))
-      xs(7) = m(mn)%xsec(s2,t2,u1,v1) + &
-      radx * (m(mn)%xsec(s2,t2,u1,v2) - m(mn)%xsec(s2,t2,u1,v1))
-      xs(8) = m(mn)%xsec(s2,t2,u2,v1) + &
-      radx * (m(mn)%xsec(s2,t2,u2,v2) - m(mn)%xsec(s2,t2,u2,v1))
+      xs(1) = m(mn)%xsec(s1,t1,u1,v1) .add. &
+      (radx .mult. (m(mn)%xsec(s1,t1,u1,v2) .subs. m(mn)%xsec(s1,t1,u1,v1)))
+      xs(2) = m(mn)%xsec(s1,t1,u2,v1) .add. &
+      (radx .mult. (m(mn)%xsec(s1,t1,u2,v2) .subs. m(mn)%xsec(s1,t1,u2,v1)))
+      xs(3) = m(mn)%xsec(s1,t2,u1,v1) .add. &
+      (radx .mult. (m(mn)%xsec(s1,t2,u1,v2) .subs. m(mn)%xsec(s1,t2,u1,v1)))
+      xs(4) = m(mn)%xsec(s1,t2,u2,v1) .add. &
+      (radx .mult. (m(mn)%xsec(s1,t2,u2,v2) .subs. m(mn)%xsec(s1,t2,u2,v1)))
+      xs(5) = m(mn)%xsec(s2,t1,u1,v1) .add. &
+      (radx .mult. (m(mn)%xsec(s2,t1,u1,v2) .subs. m(mn)%xsec(s2,t1,u1,v1)))
+      xs(6) = m(mn)%xsec(s2,t1,u2,v1) .add. &
+      (radx .mult. (m(mn)%xsec(s2,t1,u2,v2) .subs. m(mn)%xsec(s2,t1,u2,v1)))
+      xs(7) = m(mn)%xsec(s2,t2,u1,v1) .add. &
+      (radx .mult. (m(mn)%xsec(s2,t2,u1,v2) .subs. m(mn)%xsec(s2,t2,u1,v1)))
+      xs(8) = m(mn)%xsec(s2,t2,u2,v1) .add. &
+      (radx .mult. (m(mn)%xsec(s2,t2,u2,v2) .subs. m(mn)%xsec(s2,t2,u2,v1)))
     ELSE
       xs(1) = m(mn)%xsec(s1,t1,u1,v1)
       xs(2) = m(mn)%xsec(s1,t1,u2,v1)
@@ -672,42 +672,42 @@ contains
     !interpolation on Fuel Temperature
     IF (m(mn)%nf > 1) THEN
       radx = (xftem - m(mn)%pf(u1)) / (m(mn)%pf(u2) - m(mn)%pf(u1))
-      xs(1) = xs(1) + radx * (xs(2) - xs(1))
-      xs(3) = xs(3) + radx * (xs(4) - xs(3))
-      xs(5) = xs(5) + radx * (xs(6) - xs(5))
-      xs(7) = xs(7) + radx * (xs(8) - xs(7))
+      xs(1) = xs(1) .add. (radx .mult. (xs(2) .subs. xs(1)))
+      xs(3) = xs(3) .add. (radx .mult. (xs(4) .subs. xs(3)))
+      xs(5) = xs(5) .add. (radx .mult. (xs(6) .subs. xs(5)))
+      xs(7) = xs(7) .add. (radx .mult. (xs(8) .subs. xs(7)))
     END IF
     !interpolation on Boron concentration
     IF (m(mn)%nb > 1) THEN
       radx = (xbcon - m(mn)%pb(t1)) / (m(mn)%pb(t2) - m(mn)%pb(t1))
-      xs(1) = xs(1) + radx * (xs(3) - xs(1))
-      xs(5) = xs(5) + radx * (xs(7) - xs(5))
+      xs(1) = xs(1) .add. (radx .mult. (xs(3) .subs. xs(1)))
+      xs(5) = xs(5) .add. (radx .mult. (xs(7) .subs. xs(5)))
     END IF
     !interpolation on coolant density
     IF (m(mn)%nd > 1) THEN
-      xs(1) = xs(1) + (xcden - m(mn)%pd(s1)) / (m(mn)%pd(s2) - m(mn)%pd(s1)) * &
-      (xs(5) - xs(1))
+      xs(1) = xs(1) .add. ((xcden - m(mn)%pd(s1)) / (m(mn)%pd(s2) - m(mn)%pd(s1)) .mult. &
+      (xs(5) .subs. xs(1)))
     END IF
   ELSE   ! For Rodded XSEC
     !interpolation on Moderator Temperature
     IF (m(mn)%nm > 1) THEN
       radx = (xmtem - m(mn)%pm(v1)) / (m(mn)%pm(v2) - m(mn)%pm(v1))
-      xs(1) = m(mn)%rxsec(s1,t1,u1,v1) + &
-      radx * (m(mn)%rxsec(s1,t1,u1,v2) - m(mn)%rxsec(s1,t1,u1,v1))
-      xs(2) = m(mn)%rxsec(s1,t1,u2,v1) + &
-      radx * (m(mn)%rxsec(s1,t1,u2,v2) - m(mn)%rxsec(s1,t1,u2,v1))
-      xs(3) = m(mn)%rxsec(s1,t2,u1,v1) + &
-      radx * (m(mn)%rxsec(s1,t2,u1,v2) - m(mn)%rxsec(s1,t2,u1,v1))
-      xs(4) = m(mn)%rxsec(s1,t2,u2,v1) + &
-      radx * (m(mn)%rxsec(s1,t2,u2,v2) - m(mn)%rxsec(s1,t2,u2,v1))
-      xs(5) = m(mn)%rxsec(s2,t1,u1,v1) + &
-      radx * (m(mn)%rxsec(s2,t1,u1,v2) - m(mn)%rxsec(s2,t1,u1,v1))
-      xs(6) = m(mn)%rxsec(s2,t1,u2,v1) + &
-      radx * (m(mn)%rxsec(s2,t1,u2,v2) - m(mn)%rxsec(s2,t1,u2,v1))
-      xs(7) = m(mn)%rxsec(s2,t2,u1,v1) + &
-      radx * (m(mn)%rxsec(s2,t2,u1,v2) - m(mn)%rxsec(s2,t2,u1,v1))
-      xs(8) = m(mn)%rxsec(s2,t2,u2,v1) + &
-      radx * (m(mn)%rxsec(s2,t2,u2,v2) - m(mn)%rxsec(s2,t2,u2,v1))
+      xs(1) = m(mn)%rxsec(s1,t1,u1,v1) .add. &
+      (radx .mult. (m(mn)%rxsec(s1,t1,u1,v2) .subs. m(mn)%rxsec(s1,t1,u1,v1)))
+      xs(2) = m(mn)%rxsec(s1,t1,u2,v1) .add. &
+      (radx .mult. (m(mn)%rxsec(s1,t1,u2,v2) .subs. m(mn)%rxsec(s1,t1,u2,v1)))
+      xs(3) = m(mn)%rxsec(s1,t2,u1,v1) .add. &
+      (radx .mult. (m(mn)%rxsec(s1,t2,u1,v2) .subs. m(mn)%rxsec(s1,t2,u1,v1)))
+      xs(4) = m(mn)%rxsec(s1,t2,u2,v1) .add. &
+      (radx .mult. (m(mn)%rxsec(s1,t2,u2,v2) .subs. m(mn)%rxsec(s1,t2,u2,v1)))
+      xs(5) = m(mn)%rxsec(s2,t1,u1,v1) .add. &
+      (radx .mult. (m(mn)%rxsec(s2,t1,u1,v2) .subs. m(mn)%rxsec(s2,t1,u1,v1)))
+      xs(6) = m(mn)%rxsec(s2,t1,u2,v1) .add. &
+      (radx .mult. (m(mn)%rxsec(s2,t1,u2,v2) .subs. m(mn)%rxsec(s2,t1,u2,v1)))
+      xs(7) = m(mn)%rxsec(s2,t2,u1,v1) .add. &
+      (radx .mult. (m(mn)%rxsec(s2,t2,u1,v2) .subs. m(mn)%rxsec(s2,t2,u1,v1)))
+      xs(8) = m(mn)%rxsec(s2,t2,u2,v1) .add. &
+      (radx .mult. (m(mn)%rxsec(s2,t2,u2,v2) .subs. m(mn)%rxsec(s2,t2,u2,v1)))
     ELSE
       xs(1) = m(mn)%rxsec(s1,t1,u1,v1)
       xs(2) = m(mn)%rxsec(s1,t1,u2,v1)
@@ -721,22 +721,22 @@ contains
     !interpolation on Fuel Temperature
     IF (m(mn)%nf > 1) THEN
       radx = (xftem - m(mn)%pf(u1)) / (m(mn)%pf(u2) - m(mn)%pf(u1))
-      xs(1) = xs(1) + radx * (xs(2) - xs(1))
-      xs(3) = xs(3) + radx * (xs(4) - xs(3))
-      xs(5) = xs(5) + radx * (xs(6) - xs(5))
-      xs(7) = xs(7) + radx * (xs(8) - xs(7))
+      xs(1) = xs(1) .add. (radx .mult. (xs(2) .subs. xs(1)))
+      xs(3) = xs(3) .add. (radx .mult. (xs(4) .subs. xs(3)))
+      xs(5) = xs(5) .add. (radx .mult. (xs(6) .subs. xs(5)))
+      xs(7) = xs(7) .add. (radx .mult. (xs(8) .subs. xs(7)))
     END IF
     !interpolation on Boron concentration
     IF (m(mn)%nb > 1) THEN
       radx = (xbcon - m(mn)%pb(t1)) / (m(mn)%pb(t2) - m(mn)%pb(t1))
-      xs(1) = xs(1) + radx * (xs(3) - xs(1))
-      xs(5) = xs(5) + radx * (xs(7) - xs(5))
+      xs(1) = xs(1) .add. (radx .mult. (xs(3) .subs. xs(1)))
+      xs(5) = xs(5) .add. (radx .mult. (xs(7) .subs. xs(5)))
     END IF
 
     !interpolation on coolant density
     IF (m(mn)%nd > 1) THEN
-      xs(1) = xs(1) + (xcden - m(mn)%pd(s1)) / (m(mn)%pd(s2) - m(mn)%pd(s1)) * &
-      (xs(5) - xs(1))
+      xs(1) = xs(1) .add. ((xcden - m(mn)%pd(s1)) / (m(mn)%pd(s2) - m(mn)%pd(s1)) .mult. &
+      (xs(5) .subs. xs(1)))
     END IF
   END IF
   sigtr = xs(1)%sigtr

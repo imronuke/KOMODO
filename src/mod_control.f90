@@ -131,9 +131,9 @@ contains
     END IF
 
     IF (powtot > 0.0) THEN
-	   IF (aprad == 1) CALL AsmPow(pow)
-       IF (apaxi == 1) CALL AxiPow(pow)
-	END IF
+      IF (aprad == 1) CALL AsmPow(pow)
+      IF (apaxi == 1) CALL AxiPow(pow)
+    END IF
 
     IF (afrad == 1) CALL AsmFlux()
 

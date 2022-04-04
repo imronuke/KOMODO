@@ -83,7 +83,7 @@ INTEGER :: g, i, N
 CHARACTER(LEN=100) :: iname, oname
 
 !Got this trick from: http://web.utah.edu/thorne/computing/Handy_Fortran_Tricks.pdf
-N = IARGC()
+N = command_argument_count()
 IF (N < 1) THEN
    WRITE(*,*) '  NOTE : You can also write the input directly after the command'
    WRITE(*,'(A,A100)',ADVANCE='NO') '  INPUT NAME : '
@@ -413,6 +413,13 @@ if (scr) then
   WRITE(*, 2411)
   WRITE(*, 2412)
   WRITE(*, 2409)
+#ifdef __GIT
+  WRITE(*, *)
+  WRITE(*, *) "GIT COMMIT SHA    : ", __GIT_COMMIT_HASH
+  WRITE(*, *) "GIT COMMIT DATE   : ", __GIT_DATE
+  WRITE(*, *) "GIT COMMIT BRANCH : ", __GIT_BRANCH
+  WRITE(*, *)
+#endif
   WRITE(*, *)
   WRITE(*, *)
 end if
@@ -534,8 +541,8 @@ DO
     IF (per > 0) THEN              ! IF %card detected
       iline = iline(per+1:200)
       iline = TRIM(ADJUSTL(iline))
-      card  = iline
-      SELECT CASE (iline)
+      card  = trim(iline)
+      SELECT CASE (card)
       CASE('MODE'); bunit = umode; bmode = 1
       CASE('XSEC'); bunit = uxsec; bxsec = 1
       CASE('GEOM'); bunit = ugeom; bgeom = 1
@@ -3666,7 +3673,6 @@ USE sdata, ONLY: ng, nnod, sigf, f0, vdel, pow, ppow
 
 implicit none
 
-real(dp), dimension(nnod,ng) :: npow   !node power for node n and group g
 integer :: g, n
 real(dp) :: tpow
 
