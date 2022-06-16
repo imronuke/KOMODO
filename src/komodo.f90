@@ -83,8 +83,10 @@ WRITE(*,*)
 WRITE(*,*) "  KOMODO EXIT NORMALLY"
 
 #ifndef __NVHPC
+#ifndef __GNU
 ! KOMODO stop to prevent remaining memory not allocated for g95 compiler
 stop
+#endif
 #endif
 
 END PROGRAM

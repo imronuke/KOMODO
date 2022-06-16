@@ -14,6 +14,8 @@ if(CMAKE_Fortran_COMPILER_ID  STREQUAL "GNU")
    else()
       set(CMAKE_Fortran_FLAGS "-O3 ${f90flags}")
    endif()
+
+   add_definitions(-D__GNU)
 elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
    set(f90flags "-fpp -std08 -assume byterecl -traceback -diag-disable 6009 -fPIC -list-line-length-none")
 
