@@ -42,16 +42,16 @@ REAL(DP), DIMENSION(:), ALLOCATABLE :: xdel, ydel, zdel, vdel  ! Delta x, y and 
 INTEGER :: xwest, xeast, ysouth, ynorth, zbott, ztop       ! Boundary conditions
 INTEGER, DIMENSION(:), ALLOCATABLE :: mat                  ! Material assignment to nodes
 
-! FDM Matrix
+! FDM Matrix (Stored in Compressed Sparse Row aka CSR)
 TYPE :: FDM_MATR
   REAL(DP), DIMENSION(:), ALLOCATABLE :: elmn               ! Non-zero elements of FDM matrix for a row
 END TYPE
-TYPE(FDM_MATR), DIMENSION(:,:), ALLOCATABLE :: A            ! FDM matrix
+TYPE(FDM_MATR), DIMENSION(:), ALLOCATABLE :: A            ! FDM matrix
 TYPE :: FDM_IND
-  INTEGER                            :: ncol               ! Number of non-zero column in a row for the FDM Matrix
+  INTEGER, DIMENSION(:), ALLOCATABLE :: row                ! Row Pointer
   INTEGER, DIMENSION(:), ALLOCATABLE :: col                ! Column index for the non-zero element of the FDM matrix
 END TYPE
-TYPE(FDM_IND), DIMENSION(:), ALLOCATABLE :: ind            ! Index of the FDM matrix
+TYPE(FDM_IND) :: ind            ! Index of the FDM matrix
 
 ! Keff, flux and currents
 REAL(DP) :: Ke

@@ -162,53 +162,56 @@ contains
     ! Calculate number of nodes for one planar
     np = rec
 
+    rec = 0
     do n = 1, nnod
 
       ! Set i, j, k
       i = ix(n); j = iy(n); k = iz(n)
-      rec = 0
+
+      ind%row(n) = rec
 
       ! Lower diagonal matrix element for z-direction
       if (k /= 1) then
         rec = rec + 1
-        ind(n)%col(rec) = n - np
+        ind%col(rec) = n - np
       end if
 
       ! Lower diagonal matrix element for y-direction
       if (j /= xstag(i)%smin) then
         rec = rec + 1
-        ind(n)%col(rec) = n - (nodp(i,j) - nodp(i,j-1))
+        ind%col(rec) = n - (nodp(i,j) - nodp(i,j-1))
       end if
 
       ! Lower diagonal matrix element for x-direction
       if (i /= ystag(j)%smin) then
         rec = rec + 1
-        ind(n)%col(rec) = n - 1
+        ind%col(rec) = n - 1
       end if
 
       ! Diagonal matrix elementss
       rec = rec + 1
-      ind(n)%col(rec) = n
+      ind%col(rec) = n
 
        ! Upper diagonal matrix element for x-direction
       if (i /= ystag(j)%smax) then
         rec = rec + 1
-        ind(n)%col(rec) = n + 1
+        ind%col(rec) = n + 1
       end if
 
       ! Upper diagonal matrix element for y-direction
       if (j /= xstag(i)%smax) then
         rec = rec + 1
-        ind(n)%col(rec) = n + (nodp(i,j+1) - nodp(i,j))
+        ind%col(rec) = n + (nodp(i,j+1) - nodp(i,j))
       end if
 
       ! Upper diagonal matrix element for z-direction
       if (k /= nzz) then
         rec = rec + 1
-        ind(n)%col(rec) = n + np
+        ind%col(rec) = n + np
       end if
 
     end do
+    ind%row(nnod+1) = rec + 1
 
   end subroutine set_ind
 
@@ -230,49 +233,43 @@ contains
 
     ! Allocate FDM matrix for first time
     if (first) then
-      allocate(A(nnod,ng))
-      do n = 1, nnod
-        do g = 1, ng
-          allocate(A(n,g)%elmn(ind(n)%ncol))
-        end do
-      end do
       call set_ind()
       first = .false.
     end if
 
-    ! If need to recalculate FDM coupling coefficients
+    ! If need to calculate FDM coupling coefficients
     if (opt > 0) call coup_coef()
 
 
     ! Setup CMFD linear system
     do g = 1, ng
+      rec = 0
       do n = 1, nnod
 
         ! Set i, j, k
         i = ix(n); j = iy(n); k = iz(n)
-        rec = 0
 
         ! Lower diagonal matrix element for z-direction
         if (k /= 1) then
           rec = rec + 1
-          A(n,g)%elmn(rec) = -(nod(n,g)%df(6) - nod(n,g)%dn(6)) / zdel(k)
+          A(g)%elmn(rec) = -(nod(n,g)%df(6) - nod(n,g)%dn(6)) / zdel(k)
         end if
 
         ! Lower diagonal matrix element for y-direction
         if (j /= xstag(i)%smin) then
           rec = rec + 1
-          A(n,g)%elmn(rec) = -(nod(n,g)%df(4) - nod(n,g)%dn(4)) / ydel(j)
+          A(g)%elmn(rec) = -(nod(n,g)%df(4) - nod(n,g)%dn(4)) / ydel(j)
         end if
 
         ! Lower diagonal matrix element for x-direction
         if (i /= ystag(j)%smin) then
           rec = rec + 1
-          A(n,g)%elmn(rec) = -(nod(n,g)%df(2) - nod(n,g)%dn(2)) / xdel(i)
+          A(g)%elmn(rec) = -(nod(n,g)%df(2) - nod(n,g)%dn(2)) / xdel(i)
         end if
 
         ! Diagonal matrix elementss
         rec = rec + 1
-        A(n,g)%elmn(rec) = (nod(n,g)%df(1) + nod(n,g)%df(2) - &
+        A(g)%elmn(rec) = (nod(n,g)%df(1) + nod(n,g)%df(2) - &
                            nod(n,g)%dn(1) + nod(n,g)%dn(2)) / xdel(i) + &
                            (nod(n,g)%df(3) + nod(n,g)%df(4) - &
                            nod(n,g)%dn(3) + nod(n,g)%dn(4)) / ydel(j) + &
@@ -283,19 +280,19 @@ contains
          ! Upper diagonal matrix element for x-direction
         if (i /= ystag(j)%smax) then
           rec = rec + 1
-          A(n,g)%elmn(rec) = -(nod(n,g)%df(1) + nod(n,g)%dn(1)) / xdel(i)
+          A(g)%elmn(rec) = -(nod(n,g)%df(1) + nod(n,g)%dn(1)) / xdel(i)
         end if
 
         ! Upper diagonal matrix element for y-direction
         if (j /= xstag(i)%smax) then
           rec = rec + 1
-          A(n,g)%elmn(rec) = -(nod(n,g)%df(3) + nod(n,g)%dn(3)) / ydel(j)
+          A(g)%elmn(rec) = -(nod(n,g)%df(3) + nod(n,g)%dn(3)) / ydel(j)
         end if
 
         ! Upper diagonal matrix element for z-direction
         if (k /= nzz) then
           rec = rec + 1
-          A(n,g)%elmn(rec) = -(nod(n,g)%df(5) + nod(n,g)%dn(5)) / zdel(k)
+          A(g)%elmn(rec) = -(nod(n,g)%df(5) + nod(n,g)%dn(5)) / zdel(k)
         end if
 
       end do
@@ -1245,16 +1242,20 @@ end subroutine print_keff
    real(dp), dimension(:), intent(in)   :: x   ! vector
    real(dp), dimension(size(x))         :: v   ! resulting vector
 
-   integer   :: n
-   integer   :: i
+   integer   :: i, j
+   integer   :: row_start, row_end
+   real(dp)  :: tmpsum
 
-   v = 0._dp
-   do n = 1, nnod
-     do i = 1, ind(n)%ncol
-       v(n) = v(n) + A(n,g)%elmn(i)*x(ind(n)%col(i))
-     end do
-   end do
-
+  v = 0._dp
+  do i = 1, nnod
+    tmpsum = 0.
+    row_start = ind%row(i) + 1
+    row_end   = ind%row(i+1)
+    do j = row_start, row_end
+      tmpsum = tmpsum + A(g)%elmn(j) * x(ind%col(j)) 
+    end do
+    v(i) = tmpsum
+  end do
  end function sp_matvec
 
  !****************************************************************************!

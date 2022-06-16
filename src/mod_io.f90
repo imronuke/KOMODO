@@ -1306,11 +1306,11 @@ USE sdata, ONLY: nxx, nyy, nzz, ix, iy, iz, xyz, &
                  nnod, sigtr, siga, nuf, sigf, &
                  sigs, D, sigr, ng, ystag, xstag, &
                  xdel, ydel, zdel, vdel, nupd, &
-                 mat, ind
+                 mat, ind, A
 
 IMPLICIT NONE
 
-INTEGER :: i, j, k, n, noz
+INTEGER :: i, j, k, n, g, noz
 
 ALLOCATE(ix(nnod), iy(nnod), iz(nnod))
 ALLOCATE(xyz(nxx, nyy, nzz))
@@ -1347,9 +1347,8 @@ DO i = 1, nnod
 END DO
 
 ! Calculate number of non-zero element in the CMFD Matrix
-ALLOCATE(ind(nnod))
+noz = 0
 do n = 1, nnod
-  noz = 0
   i = ix(n); j = iy(n); k = iz(n)         ! Set i, j, k
   if (k /= 1) noz = noz + 1
   if (j /= xstag(i)%smin) noz = noz + 1
@@ -1358,9 +1357,14 @@ do n = 1, nnod
   if (i /= ystag(j)%smax) noz = noz + 1
   if (j /= xstag(i)%smax) noz = noz + 1
   if (k /= nzz) noz = noz + 1
-  ind(n)%ncol = noz
-  ALLOCATE(ind(n)%col(noz))
 end do
+
+ALLOCATE(A(ng))
+DO g = 1, ng
+    ALLOCATE(A(g)%elmn(noz))
+END DO
+ALLOCATE(ind%col(noz))
+ALLOCATE(ind%row(nnod+1))
 
 ! calaculate default nodal update interval
 nupd = ceiling((nxx + nyy + nzz) / 2.5)
