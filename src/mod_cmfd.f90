@@ -211,7 +211,7 @@ contains
       end if
 
     end do
-    ind%row(nnod+1) = rec + 1
+    ind%row(nnod+1) = rec
 
   end subroutine set_ind
 
@@ -223,7 +223,7 @@ contains
     ! two-dimensional vector ind and non-zero elements strored in A
 
     use sdata, only: nod, ix, iy, iz, xdel, ydel, zdel, &
-    ystag, xstag, nnod, sigr, nzz, ng, A, ind
+    ystag, xstag, nnod, sigr, nzz, ng, A
 
     implicit none
 
