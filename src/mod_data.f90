@@ -200,6 +200,7 @@ real(dp), dimension(:), allocatable   :: Ln1, Lp1            ! First Transverse 
 real(dp)                              :: ndmax               ! Maximum change in nodal coupling coefficients
 character(len=4)                      :: kern = 'SANM'
 integer                               :: im, jm, km
+real(dp), allocatable                 :: r(:), rs(:), v(:), p(:), s(:), t(:), tmp(:)
 
 !Timing
 real(dp) :: fdm_time = 0., nod_time = 0., xs_time = 0., &

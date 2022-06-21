@@ -1,6 +1,7 @@
 module CMFD
 
   use sdata, only: dp
+  use gpu
   implicit none
   save
 
@@ -213,6 +214,9 @@ contains
     end do
     ind%row(nnod+1) = rec
 
+    !$acc enter data copyin(ind)
+    !$acc enter data copyin(ind%row, ind%col)
+
   end subroutine set_ind
 
   !****************************************************************************!
@@ -297,6 +301,19 @@ contains
 
       end do
     end do
+
+    if (opt > 0) then
+      !$acc enter data copyin(A)
+      do g = 1, ng
+        !$acc enter data copyin(A(g)%elmn)
+      end do
+    else
+      do g = 1, ng
+        !$acc update device(A(g)%elmn(:))
+      end do
+    end if
+
+    
 
   end subroutine matrix_setup
 
@@ -467,7 +484,7 @@ end subroutine print_keff
       call TSrc(g, Ke, bs)
 
       !!!Inner Iteration
-      call bicg(nin, g, bs, f0(:,g))
+      call bicg(nin, g, bs)
     end do
     CALL FSrc (fs0)               !Update fission source
     errn = fs0 - fs0c
@@ -558,7 +575,7 @@ end subroutine print_keff
       call TSrc(g, Ke, bs)
 
       !!!Inner Iteration
-      call bicg(nin, g, bs, f0(:,g))
+      call bicg(nin, g, bs)
     end do
     CALL FSrc (fs0)               !Update fission source
     errn = fs0 - fs0c
@@ -652,7 +669,7 @@ end subroutine print_keff
       call TSrcAd(g, Ke, bs)
 
       !!!Inner Iteration
-      call bicg(nin, g, bs, f0(:,g))
+      call bicg(nin, g, bs)
     end do
     CALL FSrcAd (fs0)               !Update fission source
     errn = fs0 - fs0c
@@ -752,7 +769,7 @@ end subroutine print_keff
       call TSrc(g, Ke, bs)
 
       !!!Inner Iteration
-      call bicg(nin, g, bs, f0(:,g))
+      call bicg(nin, g, bs)
     end do
     CALL FSrc (fs0)               !Update fission source
     errn = fs0 - fs0c
@@ -830,7 +847,7 @@ end subroutine print_keff
       call TSrcTr(g, bs)
 
       !!!Inner Iteration
-      call bicg(nin, g, bs, f0(:,g))
+      call bicg(nin, g, bs)
     end do
     CALL FSrc (fs0)               !Update fission source
     errn = fs0 - fs0c
@@ -1187,7 +1204,9 @@ end subroutine print_keff
 
   !****************************************************************************!
 
-  subroutine bicg(imax,g,b,x)
+  subroutine bicg(imax,g,b)
+
+    use sdata, only: r, rs, v, p, s, t, tmp, nnod, f0
 
     !Purpose: to solve linear of system equation with BiCGSTAB method
     ! (without preconditioner). Sparse matrix saved in a and indexed in rc.
@@ -1200,38 +1219,67 @@ end subroutine print_keff
 
     integer, intent(in)                  :: imax, g  ! Max. number of iteration and group number
     real(dp), dimension(:), intent(in)   :: b   ! source
-    real(dp), dimension(:), intent(inout)  :: x
 
-    real(dp), dimension(size(b, dim=1))  :: r, rs, v, p, s, t
     real(dp)                             :: rho      , rho_prev
     real(dp)                             :: alpha    , omega   , beta, theta
     integer                              :: i
+    logical                              :: first = .true.
 
-    r  = b - sp_matvec(g,x)
-    rs = r
-    rho   = 1.0_dp; alpha = 1.0_dp; omega = 1.0_dp
-    v  = 0.0_dp; p  = 0.0_dp
+    if (first) then
+      call gpu_allocate(r,  nnod)
+      call gpu_allocate(rs, nnod)
+      call gpu_allocate(v,  nnod)
+      call gpu_allocate(p,  nnod)
+      call gpu_allocate(t,  nnod)
+      call gpu_allocate(s,  nnod)
+      call gpu_allocate(tmp,  nnod)
+      !$acc enter data copyin(f0(:,:))
+      first = .false.
+    end if
+
+    !$acc enter data copyin(b)
+
+    ! write(*,*) r(1:3)
+    ! call gpu_initialize(r, 3.0_dp)
+    ! !$acc update self(r)
+    ! write(*,*) r(1:3)
+
+    call sp_matvec(g,f0(:,g),r)
+
+    call xpby(b, -1._dp, r, rs)
+    call xew(rs, r)
+    
+    rho   = 1.0_dp
+    alpha = 1.0_dp
+    omega = 1.0_dp
+    call gpu_initialize(v, 0.0_dp)
+    call gpu_initialize(p, 0.0_dp)
 
     do i = 1, imax
       rho_prev = rho
       rho      = dproduct(rs,r)
       beta     = (rho/rho_prev) * (alpha/omega)
-      p        = r + beta * (p - omega*v)
-      v        = sp_matvec(g,p)
+      call xpby(p, -omega, v, tmp)
+      call xpby(r, beta, tmp, p)
+      call sp_matvec(g,p,v)
       alpha    = rho/dproduct(rs,v)
-      s        = r - alpha*v
-      t        = sp_matvec(g,s)
+      call xpby(r, -alpha, v, s)
+      call sp_matvec(g,s,t)
       theta    = dproduct(t,t)
       omega    = dproduct(t,s)/theta
-      x        = x + alpha*p + omega*s
-      r        = s - omega*t
+      call axpby(alpha, p, omega, s, tmp)
+      call xpby(f0(:,g), 1.0_dp, tmp, r)
+      call xew(r, f0(:,g))
+      call xpby(s, -omega, t, r)
     end do
+    !$acc exit data delete(b)
+    !$acc update self(f0(:,g))
 
   end subroutine bicg
 
  !****************************************************************************!
 
- function sp_matvec(g,x) result(v)
+ subroutine sp_matvec(g,x,vx)
 
    USE sdata, ONLY: A, ind, nnod
 
@@ -1240,28 +1288,32 @@ end subroutine print_keff
 
    integer, intent(in) :: g                    ! group number of FDM matrix
    real(dp), dimension(:), intent(in)   :: x   ! vector
-   real(dp), dimension(size(x))         :: v   ! resulting vector
+   real(dp), dimension(:)         :: vx   ! resulting vector
 
    integer   :: i, j
    integer   :: row_start, row_end
    real(dp)  :: tmpsum
 
-  v = 0._dp
+  !$acc kernels present(A(g)%elmn, ind, x, vx)
+  !$acc loop device_type(nvidia) gang worker(32)
   do i = 1, nnod
     tmpsum = 0.
     row_start = ind%row(i) + 1
     row_end   = ind%row(i+1)
+    ! vector(8) because at each row there are 7 non zero elements
+    !$acc loop device_type(nvidia) vector(8)  
     do j = row_start, row_end
       tmpsum = tmpsum + A(g)%elmn(j) * x(ind%col(j)) 
     end do
-    v(i) = tmpsum
+    vx(i) = tmpsum
   end do
- end function sp_matvec
+  !$acc end kernels
+
+ end subroutine sp_matvec
 
  !****************************************************************************!
 
- function dproduct(a,b) result(x)
-
+ real(dp) function dproduct(a,b)
    !purpose: to perform dot product
 
    real(dp), dimension(:), intent(in)   :: a, b   ! vector
@@ -1269,13 +1321,67 @@ end subroutine print_keff
 
    integer   :: n
 
+   
+   !$acc kernels present(a, b)
    x = 0._dp
    do n = 1, size(a)
      x = x + a(n) * b(n)
    end do
+   !$acc end kernels
+
+   dproduct = x
 
  end function dproduct
 
   !****************************************************************************!
+
+ subroutine axpby(alpha, x, beta, y, w)
+  implicit none
+  real(dp)              :: alpha, beta, x(:), y(:)
+  real(dp)              :: w(:)
+  integer               :: i, length
+
+  length = size(x)
+  !$acc kernels present(x,y,w)
+  do i=1,length
+    w(i) = alpha*x(i) + beta*y(i)
+  enddo
+  !$acc end kernels
+
+end subroutine
+
+  !****************************************************************************!
+
+subroutine xpby(x, beta, y, w)
+  implicit none
+  real(dp)              :: beta, x(:), y(:)
+  real(dp)              :: w(:)
+  integer               :: i, length
+
+  length = size(x)
+  !$acc kernels present(x,y,w)
+  do i=1,length
+    w(i) = x(i) + beta*y(i)
+  enddo
+  !$acc end kernels
+
+end subroutine
+
+  !****************************************************************************!
+
+subroutine xew(x, w)
+  implicit none
+  real(dp)              :: x(:)
+  real(dp)              :: w(size(x))
+  integer               :: i, length
+
+  length = size(x)
+  !$acc kernels present(x,w)
+  do i=1,length
+    w(i) = x(i)
+  enddo
+  !$acc end kernels
+
+end subroutine
 
 end module

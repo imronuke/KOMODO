@@ -1,2 +1,4 @@
 build/
+*.mod
+*.o
 *.out

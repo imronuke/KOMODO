@@ -1,40 +1,17 @@
 cmake_minimum_required(VERSION 3.15)
 
-# set(CMAKE_Fortran_COMPILER nvfortran )
-set(CMAKE_Fortran_COMPILER gfortran )
-project(komodo Fortran)
+option(GPU "Use OpenACC GPU          "  OFF)
 
-option(DEBUG "Debug Mode                                 "  off)
-
-if(CMAKE_Fortran_COMPILER_ID  STREQUAL "GNU")
-   set(f90flags "-cpp -fbacktrace -fPIC -ffree-line-length-none")
-
-   if(DEBUG)
-      set(CMAKE_Fortran_FLAGS "-g  -Wall -pedantic -fbounds-check -ffpe-trap=invalid,overflow,underflow ${f90flags}")
-   else()
-      set(CMAKE_Fortran_FLAGS "-O3 ${f90flags}")
-   endif()
-
-   add_definitions(-D__GNU)
-elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
-   set(f90flags "-fpp -std08 -assume byterecl -traceback -diag-disable 6009 -fPIC -list-line-length-none")
-
-   if(DEBUG)
-      set(CMAKE_Fortran_FLAGS "-g -warn -ftrapuv -fp-stack-check -check all -check:noarg_temp_created -fpe0 ${f90flags}")
-   else()
-      set(CMAKE_Fortran_FLAGS "-O3 ${f90flags}")
-   endif()
-elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "PGI" OR CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
-   set(f90flags "-Mfree -Mpreprocess -Mbackslash")
-
-   if(DEBUG)
-      set(CMAKE_Fortran_FLAGS "-traceback -Wall -Kieee -Ktrap=fp ${f90flags}")
-   else()
-      set(CMAKE_Fortran_FLAGS "-O3 -fast ${f90flags}")
-   endif()
-
-   add_definitions(-D__NVHPC)
+# Set for debug only
+if(GPU)
+   set(CMAKE_Fortran_FLAGS "-fast -ta=tesla:lineinfo -Minfo=accel,ccff -Mfree -Mpreprocess -Mbackslash")
+   set(CMAKE_Fortran_COMPILER nvfortran )
+else()
+   set(CMAKE_Fortran_FLAGS "-cpp -O3")
+   set(CMAKE_Fortran_COMPILER gfortran )
 endif()
+
+project(komodo Fortran)
 
 file(GLOB SRC_sc ${PROJECT_SOURCE_DIR}/src/*.f90 )
 add_executable(komodo ${SRC_sc})
