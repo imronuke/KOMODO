@@ -97,7 +97,7 @@ Three-dimensional problem with 2x2 nodes per FA
 ! 0 = zero-flux
 ! 1 = zero-incoming current
 ! 2 = reflective
-(east), (west), (north), (south), (bottom), (top)
+!(east), (west), (north), (south), (bottom), (top)
    1       2       2        1        1        1
 ```
 
@@ -129,7 +129,7 @@ Two-dimensional problem with 2x2 nodes per FA
 ! 0 = zero-flux
 ! 1 = zero-incoming current
 ! 2 = reflective
-(east), (west), (north), (south), (bottom), (top)
+!(east), (west), (north), (south), (bottom), (top)
    1       2       2        1        2        2
 ```
 
@@ -160,7 +160,7 @@ Two-dimensional problem with 16x16 nodes per FA. Normally for Finite Difference 
 ! 0 = zero-flux
 ! 1 = zero-incoming current
 ! 2 = reflective
-(east), (west), (north), (south), (bottom), (top)
+!(east), (west), (north), (south), (bottom), (top)
    1       2       2        1        2        2
 ```
 
@@ -185,7 +185,7 @@ One-dimensional problem with 1 cm node or mesh size
 ! 0 = zero-flux
 ! 1 = zero-incoming current
 ! 2 = reflective
-(east), (west), (north), (south), (bottom), (top)
+!(east), (west), (north), (south), (bottom), (top)
    2       1       2        2        2        2
 ```
 

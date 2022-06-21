@@ -91,8 +91,11 @@ IAEA3D
 ! 0 = zero-flux
 ! 1 = zero-incoming current
 ! 2 = reflective
-(east), (west), (north), (south), (bottom), (top)
+! (east), (west), (north), (south), (bottom), (top)
    1       2       2        1        1        1
+
+%ITER
+1200 5 1.e-5 1.e-5 15 40 20 80 ! 5 inner iterations per outer, and fission extrapolate every 15 outer iterations
 
 ! NOTE: Writing 19*20.0 is equivalent to write 20.0 nineteen times in a row
 ```
