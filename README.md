@@ -6,6 +6,7 @@
 **Documentation available at**: https://imronuke.github.io/KOMODO/
 
 **Features:**
+* GPU accelelator (using OpenACC) is partially supported. Useful for a large problem with many nodes.
 * Input is straightforward, modular and in a free-format form
 * Solves both static and transient core problems **with or without TH feedback**
 * Performs forward, adjoint and fixed-source calculations
