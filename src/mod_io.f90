@@ -838,28 +838,20 @@ message = ' error in reading number assemblies'
 CALL er_message(ounit, ios, ln, message, buf=xbunit)
 
 ! Limit values of nx, ny and nz
+! Limit values of nx, ny and nz
 IF (nx < 2) THEN
     WRITE(ounit,*) '  Error: nx shall be at least 2'
+    WRITE(*,*)     '  Error: nx shall be at least 2'
     STOP
 END IF
 IF (ny < 2) THEN
     WRITE(ounit,*) '  Error: ny shall be at least 2'
+    WRITE(*,*)     '  Error: ny shall be at least 2'
     STOP
 END IF
 IF (nz < 2) THEN
     WRITE(ounit,*) '  Error: nz shall be at least 2'
-    STOP
-END IF
-IF (nx > 33) THEN
-    WRITE(ounit,*) '  Error: nx shall be maximum 33'
-    STOP
-END IF
-IF (ny > 33) THEN
-    WRITE(ounit,*) '  Error: ny shall be maximum 33'
-    STOP
-END IF
-IF (nz > 40) THEN
-    WRITE(ounit,*) '  Error: nz shall be maximum 40'
+    WRITE(*,*)     '  Error: nz shall be at least 2'
     STOP
 END IF
 

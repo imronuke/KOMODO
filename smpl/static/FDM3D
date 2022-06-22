@@ -29,15 +29,15 @@ FDM
 1.111111  0.010024  0.000000  0.000000  0.000000  0.000000  0.000000  ! COMPOSITION 4
 ! Geometry card
 %GEOM
-9 9 40                  !nx, ny, nz
+9 9 100                  !nx, ny, nz
 10.0   8*20.0          !x-direction assembly size in cm
 8  8*16                ! 16x16 per FA
 8*20.0 10.0            !y-direction assembly size in cm
 8*16  8                ! 16x16 per FA
-40*1.25                 !z-direction assembly  in cm
-40*1                    !z-direction nodal is not divided
+100*1.25                 !z-direction assembly  in cm
+100*1                    !z-direction nodal is not divided
 1                      !np number of planar type
-40*1                    !planar assignment (from bottom to top)
+100*1                    !planar assignment (from bottom to top)
 ! Planar
  3  2  2  2  3  2  2  1  4
  2  2  2  2  2  2  2  1  4
