@@ -14,6 +14,8 @@ echo "Compiling src/mod_xsec.f90"
 gfortran -O4 -c -cpp src/mod_xsec.f90
 echo "Compiling src/mod_nodal.f90"
 gfortran -O4 -c -cpp src/mod_nodal.f90
+echo "Compiling src/mod_gpu.f90"
+gfortran -O4 -c -cpp src/mod_gpu.f90
 echo "Compiling src/mod_cmfd.f90"
 gfortran -O4 -c -cpp src/mod_cmfd.f90
 echo "Compiling src/mod_th.f90"
