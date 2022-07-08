@@ -163,7 +163,7 @@ contains
     ! Calculate number of nodes for one planar
     np = rec
 
-    rec = 0
+    rec = 1
     do n = 1, nnod
 
       ! Set i, j, k
@@ -173,42 +173,42 @@ contains
 
       ! Lower diagonal matrix element for z-direction
       if (k /= 1) then
-        rec = rec + 1
         ind%col(rec) = n - np
+        rec = rec + 1
       end if
 
       ! Lower diagonal matrix element for y-direction
       if (j /= xstag(i)%smin) then
-        rec = rec + 1
         ind%col(rec) = n - (nodp(i,j) - nodp(i,j-1))
+        rec = rec + 1
       end if
 
       ! Lower diagonal matrix element for x-direction
       if (i /= ystag(j)%smin) then
-        rec = rec + 1
         ind%col(rec) = n - 1
+        rec = rec + 1
       end if
 
       ! Diagonal matrix elementss
-      rec = rec + 1
       ind%col(rec) = n
+      rec = rec + 1
 
        ! Upper diagonal matrix element for x-direction
       if (i /= ystag(j)%smax) then
-        rec = rec + 1
         ind%col(rec) = n + 1
+        rec = rec + 1
       end if
 
       ! Upper diagonal matrix element for y-direction
       if (j /= xstag(i)%smax) then
-        rec = rec + 1
         ind%col(rec) = n + (nodp(i,j+1) - nodp(i,j))
+        rec = rec + 1
       end if
 
       ! Upper diagonal matrix element for z-direction
       if (k /= nzz) then
-        rec = rec + 1
         ind%col(rec) = n + np
+        rec = rec + 1
       end if
 
     end do
@@ -1298,8 +1298,8 @@ end subroutine print_keff
   !$acc loop device_type(nvidia) gang worker(32)
   do i = 1, nnod
     tmpsum = 0.
-    row_start = ind%row(i) + 1
-    row_end   = ind%row(i+1)
+    row_start = ind%row(i)
+    row_end   = ind%row(i+1)-1
     ! vector(8) because at each row there are 7 non zero elements
     !$acc loop device_type(nvidia) vector(8)  
     do j = row_start, row_end
@@ -1333,7 +1333,7 @@ end subroutine print_keff
 
  end function dproduct
 
-  !****************************************************************************!
+!****************************************************************************!
 
  subroutine axpby(alpha, x, beta, y, w)
   implicit none
@@ -1350,7 +1350,7 @@ end subroutine print_keff
 
 end subroutine
 
-  !****************************************************************************!
+!****************************************************************************!
 
 subroutine xpby(x, beta, y, w)
   implicit none
@@ -1367,7 +1367,7 @@ subroutine xpby(x, beta, y, w)
 
 end subroutine
 
-  !****************************************************************************!
+!****************************************************************************!
 
 subroutine xew(x, w)
   implicit none
