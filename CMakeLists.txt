@@ -1,14 +1,20 @@
 cmake_minimum_required(VERSION 3.15)
 
-option(GPU "Use OpenACC GPU          "  OFF)
+option(GPU    "Use OpenACC GPU          "  OFF)
+option(DEBUG  "DEBUGGING MODE           "  OFF)
 
 # Set for debug only
 if(GPU)
    set(CMAKE_Fortran_FLAGS "-fast -ta=tesla:lineinfo -Minfo=accel,ccff -Mfree -Mpreprocess -Mbackslash")
    set(CMAKE_Fortran_COMPILER nvfortran )
 else()
-   set(CMAKE_Fortran_FLAGS "-cpp -O3")
-   set(CMAKE_Fortran_COMPILER gfortran )
+   if(DEBUG)
+      set(CMAKE_Fortran_FLAGS "-cpp -fbacktrace -g -pedantic -fbounds-check -ffpe-trap=invalid,overflow,underflow")
+      set(CMAKE_Fortran_COMPILER gfortran )
+   else()
+      set(CMAKE_Fortran_FLAGS "-cpp -O4")
+      set(CMAKE_Fortran_COMPILER gfortran )
+   endif()
 endif()
 
 project(komodo Fortran)
