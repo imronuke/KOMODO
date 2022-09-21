@@ -17,7 +17,7 @@ contains
 
     use sdata, only: nnod, aprad, apaxi, afrad, ftem, mtem, cden, &
     bcon, bpos, npow, th_niter
-    use io,    only: AsmPow, AxiPow, AsmFlux, inp_read, bther
+    use io,    only: AsmPow, AxiPow, AsmFlux, inp_read, bther, boutp, print_outp
     use xsec,  only: XS_updt
     use cmfd,  only: outer,print_keff
     use th,  only: th_iter, powdis
@@ -52,6 +52,8 @@ contains
     IF (apaxi == 1) CALL AxiPow(pow)
 
     IF (afrad == 1) CALL AsmFlux(1.e0_DP)
+
+    IF (boutp == 1) CALL print_outp(pow)
 
 
   END SUBROUTINE forward

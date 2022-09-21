@@ -10,6 +10,8 @@ IMPLICIT NONE
 
 SAVE
 
+CHARACTER(LEN=100) :: iname, oname
+
 ! ind is sed to read x indicator in beginning of input buffer line.
 ! This to prevent reading next line
 CHARACTER(LEN=1) :: ind
@@ -28,10 +30,11 @@ INTEGER, PARAMETER :: buff  = 99    !input buffer file unit number (entire input
 
 ! Input buffer file unit number for each card
 INTEGER, PARAMETER :: umode = 111, uxsec = 112, ugeom = 113, ucase = 114
-INTEGER, PARAMETER :: uesrc = 115, uiter = 118, uprnt = 119, uadf  = 120
-INTEGER, PARAMETER :: ucrod = 121, ubcon = 122, uftem = 123, umtem = 124
-INTEGER, PARAMETER :: ucden = 125, ucbcs = 126, uejct = 127, uther = 128
-INTEGER, PARAMETER :: uxtab = 129, ukern = 130, uextr = 131, uthet = 132
+INTEGER, PARAMETER :: uesrc = 115, uiter = 116, uprnt = 117, uadf  = 118
+INTEGER, PARAMETER :: ucrod = 119, ubcon = 120, uftem = 121, umtem = 122
+INTEGER, PARAMETER :: ucden = 123, ucbcs = 124, uejct = 125, uther = 126
+INTEGER, PARAMETER :: uxtab = 127, ukern = 128, uextr = 129, uthet = 130
+INTEGER, PARAMETER :: uoutp = 131
 INTEGER :: bunit
 
 ! Card active/inactive indicator (active = 1, inactive = 0)
@@ -39,15 +42,18 @@ INTEGER :: bmode = 0, bxsec = 0, bgeom = 0, bcase = 0, besrc = 0
 INTEGER :: biter = 0, bprnt = 0, badf  = 0, bcrod = 0, bbcon = 0
 INTEGER :: bftem = 0, bmtem = 0, bcden = 0, bcbcs = 0, bejct = 0
 INTEGER :: bther = 0, bxtab = 0, bkern = 0, bextr = 0, bthet = 0
+INTEGER :: boutp = 0
 
 ! This declaration is to notify that the error in separated card file (in case so)
-INTEGER, PARAMETER :: ncard = 20                  ! Number of card
+INTEGER, PARAMETER :: ncard = 21                  ! Number of card
 INTEGER, DIMENSION(ncard) :: uarr = &             ! Array of buffer unit number
 (/umode, uxsec, ugeom, ucase, uesrc, uiter, uprnt, uadf,  ucrod, ubcon, &
-  uftem, umtem, ucden, ucbcs, uejct, uther, uxtab, ukern, uextr, uthet /)
+  uftem, umtem, ucden, ucbcs, uejct, uther, uxtab, ukern, uextr, uthet, &
+  uoutp /)
 CHARACTER(LEN=4), DIMENSION(ncard) :: carr = &    ! Array of card name
 (/'MODE', 'XSEC', 'GEOM', 'CASE', 'ESRC', 'ITER', 'PRNT', 'ADF ', 'CROD', 'BCON', &
-  'FTEM', 'MTEM', 'CDEN', 'CBCS', 'EJCT', 'THER', 'XTAB', 'KERN', 'EXTR', 'THET' /)
+  'FTEM', 'MTEM', 'CDEN', 'CBCS', 'EJCT', 'THER', 'XTAB', 'KERN', 'EXTR', 'THET', &
+  'OUTP' /)
 CHARACTER(LEN=100), DIMENSION(:), ALLOCATABLE :: farr   ! Array of card file
 
 ! Geometry
@@ -60,6 +66,12 @@ TYPE :: MAT_ASGN                                        ! Material assignment
 END TYPE
 TYPE(MAT_ASGN), DIMENSION(:), ALLOCATABLE :: plnr       ! planar
 INTEGER, DIMENSION(:,:,:), ALLOCATABLE :: mnum
+
+! Output option
+TYPE :: OPT_DATA
+    INTEGER :: o3d, power, assembly
+END TYPE
+TYPE(OPT_DATA) :: output_opt
 
 
 CONTAINS
@@ -80,7 +92,6 @@ USE sdata, ONLY: ng, nnod, mode, dc, exsrc
 IMPLICIT NONE
 
 INTEGER :: g, i, N
-CHARACTER(LEN=100) :: iname, oname
 
 !Got this trick from: http://web.utah.edu/thorne/computing/Handy_Fortran_Tricks.pdf
 N = command_argument_count()
@@ -89,7 +100,7 @@ IF (N < 1) THEN
    WRITE(*,'(A,A100)',ADVANCE='NO') '  INPUT NAME : '
    READ(*,*) iname
 ELSE
-   CALL GETARG(1,iname) !Grab the first command line argument
+   CALL get_command_argument(1,iname) !Grab the first command line argument
 ENDIF
 
 iname = TRIM(iname)
@@ -121,6 +132,7 @@ OPEN (UNIT=uxtab, STATUS='SCRATCH', ACTION='READWRITE')
 OPEN (UNIT=ukern, STATUS='SCRATCH', ACTION='READWRITE')
 OPEN (UNIT=uextr, STATUS='SCRATCH', ACTION='READWRITE')
 OPEN (UNIT=uthet, STATUS='SCRATCH', ACTION='READWRITE')
+OPEN (UNIT=uoutp, STATUS='SCRATCH', ACTION='READWRITE')
 
 ! By default, card file names are the input file name
 ALLOCATE (farr(ncard)); farr = ADJUSTL(iname)
@@ -139,6 +151,7 @@ REWIND(umode); REWIND(uxsec); REWIND(ugeom); REWIND(ucase); REWIND(uesrc)
 REWIND(uiter); REWIND(uprnt); REWIND(uadf); REWIND(ucrod); REWIND(ubcon)
 REWIND(uftem); REWIND(umtem); REWIND(ucden); REWIND(ucbcs); REWIND(uejct)
 REWIND(uther); REWIND(uxtab); REWIND(ukern); REWIND(uextr); REWIND(uthet)
+REWIND(uoutp)
 
 ! Start reading buffer files for each input card buffer
 
@@ -246,6 +259,8 @@ ELSE IF (mode /= 'RODEJECT' .AND. bejct == 1) THEN
 ELSE
     CONTINUE
 END IF
+
+IF (boutp == 1) CALL inp_outp(uoutp)
 
 ! Miscellaneous things
 CALL misc()
@@ -361,6 +376,7 @@ CLOSE(UNIT=uesrc); CLOSE(UNIT=uiter); CLOSE(UNIT=uprnt); CLOSE(UNIT=uadf)
 CLOSE(UNIT=ucrod); CLOSE(UNIT=ubcon); CLOSE(UNIT=uftem); CLOSE(UNIT=umtem)
 CLOSE(UNIT=ucden); CLOSE(UNIT=ucbcs); CLOSE(UNIT=uejct); CLOSE(UNIT=uther)
 CLOSE(UNIT=uxtab); CLOSE(UNIT=ukern); CLOSE(UNIT=uextr); CLOSE(UNIT=uthet)
+CLOSE(UNIT=uoutp)
 CLOSE(UNIT=buff)
 
 
@@ -368,17 +384,17 @@ END SUBROUTINE inp_read
 
 !******************************************************************************!
 
-SUBROUTINE openFile(iunit, iname, file, message)
+SUBROUTINE openFile(file_unit, iname, file, er_message)
 
-INTEGER :: iunit
-CHARACTER(LEN=*) :: iname, file, message
+INTEGER :: file_unit
+CHARACTER(LEN=*) :: iname, file, er_message
 INTEGER  :: iost
 
-OPEN (UNIT=iunit, FILE=iname, STATUS='OLD', ACTION='READ', &
+OPEN (UNIT=file_unit, FILE=iname, STATUS='OLD', ACTION='READ', &
       IOSTAT = iost)
 
 IF (iost /= 0) THEN
-  WRITE(*,1020) message, iost
+  WRITE(*,1020) er_message, iost
   WRITE(*,*) '  CANNOT FIND '// file //' FILE : ', iname
   1020 FORMAT    (2X, A, I6)
   STOP
@@ -563,6 +579,7 @@ DO
       CASE('KERN'); bunit = ukern; bkern = 1
       CASE('EXTR'); bunit = uextr; bextr = 1
       CASE('THET'); bunit = uthet; bthet = 1
+      CASE('OUTP'); bunit = uoutp; boutp = 1
       CASE DEFAULT
         WRITE(ounit,1014) ln, iline
         WRITE(*,1014) ln, iline
@@ -1643,6 +1660,45 @@ end if
 1648 format (2X, 'NODAL KERNEL  : ', A30)
 
 END SUBROUTINE inp_kern
+
+!******************************************************************************!
+
+SUBROUTINE inp_outp (xbunit)
+
+    !
+    ! Purpose:
+    !    To read output option
+    
+    IMPLICIT NONE
+    
+    INTEGER, INTENT(IN) :: xbunit
+    
+    ! INTEGER :: ln   !Line number
+    ! INTEGER :: ios  ! IOSTAT status
+    ! CHARACTER (LEN=100) :: output_option
+    
+    
+    ! READ(xbunit, *, IOSTAT=ios) ind, ln, output_option
+    ! message = ' error in reading output option'
+    ! CALL er_message(ounit, ios, ln, message, buf=xbunit)
+    output_opt % o3d = 1
+    output_opt % power = 1
+    output_opt % assembly = 1
+    
+    WRITE(ounit,*)
+    WRITE(ounit,*)
+    WRITE(ounit,*) '             >>>>>DETAILED OUTPUT OPTION<<<<<'
+    WRITE(ounit,*) '           ------------------------------------'
+    
+    WRITE(ounit,1650) 
+    if (scr) then
+      WRITE(*,*)
+      WRITE(*,1650) 'THREE-DIMENSIONAL NODE POWER'
+    end if
+    
+    1650 format (2X, 'NODAL KERNEL  : ', A30)
+    
+    END SUBROUTINE inp_outp
 
 !******************************************************************************!
 
@@ -3260,6 +3316,129 @@ FUNCTION GETLOC(arr, elm) RESULT (loc)
   END DO
 
 END FUNCTION GETLOC
+
+!******************************************************************************!
+
+SUBROUTINE print_outp(fn)
+
+    !
+    ! Purpose:
+    !    To print detailed output
+    !
+    
+    USE sdata, ONLY: nx, ny, nxx, nyy, nzz, zdel, &
+                    xdel, ydel, ystag, nnod, ix, iy, iz, &
+                    xdiv, ydiv
+    
+    IMPLICIT NONE
+    
+    REAL(DP), DIMENSION(:), INTENT(IN) :: fn
+    
+    REAL(DP), DIMENSION(nxx, nyy, nzz) :: fx
+    INTEGER :: i, j, k, n
+    INTEGER :: ly, lx, ys, xs, yf, xf
+    REAL(DP) :: summ, vsumm
+    REAL(DP), DIMENSION(nxx, nyy) :: fnode
+    REAL(DP), DIMENSION(nx, ny, nzz) :: fasm
+    REAL(DP) :: totp
+    INTEGER :: nfuel
+    REAL(DP) :: fmax
+    INTEGER :: xmax, ymax
+    CHARACTER(LEN=6), DIMENSION(nx, ny, nzz) :: cpow
+    
+    INTEGER, PARAMETER :: xm = 12
+    INTEGER :: ip, ipr
+    
+    fx = 0._DP
+    DO n = 1, nnod
+        fx(ix(n), iy(n), iz(n)) = fn(n)
+    END DO
+    
+    !Calculate assembly power
+    nfuel = 0
+    totp  = 0._DP
+    DO k = 1, nzz
+        ys = 1
+        yf = 0
+        DO j= 1, ny
+            yf = yf + ydiv(j)
+            xf = 0
+            xs = 1
+            DO i= 1, nx
+                xf = xf + xdiv(i)
+                summ = 0._DP
+                vsumm = 0._DP
+                DO ly= ys, yf
+                    DO lx= xs, xf
+                        summ = summ + fx(lx,ly,k)*xdel(lx)*ydel(ly)
+                        vsumm = vsumm + xdel(lx)*ydel(ly)*zdel(k)
+                    END DO
+                END DO
+                fasm(i,j,k) = summ / vsumm
+                xs = xs + xdiv(i)
+                IF (fasm(i,j,k) > 0._DP) nfuel = nfuel + 1
+                IF (fasm(i,j,k) > 0._DP) totp  = totp + fasm(i,j,k)
+            END DO
+            ys = ys + ydiv(j)
+        END DO
+    END DO
+    
+    
+    ! Normalize assembly power to 1._DP
+    xmax = 1; ymax = 1
+    fmax = 0._DP
+    DO k = 1, nzz
+        DO j = 1, ny
+            DO i = 1, nx
+                ! Convert power to character (If power == 0 convert to blank spaces)
+                IF ((fasm(i,j,k) - 0.) < 1.e-5_DP) THEN
+                    cpow(i,j,k) = '     '
+                ELSE
+                    WRITE (cpow(i,j,k),'(F6.3)') fasm(i,j,k)
+                    cpow(i,j,k) = TRIM(cpow(i,j,k))
+                END IF
+            END DO
+        END DO
+    END DO
+    
+    OPEN (UNIT=102, FILE=TRIM(iname) // '_3d_power.out', STATUS='REPLACE', ACTION='WRITE')
+
+    ! Print assembly power distribution
+    WRITE(102,*) '   3-D Power Distribution'
+    WRITE(102,*) '  =============================='
+    
+    DO k = nzz, 1, -1
+        IF (sum(fasm(:,:,k)) > 0.0) THEN
+            ip = nx/xm
+            ipr = MOD(nx,xm) - 1
+            xs = 1; xf = xm
+            WRITE(102,100)  k
+            DO n = 1, ip
+                WRITE(102,'(4X,100I8)') (i, i = xs, xf)
+                DO j= ny, 1, -1
+                    WRITE(102,'(2X,I4,100A8)') j, (cpow(i,j,k), i=xs, xf)
+                END DO
+                WRITE(102,*)
+                xs = xs + xm
+                xf = xf + xm
+            END DO
+            
+            
+            WRITE(102,'(4X,100I8)') (i, i = xs, xs+ipr)
+            IF (xs+ipr > xs) THEN
+                DO j= ny, 1, -1
+                    WRITE(102,'(2X,I4,100A8)') j, (cpow(i,j,k), i=xs, xs+ipr)
+                END DO
+            END IF
+        END IF
+    END DO
+    
+    WRITE(102,*)
+
+    100 FORMAT(2X, 'z = ', I3)
+    
+    
+    END SUBROUTINE print_outp
 
 !******************************************************************************!
 

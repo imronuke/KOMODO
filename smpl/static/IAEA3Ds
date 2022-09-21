@@ -78,3 +78,5 @@ IAEA3D
   4  4  4  4  0  0  0  0  0
 ! Boundary conditions (east), (west), (north), (south), (bottom), (top)
 1 2 2 1 1 1
+
+%OUTP

@@ -101,12 +101,12 @@ implicit none
 
 real(dp), dimension(:), intent(out) :: p
 integer :: g, n
-real(dp) :: pow
+real(dp) :: pow, vtot
 
 p = 0._dp
 do g= 1, ng
     do n= 1, nnod
-      pow = f0(n,g) * sigf(n,g) * vdel(n)
+      pow = f0(n,g) * sigf(n,g)
       if (pow < 0.) pow = 0.
       p(n) = p(n) + pow
     end do
@@ -114,8 +114,10 @@ end do
 
 ! Normalize to 1._DP
 powtot = 0._DP
+vtot = 0.0
 do n = 1, nnod
-    powtot = powtot + p(n)
+    powtot = powtot + p(n) * vdel(n)
+    vtot   = vtot + vdel(n)
 end do
 
 if (powtot <= 0 .AND. mode /= 'FIXEDSRC') THEN
@@ -126,7 +128,7 @@ end if
 
 if (powtot > 0.0) then
    do n = 1, nnod
-       p(n) = p(n) / powtot
+       p(n) = p(n) * vtot / powtot
    end do
 end if
 
