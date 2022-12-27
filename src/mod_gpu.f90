@@ -1,6 +1,6 @@
 module gpu
 
-    use sdata, only: dp
+    use data, only: dp
     implicit none
     save
 

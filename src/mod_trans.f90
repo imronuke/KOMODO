@@ -5,7 +5,7 @@ MODULE trans
 ! Using Fully Implicit method with (or without) exponetial transformation
 ! =======================
 
-USE sdata, ONLY: DP
+USE data, ONLY: DP
 
 implicit none
 
@@ -21,10 +21,10 @@ subroutine rod_eject()
 !    To perform rod ejection simulation
 !
 
-USE sdata, ONLY: ng, nnod, sigr, nf, nmat, ttot, tdiv, tstep1, tstep2, Ke, &
-                 bcon, ftem, mtem, cden, bpos, nb, &
-                 iBeta, f0, ft, c0, tbeta, omeg, ctbeta, L
-USE io, ONLY: ounit, bextr, scr
+USE data, ONLY: ng, nnod, sigr, nf, nmat, total_time, time_mid, time_step_1, time_step_2, Ke, &
+                 bcon, ftem, mtem, cden, bpos, nbank, &
+                 beta, flux, flux_prev, c0, tbeta, omega, core_beta, L
+USE read, ONLY: ounit, bextr, scr
 USE xsec, ONLY: XS_updt
 USE cmfd, ONLY: outer_tr, outer, outer_ad
 
@@ -41,7 +41,7 @@ integer :: n, i, j, imax, step
 allocate (c0(nnod,nf))
 
 ! Allocate Frequency transformation constant
-allocate (omeg(nnod,ng))
+allocate (omega(nnod,ng))
 
 ! allocate total leakages
 allocate(L(nnod,ng))
@@ -63,7 +63,7 @@ if (ABS(Ke - 1._DP) > 1.e-5_DP) CALL KNE1
 ! NOTE: This adjoint flux is approximation where
 ! the same nodal coupling coefficients in forward calculation are used
 CALL outer_ad(0)
-af = f0   ! Save adjoint flux to af
+af = flux   ! Save adjoint flux to af
 if (scr) then
   write(*,*)
   write(*,*) ' adjoint calculation ... done'
@@ -80,15 +80,15 @@ end if
 CALL iPden()
 
 ! Calculate initial power
-CALL PowTot(f0,tpow1)
+CALL PowTot(flux,tpow1)
 
 ! Total beta
 tbeta = 0.
 do n = 1, nmat
   do j = 1, nf
-    tbeta(n) = tbeta(n) + iBeta(j)
+    tbeta(n) = tbeta(n) + beta(j)
   end do
-  ctbeta = tbeta(1)
+  core_beta = tbeta(1)
 end do
 
 ! Calculate reactivity
@@ -101,7 +101,7 @@ WRITE(*, *)
 WRITE(*, *) " Step  Time(s)  React.($)   Rel. Power   CR Bank Pos. (1-end)"
 WRITE(*, *) "--------------------------------------------------------------"
 WRITE(*,'(I4, F10.3, F10.4, ES15.4, 12F9.2)') 0, 0., rho, &
-1.0, (bpos(n), n = 1, nb)
+1.0, (bpos(n), n = 1, nbank)
 
 ! Terminal output
 WRITE(ounit,*)
@@ -115,45 +115,45 @@ WRITE(ounit,'(I4, F10.3, F10.4, ES15.4)') 0, 0., rho, 1.0
 ! Start transient calculation
 step = 0
 t2 = 0.
-imax = NINT(tdiv/tstep1)
+imax = NINT(time_mid/time_step_1)
 
 ! First Time Step
 do i = 1, imax
 
     step = step + 1
     t1 = t2
-    t2 = REAL(i)*tstep1
+    t2 = REAL(i)*time_step_1
 
     if (i > 1) THEN
        if (bextr == 0) then
-         omeg = 0._dp
+         omega = 0._dp
        else
-         omeg = LOG(f0 / ft) / tstep1
+         omega = LOG(flux / flux_prev) / time_step_1
        end if
     else
-       omeg = 0._dp
+       omega = 0._dp
     end if
 
-    call trans_calc(0,tstep1,af,tpow1,step,t2)
+    call trans_calc(0,time_step_1,af,tpow1,step,t2)
 
 end do
 
 ! Second Time Step
-imax = NINT((ttot-tdiv)/tstep2)
+imax = NINT((total_time-time_mid)/time_step_2)
 
 do i = 1, imax
 
     step = step + 1
     t1 = t2
-    t2 = tdiv + REAL(i)*tstep2
+    t2 = time_mid + REAL(i)*time_step_2
 
     if (bextr == 0) then
-      omeg = 0._dp
+      omega = 0._dp
     else
-      omeg = LOG(f0 / ft) / tstep2
+      omega = LOG(flux / flux_prev) / time_step_2
     end if
 
-    call trans_calc(0,tstep2,af,tpow1,step,t2)
+    call trans_calc(0,time_step_2,af,tpow1,step,t2)
 
 end do
 
@@ -168,10 +168,10 @@ subroutine rod_eject_th()
 !    To perform rod ejection simulation with TH feedback
 !
 
-USE sdata, ONLY: ng, nnod, sigr, nf, ttot, tdiv, tstep1, tstep2, Ke, &
-                 tfm, ppow, m, ftem, mtem, bpos, nb, iBeta, &
-                 f0, ft, c0, tbeta, omeg, npow, ctbeta, nmat, L, th_niter
-USE io, ONLY: ounit, bextr, bxtab, scr
+USE data, ONLY: ng, nnod, sigr, nf, total_time, time_mid, time_step_1, time_step_2, Ke, &
+                 tfm, ppow, m, ftem, mtem, bpos, nbank, beta, &
+                 flux, flux_prev, c0, tbeta, omega, node_power, core_beta, nmat, L, n_th_iter
+USE read, ONLY: ounit, bextr, bxtab, scr
 USE xsec, ONLY: XS_updt
 USE cmfd, ONLY: outer_tr, outer, outer_ad
 use th, only : th_iter, par_ave, par_max
@@ -190,16 +190,16 @@ real(dp) :: tf, tm, mtf, mtm
 allocate (c0(nnod,nf))
 
 ! Allocate Frequency transformation constant
-allocate (omeg(nnod,ng))
+allocate (omega(nnod,ng))
 
 ! Allocate node power distribution
-allocate(npow(nnod))
+allocate(node_power(nnod))
 
 ! allocate total leakages
 allocate(L(nnod,ng))
 
 ! Determine th paramters distribution
-CALL th_iter(th_niter, 0)
+CALL th_iter(n_th_iter, 0)
 if (scr) then
   write(*,*)
   write(*,*) ' steady state calculation ... done'
@@ -212,7 +212,7 @@ IF (ABS(Ke - 1._DP) > 1.e-5_DP .AND. bxtab == 0) CALL KNE1
 ! NOTE: This adjoint flux is approximation where
 ! the same nodal coupling coefficients in forward calculation are used
 CALL outer_ad(0)
-af = f0   ! Save adjoint flux to af
+af = flux   ! Save adjoint flux to af
 if (scr) then
   write(*,*)
   write(*,*) ' adjoint calculation ... done'
@@ -226,7 +226,7 @@ if (scr) then
 end if
 
 ! Calculate power
-CALL PowTot(f0,tpow1)
+CALL PowTot(flux,tpow1)
 
 ! Calculate Initial precursor density
 CALL iPden()
@@ -236,10 +236,10 @@ IF (bxtab == 0) then
   tbeta = 0.
   do n = 1, nmat
     do j = 1, nf
-      tbeta(n) = tbeta(n) + iBeta(j)
+      tbeta(n) = tbeta(n) + beta(j)
     end do
   end do
-  ctbeta = tbeta(1)
+  core_beta = tbeta(1)
 else
   tbeta = 0.
   do n = 1, nmat
@@ -249,7 +249,7 @@ else
   end do
   call calc_beta(af)
   write(*,*)
-  write(*,1324) ctbeta*1.e5
+  write(*,1324) core_beta*1.e5
 end if
 
 ! Calculate reactivity
@@ -276,50 +276,50 @@ WRITE(*, *)
 WRITE(*, *) " Step  Time(s)  React.($)   Rel. Power   CR Bank Pos. (1-end)"
 WRITE(*, *) "--------------------------------------------------------------"
 WRITE(*,'(I4, F10.3, F10.4, ES15.4, 12F9.2)') 0, 0., rho, &
-ppow*0.01, (bpos(n), n = 1, nb)
+ppow*0.01, (bpos(n), n = 1, nbank)
 
 ! Start transient calculation
 step = 0
 t2 = 0.
-imax = NINT(tdiv/tstep1)
+imax = NINT(time_mid/time_step_1)
 
 ! First Time Step
 do i = 1, imax
 
     step = step + 1
     t1 = t2
-    t2 = REAL(i)*tstep1
+    t2 = REAL(i)*time_step_1
 
     if (i > 1) THEN
        if (bextr == 0) then
-         omeg = 0._dp
+         omega = 0._dp
        else
-         omeg = LOG(f0 / ft) / tstep1
+         omega = LOG(flux / flux_prev) / time_step_1
        end if
     else
-       omeg = 0._dp
+       omega = 0._dp
     end if
 
-    call trans_calc(1,tstep1,af,tpow1,step,t2)
+    call trans_calc(1,time_step_1,af,tpow1,step,t2)
 
 end do
 
 ! Second Time Step
-imax = NINT((ttot-tdiv)/tstep2)
+imax = NINT((total_time-time_mid)/time_step_2)
 
 do i = 1, imax
 
     step = step + 1
     t1 = t2
-    t2 = tdiv + REAL(i)*tstep2
+    t2 = time_mid + REAL(i)*time_step_2
 
     if (bextr == 0) then
-      omeg = 0._dp
+      omega = 0._dp
     else
-      omeg = LOG(f0 / ft) / tstep2
+      omega = LOG(flux / flux_prev) / time_step_2
     end if
 
-    call trans_calc(1,tstep2,af,tpow1,step,t2)
+    call trans_calc(1,time_step_2,af,tpow1,step,t2)
 
 end do
 
@@ -336,11 +336,11 @@ subroutine trans_calc(thc,ht,af,tpow1,step,t2)
 !    To perform transient calculation for given time step
 !
 
-USE sdata, ONLY: ng, nnod, sigr, bcon, ftem, mtem, cden, &
-                 fbpos, bpos, tmove, bspeed, mdir, nb, velo, npow, &
-                 f0, ft, fst, fs0, omeg, tranw, ix, iy, iz, pow, &
-                 tfm, zdel, ppow, node_nf, m, mat, dfis, ctbeta, sth, sigrp
-USE io, ONLY: ounit, bxtab
+USE data, ONLY: ng, nnod, sigr, bcon, ftem, mtem, cden, &
+                 fbpos, bpos, tmove, bspeed, mdir, nbank, neutron_velo, node_power, &
+                 flux, flux_prev, fsrc_prev, fsrc, omega, transient_warning, ix, iy, iz, pow, &
+                 tfm, zdel, ppow, node_nf, m, mat, dfis, core_beta, small_theta, sigrp
+USE read, ONLY: ounit, bxtab
 USE xsec, ONLY: XS_updt
 USE cmfd, ONLY: outer_tr, outer
 use th, only : th_trans, par_ave, par_max, powdis
@@ -364,14 +364,14 @@ real(dp) :: tf, tm, mtf, mtm
 logical  :: first = .true.
 
 if (first) then
-  allocate(ft(nnod,ng), fst(nnod))
+  allocate(flux_prev(nnod,ng), fsrc_prev(nnod))
   allocate(dfis(nnod))
   allocate(sigrp(nnod,ng))
   first = .false.
 end if
 
 ! Rod bank changes
-do n = 1, nb
+do n = 1, nbank
     if (mdir(n) == 1) THEN   ! If CR moving down
         if (t2-tmove(n) > 1.e-5_DP .AND. fbpos(n)-bpos(n) < 1.e-5_DP) THEN
             bpos(n) = bpos(n) - ht *  bspeed(n)
@@ -395,21 +395,21 @@ do n = 1, nb
   IF (bxtab == 0) THEN
     DO g = 1, ng
       DO n = 1, nnod
-         sigr(n,g) = sigr(n,g) + 1._DP / (sth * velo(g) * ht) + omeg(n,g) / velo(g)
+         sigr(n,g) = sigr(n,g) + 1._DP / (small_theta * neutron_velo(g) * ht) + omega(n,g) / neutron_velo(g)
       END DO
     END DO
   ELSE
     DO g = 1, ng
       DO n = 1, nnod
-        sigr(n,g) = sigr(n,g) + 1._DP / (sth * m(mat(n))%velo(g) * ht) &
-                  + omeg(n,g) / m(mat(n))%velo(g)
+        sigr(n,g) = sigr(n,g) + 1._DP / (small_theta * m(mat(n))%velo(g) * ht) &
+                  + omega(n,g) / m(mat(n))%velo(g)
       END DO
     END DO
   END IF
 
 ! Save the previous fluxes and fission source
-ft = f0
-fst = fs0
+flux_prev = flux
+fsrc_prev = fsrc
 
 ! Transient calculation
 CALL outer_tr(ht, maxi)
@@ -418,21 +418,21 @@ CALL outer_tr(ht, maxi)
 CALL uPden(ht)
 
 ! Calculate power
-CALL PowTot(f0, tpow2)
+CALL PowTot(flux, tpow2)
 
 ! Calculate reactivity
 call reactivity(af, sigrp, rho)
 
 if (thc == 1) then
   ! Calculate node power distribution
-  CALL PowDis(npow)
+  CALL PowDis(node_power)
 
   ! Power change
   xppow = ppow * tpow2/tpow1 * 0.01_DP
 
   ! Calculate linear power density for each nodes (W/cm)
   DO n = 1, nnod
-     pline(n) = npow(n) * pow * xppow &
+     pline(n) = node_power(n) * pow * xppow &
      / (node_nf(ix(n),iy(n)) * zdel(iz(n)))     ! Linear power density (W/cm)
   END DO
 
@@ -446,30 +446,30 @@ if (thc == 1) then
 end if
 
 if (thc == 1) then
-  WRITE(*,'(I4, F10.3, F10.4, ES15.4, 12F9.2)') step, t2, rho/ctbeta, &
-  xppow, (bpos(n), n = 1, nb)
+  WRITE(*,'(I4, F10.3, F10.4, ES15.4, 12F9.2)') step, t2, rho/core_beta, &
+  xppow, (bpos(n), n = 1, nbank)
 
   IF (maxi) THEN
-    WRITE(ounit,'(I4, F10.3, F10.4, ES15.4, 4F10.2, A35)') step, t2, rho/ctbeta, &
+    WRITE(ounit,'(I4, F10.3, F10.4, ES15.4, 4F10.2, A35)') step, t2, rho/core_beta, &
     xppow, tm-273.15, mtm-273.15, tf-273.15, mtf-273.15, 'OUTER ITERATION DID NOT CONVERGE'
   ELSE
-    WRITE(ounit,'(I4, F10.3, F10.4, ES15.4, 4F10.2)') step, t2, rho/ctbeta, &
+    WRITE(ounit,'(I4, F10.3, F10.4, ES15.4, 4F10.2)') step, t2, rho/core_beta, &
     xppow, tm-273.15, mtm-273.15, tf-273.15, mtf-273.15
   END IF
 else
-  WRITE(*,'(I4, F10.3, F10.4, ES15.4, 12F9.2)') step, t2, rho/ctbeta, &
-  tpow2/tpow1, (bpos(n), n = 1, nb)
+  WRITE(*,'(I4, F10.3, F10.4, ES15.4, 12F9.2)') step, t2, rho/core_beta, &
+  tpow2/tpow1, (bpos(n), n = 1, nbank)
 
   if (maxi) THEN
-      WRITE(ounit,'(I4, F10.3, F10.4, ES15.4, A35)') step, t2, rho/ctbeta, &
+      WRITE(ounit,'(I4, F10.3, F10.4, ES15.4, A35)') step, t2, rho/core_beta, &
       tpow2/tpow1, 'OUTER ITERATION DID NOT CONVERGE'
   else
-      WRITE(ounit,'(I4, F10.3, F10.4, ES15.4)') step, t2, rho/ctbeta, &
+      WRITE(ounit,'(I4, F10.3, F10.4, ES15.4)') step, t2, rho/core_beta, &
       tpow2/tpow1
   end if
 end if
 
-if (maxi) tranw = .TRUE.
+if (maxi) transient_warning = .TRUE.
 
 
 end subroutine trans_calc
@@ -483,8 +483,8 @@ subroutine KNE1()
 !    To adjuts the Keff to 1.0 if it is not equal to 1.0
 !
 
-USE sdata, ONLY: Ke, xnuf, dnuf, bcon, ftem, mtem, cden, bpos
-USE io, ONLY: ounit, scr
+USE data, ONLY: Ke, xnuf, dnuf, bcon, ftem, mtem, cden, bpos
+USE read, ONLY: ounit, scr
 USE xsec, ONLY: XS_updt
 USE cmfd, ONLY: outer
 
@@ -524,7 +524,7 @@ subroutine PowTot (fx,tpow)
 !
 
 
-USE sdata, ONLY: ng, nnod, sigf, vdel
+USE data, ONLY: ng, nnod, sigf, vdel
 
 implicit none
 
@@ -561,8 +561,8 @@ subroutine iPden()
 !    Calculate Initial precursor density
 !
 
-USE sdata, ONLY: nnod, nf, fs0, c0, iBeta, lamb, m, mat, nuf, ng
-USE io, ONLY: bxtab
+USE data, ONLY: nnod, nf, fsrc, c0, beta, lambda, m, mat, nuf, ng
+USE read, ONLY: bxtab
 
 implicit none
 
@@ -574,7 +574,7 @@ if (bxtab == 1) THEN
      do j = 1, nf
        if (nuf(n,ng) > 0.) THEN  !If it is fuel
          blamb = m(mat(n))%iBeta(j) / m(mat(n))%lamb(j)
-         c0(n,j)  = blamb * fs0(n)
+         c0(n,j)  = blamb * fsrc(n)
        else
          c0(n,j) = 0.
        end if
@@ -583,8 +583,8 @@ if (bxtab == 1) THEN
 else
   do n = 1, nnod
      do j = 1, nf
-        blamb = iBeta(j) / lamb(j)
-        c0(n,j)  = blamb * fs0(n)
+        blamb = beta(j) / lambda(j)
+        c0(n,j)  = blamb * fsrc(n)
      end do
   end do
 end if
@@ -601,8 +601,8 @@ subroutine uPden(ht)
 !    To update precursor density
 !
 
-USE sdata, ONLY: nnod, nf, fs0, fst, c0, iBeta, lamb,  m, mat, nuf, ng
-USE io, ONLY: bxtab
+USE data, ONLY: nnod, nf, fsrc, fsrc_prev, c0, beta, lambda,  m, mat, nuf, ng
+USE read, ONLY: bxtab
 
 implicit none
 
@@ -619,19 +619,19 @@ if (bxtab == 1) THEN
         a2   = 1._dp - a1
         a1   = a1 - pxe
         c0(n,i)  = c0(n,i)  * pxe + m(mat(n))%iBeta(i) / m(mat(n))%lamb(i) &
-                 * (a1*fst(n) + a2*fs0(n))
+                 * (a1*fsrc_prev(n) + a2*fsrc(n))
       end if
     end do
   end do
 else
   do i = 1, nf
-    pxe  = exp(-lamb(i)*ht)
-    a1   = (1._dp - pxe) / (lamb(i)*ht)
+    pxe  = exp(-lambda(i)*ht)
+    a1   = (1._dp - pxe) / (lambda(i)*ht)
     a2   = 1._dp - a1
     a1   = a1 - pxe
     do n = 1, nnod
-      c0(n,i)  = c0(n,i)  * pxe + iBeta(i) / lamb(i) &
-               * (a1*fst(n) + a2*fs0(n))
+      c0(n,i)  = c0(n,i)  * pxe + beta(i) / lambda(i) &
+               * (a1*fsrc_prev(n) + a2*fsrc(n))
     end do
   end do
 end if
@@ -648,7 +648,7 @@ subroutine reactivity(af,sigrp, rho)
 !    To calculate dynamic reactivity
 !
 
-USE sdata, ONLY: nnod, ng, f0, sigs, chi, mat, fs0, vdel, L
+USE data, ONLY: nnod, ng, flux, sigs, chi, mat, fsrc, vdel, L
 use nodal, only: Lxyz
 
 implicit none
@@ -666,16 +666,16 @@ do g = 1, ng
   scg = 0.
   do h = 1, ng
      do n = 1, nnod
-        if (g /= h) scg(n) = scg(n) + sigs(n,h,g) * f0(n,h)
+        if (g /= h) scg(n) = scg(n) + sigs(n,h,g) * flux(n,h)
      end do
   end do
   do n = 1, nnod
     call Lxyz(n,g,L1,L2,L3)
     L(n,g) = L1 + L2 + L3
-    src = src + af(n,g) * (scg(n) + chi(mat(n),g) * fs0(n)) * vdel(n)
-    rem = rem + af(n,g) * sigrp(n,g) * f0(n,g) * vdel(n)
+    src = src + af(n,g) * (scg(n) + chi(mat(n),g) * fsrc(n)) * vdel(n)
+    rem = rem + af(n,g) * sigrp(n,g) * flux(n,g) * vdel(n)
     lea = lea + af(n,g) * L(n,g) * vdel(n)
-    fde = fde + af(n,g) * chi(mat(n),g) * fs0(n) * vdel(n)
+    fde = fde + af(n,g) * chi(mat(n),g) * fsrc(n) * vdel(n)
    end do
 end do
 
@@ -692,9 +692,9 @@ subroutine calc_beta(af)
 !    To calculate core-averaged delayed neutron fraction
 !
 
-USE sdata, ONLY: ng, nnod, m, mat, chi, nf, f0, nuf, ctbeta
+USE data, ONLY: ng, nnod, m, mat, chi, nf, flux, nuf, core_beta
 USE cmfd, ONLY: Integrate
-USE io, ONLY: ounit
+USE read, ONLY: ounit
 
 implicit none
 
@@ -708,7 +708,7 @@ real(dp) :: F
 vdum = 0.
 DO g = 1, ng
     DO n = 1, nnod
-        vdum(n) = vdum(n) + nuf(n,g) * f0(n,g)
+        vdum(n) = vdum(n) + nuf(n,g) * flux(n,g)
     END DO
 END DO
 
@@ -722,7 +722,7 @@ END DO
 F = Integrate(vdum2)
 
 ! Calculate Delayed neutron fraction (beta)
-ctbeta = 0._dp
+core_beta = 0._dp
 DO i = 1, nf
     vdum2 = 0.
     DO g = 1, ng
@@ -730,11 +730,11 @@ DO i = 1, nf
             vdum2(n) = vdum2(n) + chi(mat(n),g) * m(mat(n))%iBeta(i) * vdum(n) * af(n,g)
         END DO
     END DO
-    ctbeta = ctbeta + Integrate(vdum2) / F
+    core_beta = core_beta + Integrate(vdum2) / F
 END DO
 
 write(ounit,*)
-write(ounit,1344) ctbeta*1.e5
+write(ounit,1344) core_beta*1.e5
 
 1344 format ('  CORE AVERAGED DELAYED NEUTRON FRACTION: ', F7.2, ' PCM')
 

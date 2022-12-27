@@ -1,0 +1,28 @@
+program test
+
+    use iso_c_binding
+
+    implicit none
+
+    real(8), target :: a(1000), b
+    real(8), pointer :: pa(:), pb
+
+    pa => a
+    pb => b
+
+    write(*,*) sizeof(a)
+    write(*,*) sizeof(pa)
+    write(*,*) sizeof(b)
+    write(*,*) sizeof(pb)
+
+    ! contains
+    
+    ! subroutine s1(x)
+
+    !     real(8) :: x(:)
+
+    !     write(*,*) c_sizeof(x)
+
+    ! end subroutine
+
+end program

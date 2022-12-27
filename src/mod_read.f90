@@ -81,7 +81,7 @@ module read
         oname = TRIM(iname) // '.out'
         oname = TRIM(oname)
         
-        ounit =  open_file ('write', iname)
+        ounit =  open_file ('write', oname)
 
         umode =  open_file ('scratch')
         uxsec =  open_file ('scratch')
@@ -344,8 +344,8 @@ module read
         ' ************************', '  STOP READING INPUT  ', '********************************'
         
         1008 format (30X, 'START READING INPUT')
-        1021 format(2X, 'CARD ', A, ' doES NOT PRESENT. THIS CARD IS MANDATORY')
-        1041 format(2X, 'CARD ', A, ' doES NOT PRESENT. THIS CARD IS MANDATORY FOR ', A,' CALCULATION MODE')
+        1021 format(2X, 'CARD ', A, ' DOES NOT PRESENT. THIS CARD IS MANDATORY')
+        1041 format(2X, 'CARD ', A, ' DOES NOT PRESENT. THIS CARD IS MANDATORY FOR ', A,' CALCULATION MODE')
         
         
         close(UNIT=umode); close(UNIT=uxsec); close(UNIT=ugeom); close(UNIT=ucase)
@@ -365,17 +365,12 @@ module read
     
     subroutine print_header()
         
-        integer :: eof
-        integer :: nline
-        
         write(ounit, 2409)
         write(ounit, 2411)
         write(ounit, 2412)
         write(ounit, 2409)
         write(ounit, *)
-        write(ounit, *)
         
-        write(*, *)
         write(*, *)
         write(*, 2409)
         write(*, 2411)
@@ -383,8 +378,8 @@ module read
         write(*, 2409)
         
         2409 format(11X, '###########################################################')
-        2411 format(11X, '#                 KOMOdo Version: 0.2                     #')
-        2412 format(11X, '#           open NUCLEAR REACTOR SIMULATOR                #')
+        2411 format(11X, '#                 KOMODO Version: 0.2                     #')
+        2412 format(11X, '#           OPEN NUCLEAR REACTOR SIMULATOR                #')
     
     end subroutine
     
@@ -408,14 +403,14 @@ module read
         write(*, *)
         
         
-        write(ounit,1002) 'STARTS'
+        write(ounit,*) '  =============================INPUT DATA STARTS HERE==========================='
         
         nline = 0
         do
             read(iunit, '(A200)', IOSTAT=eof) iline
             nline = nline + 1
             if (eof < 0) then
-                write(ounit,1002) 'ENDS'
+                write(ounit,*) '  =============================INPUT DATA ENDS HERE==========================='
                 write(ounit,*)
                 exit
             end if
@@ -423,8 +418,7 @@ module read
         end do
         
         1001 format (2X, I4, ': ', A200)
-        1002 format    (2X, '=============================INPUT DATA',A7, &
-                            ' HERE===========================')
+
         rewind (iunit)
     
     end subroutine inp_echo
@@ -496,7 +490,7 @@ module read
             if (eof < 0) exit                                                             !Check end of file
         
             ! users can place the card input into separated file.
-            ! if the card is placed in a separated file as indicated by keyword FILE
+            ! if the card is placed in a separated file as indicated by keyword 'FILE'
             if (index(lower_case(iline),'file') > 0) then
                 backspace(buffer)
                 read (buffer, '(A2,I5,A200)') ind, ln, iline
@@ -504,7 +498,7 @@ module read
                 iline                                 = ADJUSTL(iline)                       ! Adjust to left
                 comm                                  = index(iline, ' ')                    ! Get space position
                 fname                                 = TRIM(ADJUSTL(iline(comm+1:200)))     ! Get card file name
-                file_array(GETLOC(unit_array, bunit)) = fname                                ! Change default file name for error notification
+                file_array(findloc(unit_array, bunit)) = fname                                ! Change default file name for error notification
                 xunit                                 = open_file('read', fname)             ! open card file
     
                 call remove_comments(xunit, '!', cunit)                                      ! Remove comments in card file
@@ -560,69 +554,63 @@ module read
     
     end subroutine inp_rewrite
     
-    !******************************************************************************!
+    !===============================================================================================!
+    ! To read case mode in input                                                                    !
+    !===============================================================================================!
     
-    ! subroutine inp_mode (xbunit)
-    ! !
-    ! ! Purpose:
-    ! !    To read case mode in input
-    ! !
+    subroutine inp_mode (xbunit)
     
-    ! USE data, ONLY: mode
+        integer, intent(in) :: xbunit
+        
+        integer           :: ln   !Line number
+        integer           :: ios  ! IOSTAT status
+        character(LEN=60) :: mode_desc
+        
+        read(xbunit, '(A2, I5,A100)', IOSTAT=ios) ind, ln, mode
+        message = ' error in reading MODE'
+        call er_message(ounit, ios, ln, message, buf=xbunit)
+        
+        
+        mode = TRIM(ADJUSTL(mode))  ! ADJUSTL = MOVE PRECEDING BLANK TO TRAILING
+        
+        select case(mode)
+        case('FORWARD')
+            mode_desc = TRIM(ADJUSTL('FORWARD CALCULATION'))
+        case('ADJOINT')
+          mode_desc = TRIM(ADJUSTL('ADJOINT CALCULATION'))
+        case('FIXEDSRC')
+          mode_desc = TRIM(ADJUSTL('FIXED SOURCE CALCULATION'))
+        case('RODEJECT')
+          if (bther == 0) then
+            mode_desc = TRIM(ADJUSTL('ROD EJECTION CALCULATION WITHOUT T-H FEEDBACK'))
+          else
+            mode_desc = TRIM(ADJUSTL('ROD EJECTION CALCULATION WITH T-H FEEDBACK'))
+          end if
+        case('BCSEARCH')
+          if (bther == 0) then
+            mode_desc = TRIM(ADJUSTL('CRITICAL BORON CONCENTRATION SEARCH' &
+            // ' WITHOUT T-H FEEDBACK'))
+          else
+            mode_desc = TRIM(ADJUSTL('CRITICAL BORON CONCENTRATION SEARCH' &
+            // ' WITH T-H FEEDBACK'))
+          end if
+        case DEFAULT
+          write(ounit,1032) mode
+          write(*,1032) mode
+          stop
+        end select
+        
+        write(ounit,1031) mode_desc
+        write(ounit,*)
+        if (scr) then
+          write(*,1031) mode_desc
+          write(*,*)
+        end if
+        
+        1031 format(2X, 'CALCULATION MODE : ', A60)
+        1032 format(2X, 'MODE : ', A10, ' IS UNIDENTifIED')
     
-    ! IMPLICIT NONE
-    
-    ! integer, intent(in) :: xbunit
-    
-    ! integer :: ln   !Line number
-    ! integer :: ios  ! IOSTAT status
-    ! character(LEN=60) :: mode_desc
-    
-    ! read(xbunit, '(A2, I5,A100)', IOSTAT=ios) ind, ln, mode
-    ! message = ' error in reading MODE'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
-    
-    
-    ! mode = TRIM(ADJUSTL(mode))  ! ADJUSTL = MOVE PRECEDING BLANK TO TRAILING
-    
-    ! select case(mode)
-    ! case('FORWARD')
-    !     mode_desc = TRIM(ADJUSTL('FORWARD CALCULATION'))
-    ! case('ADJOINT')
-    !   mode_desc = TRIM(ADJUSTL('ADJOINT CALCULATION'))
-    ! case('FIXEDSRC')
-    !   mode_desc = TRIM(ADJUSTL('FIXED SOURCE CALCULATION'))
-    ! case('RODEJECT')
-    !   if (bther == 0) then
-    !     mode_desc = TRIM(ADJUSTL('ROD EJECTION CALCULATION WITHOUT T-H FEEDBACK'))
-    !   else
-    !     mode_desc = TRIM(ADJUSTL('ROD EJECTION CALCULATION WITH T-H FEEDBACK'))
-    !   end if
-    ! case('BCSEARCH')
-    !   if (bther == 0) then
-    !     mode_desc = TRIM(ADJUSTL('CRITICAL BORON CONCENTRATION SEARCH' &
-    !     // ' WITHOUT T-H FEEDBACK'))
-    !   else
-    !     mode_desc = TRIM(ADJUSTL('CRITICAL BORON CONCENTRATION SEARCH' &
-    !     // ' WITH T-H FEEDBACK'))
-    !   end if
-    ! case DEFAULT
-    !   write(ounit,1032) mode
-    !   write(*,1032) mode
-    !   stop
-    ! end select
-    
-    ! write(ounit,1031) mode_desc
-    ! write(ounit,*)
-    ! if (scr) then
-    !   write(*,1031) mode_desc
-    !   write(*,*)
-    ! end if
-    
-    ! 1031 format(2X, 'CALCULATION MODE : ', A60)
-    ! 1032 format(2X, 'MODE : ', A10, ' IS UNIDENTifIED')
-    
-    ! end subroutine inp_mode
+    end subroutine inp_mode
     
     ! !******************************************************************************!
     
@@ -3176,15 +3164,15 @@ module read
     !   if (PRESENT(xtab)) then
     !     write(funit, 1014) ln, xtab
     !   else
-    !     write(funit, 1006) card_array(GETLOC(unit_array,buf))
-    !     write(funit, 1013) ln, file_array(GETLOC(unit_array,buf))
+    !     write(funit, 1006) card_array(findloc(unit_array,buf))
+    !     write(funit, 1013) ln, file_array(findloc(unit_array,buf))
     !   end if
     !   write(funit,*) mess
     !   if (PRESENT(xtab)) then
     !     write(*, 1014) ln, xtab
     !   else
-    !     write(*, 1006) card_array(GETLOC(unit_array,buf))
-    !     write(*, 1013) ln, file_array(GETLOC(unit_array,buf))
+    !     write(*, 1006) card_array(findloc(unit_array,buf))
+    !     write(*, 1013) ln, file_array(findloc(unit_array,buf))
     !   end if
     !   write(*,*) mess
     !   1013 format(2x, 'THIS LINE NEEDS MORE INPUT DATA. LINE', I4, &
@@ -3202,15 +3190,15 @@ module read
     !   if (PRESENT(xtab)) then
     !     write(funit, 1005) ln, xtab
     !   else
-    !     write(funit, 1006) card_array(GETLOC(unit_array,buf))
-    !     write(funit, 1004) ln, file_array(GETLOC(unit_array,buf))
+    !     write(funit, 1006) card_array(findloc(unit_array,buf))
+    !     write(funit, 1004) ln, file_array(findloc(unit_array,buf))
     !   end if
     !   write(funit,*) mess
     !   if (PRESENT(xtab)) then
     !     write(*, 1005) ln, xtab
     !   else
-    !     write(*, 1006) card_array(GETLOC(unit_array,buf))
-    !     write(*, 1004) ln, file_array(GETLOC(unit_array,buf))
+    !     write(*, 1006) card_array(findloc(unit_array,buf))
+    !     write(*, 1004) ln, file_array(findloc(unit_array,buf))
     !   end if
     !   write(*,*) mess
     !   1006 format(2X, 'ERROR: THERE IS AN ERROR IN CARD %', A4)
@@ -3224,7 +3212,7 @@ module read
     
     ! !****************************************************************************!
     
-    ! FUNCTION GETLOC(arr, elm) RESULT (loc)
+    ! FUNCTION findloc(arr, elm) RESULT (loc)
     
     !   !Purpose: To  get location of an element in an array
     
@@ -3241,7 +3229,7 @@ module read
     !     end if
     !   end do
     
-    ! end FUNCTION GETLOC
+    ! end FUNCTION findloc
     
     ! !******************************************************************************!
     

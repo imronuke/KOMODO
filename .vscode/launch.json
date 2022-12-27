@@ -1,0 +1,20 @@
+
+{
+    "version": "0.2.0",
+    "configurations": [
+        
+        {
+            "name": "Run GDB",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceRoot}/cpm",
+            "args": ["${workspaceRoot}/test.inp"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceRoot}",
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "preLaunchTask": "build",
+
+        }
+    ]
+}

@@ -1,6 +1,6 @@
 module xsec
 
-  use sdata, only: dp
+  use data, only: dp
   implicit none
   save
 
@@ -25,9 +25,9 @@ contains
   !    To update XS for given TH paramaters and rod position
   !
 
-  USE sdata, ONLY : nnod, mat, sigtr, siga, nuf, sigf, sigs, dc, &
+  USE data, ONLY : nnod, mat, sigtr, siga, nuf, sigf, sigs, dc, &
   get_time, xs_time
-  use io, only: bbcon, bftem, bmtem, bcden, bcrod, bcbcs, bcrod, bxtab
+  use read, only: bbcon, bftem, bmtem, bcden, bcrod, bcbcs, bcrod, bxtab
 
   IMPLICIT NONE
 
@@ -75,8 +75,8 @@ contains
   !    To check errors in xsec
   !
 
-  use sdata, only : D, sigr, nuf, chi, sigs, nnod, ng, mat, nmat
-  use io,    only : ounit
+  use data, only : D, sigr, nuf, chi, sigs, nnod, ng, mat, nmat
+  use read,    only : ounit
 
 
   IMPLICIT NONE
@@ -158,7 +158,7 @@ contains
   !
 
 
-  USE sdata, ONLY: nnod, sigtr, siga, nuf, sigf, sigs, mat, &
+  USE data, ONLY: nnod, sigtr, siga, nuf, sigf, sigs, mat, &
                    xsigtr, xsiga, xnuf, xsigf, xsigs
 
   IMPLICIT NONE
@@ -185,7 +185,7 @@ contains
   !
 
 
-  USE sdata, ONLY: nnod, ng, sigtr, siga,  &
+  USE data, ONLY: nnod, ng, sigtr, siga,  &
                    sigs, D, sigr
 
   IMPLICIT NONE
@@ -214,10 +214,10 @@ contains
   ! Purpose: TO UPDATE AND CALCUALTE VOLUME WEIGHTED HOMOGENIZED CX FOR RODDED NODE
   !
 
-  USE sdata, ONLY: ng, nxx, nyy, nzz, xyz, zdel, mat, &
+  USE data, ONLY: ng, nxx, nyy, nzz, xyz, zdel, mat, &
                    sigtr, siga, nuf, sigf, sigs, &
                    dsigtr, dsiga, dnuf, dsigf, dsigs, &
-                   coreh, fbmap, pos0, ssize
+                   coreh, fbmap, zero_pos, step_size
 
   IMPLICIT NONE
 
@@ -232,7 +232,7 @@ contains
     DO i = 1, nxx
        IF (fbmap(i,j) > 0) THEN
           !!!(rodh -> posistion the tip of the control rod the top of core)
-           rodh = coreh - pos0  - bpos(fbmap(i,j))*ssize
+           rodh = coreh - zero_pos  - bpos(fbmap(i,j))*step_size
            dum = 0._dp
            DO k = nzz, 1, -1
              ! For partially rodded node, get volume weighted homogenized CX (0 < vfrac < 1._DP)
@@ -284,9 +284,9 @@ contains
   ! Purpose: TO UPDATE AND CALCUALTE VOLUME WEIGHTED HOMOGENIZED CX FOR RODDED NODE
   !
 
-  USE sdata, ONLY: ng, nxx, nyy, nzz, xyz, zdel, mat, &
+  USE data, ONLY: ng, nxx, nyy, nzz, xyz, zdel, mat, &
                    sigtr, siga, nuf, sigf, sigs, dc, &
-                   coreh, fbmap, pos0, ssize, m, &
+                   coreh, fbmap, zero_pos, step_size, m, &
                    nnod, cden, ftem, mtem, bcon
 
   IMPLICIT NONE
@@ -307,7 +307,7 @@ contains
     DO i = 1, nxx
       IF (fbmap(i,j) > 0) THEN
          !(rodh -> posistion the tip of the control rod the top of core)
-         rodh = coreh - pos0  - bpos(fbmap(i,j))*ssize
+         rodh = coreh - zero_pos  - bpos(fbmap(i,j))*step_size
          dum = 0._DP
            DO k = nzz, 1, -1
              nd = xyz(i,j,k)                                  ! Node number
@@ -379,7 +379,7 @@ contains
   ! Purpose:
   !    To update CX for given boron concentration
 
-  USE sdata, ONLY: nnod, ng, sigtr, siga, nuf, sigf, sigs, mat, &
+  USE data, ONLY: nnod, ng, sigtr, siga, nuf, sigf, sigs, mat, &
                    csigtr, csiga, cnuf, csigf, csigs, rbcon
 
   IMPLICIT NONE
@@ -410,8 +410,8 @@ contains
   ! Purpose:
   !    To update CX for given fuel temp
 
-  USE sdata, ONLY: nnod, ng, sigtr, siga, nuf, sigf, sigs, mat, &
-                   fsigtr, fsiga, fnuf, fsigf, fsigs, rftem
+  USE data, ONLY: nnod, ng, sigtr, siga, nuf, sigf, sigs, mat, &
+                   fsigtr, fsiga, fnuf, fsigf, fsigs, fuel_temp_ref
 
   IMPLICIT NONE
 
@@ -421,12 +421,12 @@ contains
 
   DO n = 1, nnod
       DO g = 1, ng
-          sigtr(n,g) = sigtr(n,g) + fsigtr(mat(n),g) * (SQRT(ftem(n))- SQRT(rftem))
-          siga(n,g)  = siga(n,g)  + fsiga(mat(n),g)  * (SQRT(ftem(n)) - SQRT(rftem))
-          nuf(n,g)   = nuf(n,g)   + fnuf(mat(n),g)   * (SQRT(ftem(n)) - SQRT(rftem))
-          sigf(n,g)  = sigf(n,g)  + fsigf(mat(n),g)  * (SQRT(ftem(n)) - SQRT(rftem))
+          sigtr(n,g) = sigtr(n,g) + fsigtr(mat(n),g) * (SQRT(ftem(n))- SQRT(fuel_temp_ref))
+          siga(n,g)  = siga(n,g)  + fsiga(mat(n),g)  * (SQRT(ftem(n)) - SQRT(fuel_temp_ref))
+          nuf(n,g)   = nuf(n,g)   + fnuf(mat(n),g)   * (SQRT(ftem(n)) - SQRT(fuel_temp_ref))
+          sigf(n,g)  = sigf(n,g)  + fsigf(mat(n),g)  * (SQRT(ftem(n)) - SQRT(fuel_temp_ref))
           DO h = 1, ng
-             sigs(n,g,h) = sigs(n,g,h) + fsigs(mat(n),g,h) * (SQRT(ftem(n)) - SQRT(rftem))
+             sigs(n,g,h) = sigs(n,g,h) + fsigs(mat(n),g,h) * (SQRT(ftem(n)) - SQRT(fuel_temp_ref))
           END DO
         END DO
   END DO
@@ -441,8 +441,8 @@ contains
   ! Purpose:
   !    To update CX for given moderator temperature
 
-  USE sdata, ONLY: nnod, ng, sigtr, siga, nuf, sigf, sigs, mat, &
-                   msigtr, msiga, mnuf, msigf, msigs, rmtem
+  USE data, ONLY: nnod, ng, sigtr, siga, nuf, sigf, sigs, mat, &
+                   msigtr, msiga, mnuf, msigf, msigs, mod_temp_ref
 
   IMPLICIT NONE
 
@@ -452,12 +452,12 @@ contains
 
   DO n = 1, nnod
       DO g = 1, ng
-          sigtr(n,g) = sigtr(n,g) + msigtr(mat(n),g) * (mtem(n) - rmtem)
-          siga(n,g)  = siga(n,g)  + msiga(mat(n),g)  * (mtem(n) - rmtem)
-          nuf(n,g)   = nuf(n,g)   + mnuf(mat(n),g)   * (mtem(n) - rmtem)
-          sigf(n,g)  = sigf(n,g)  + msigf(mat(n),g)  * (mtem(n) - rmtem)
+          sigtr(n,g) = sigtr(n,g) + msigtr(mat(n),g) * (mtem(n) - mod_temp_ref)
+          siga(n,g)  = siga(n,g)  + msiga(mat(n),g)  * (mtem(n) - mod_temp_ref)
+          nuf(n,g)   = nuf(n,g)   + mnuf(mat(n),g)   * (mtem(n) - mod_temp_ref)
+          sigf(n,g)  = sigf(n,g)  + msigf(mat(n),g)  * (mtem(n) - mod_temp_ref)
           DO h = 1, ng
-              sigs(n,g,h) = sigs(n,g,h) + msigs(mat(n),g,h) * (mtem(n) - rmtem)
+              sigs(n,g,h) = sigs(n,g,h) + msigs(mat(n),g,h) * (mtem(n) - mod_temp_ref)
           END DO
       END DO
   END DO
@@ -473,8 +473,8 @@ contains
   ! Purpose:
   !    To update CX for given coolant density
 
-  USE sdata, ONLY: nnod, ng, sigtr, siga, nuf, sigf, sigs, mat, &
-                   lsigtr, lsiga, lnuf, lsigf, lsigs, rcden
+  USE data, ONLY: nnod, ng, sigtr, siga, nuf, sigf, sigs, mat, &
+                   lsigtr, lsiga, lnuf, lsigf, lsigs, mod_dens_ref
 
   IMPLICIT NONE
 
@@ -484,12 +484,12 @@ contains
 
   DO n = 1, nnod
       DO g = 1, ng
-          sigtr(n,g) = sigtr(n,g) + lsigtr(mat(n),g) * (cden(n) - rcden)
-          siga(n,g)  = siga(n,g)  + lsiga(mat(n),g)  * (cden(n) - rcden)
-          nuf(n,g)   = nuf(n,g)   + lnuf(mat(n),g)   * (cden(n) - rcden)
-          sigf(n,g)  = sigf(n,g)  + lsigf(mat(n),g)  * (cden(n) - rcden)
+          sigtr(n,g) = sigtr(n,g) + lsigtr(mat(n),g) * (cden(n) - mod_dens_ref)
+          siga(n,g)  = siga(n,g)  + lsiga(mat(n),g)  * (cden(n) - mod_dens_ref)
+          nuf(n,g)   = nuf(n,g)   + lnuf(mat(n),g)   * (cden(n) - mod_dens_ref)
+          sigf(n,g)  = sigf(n,g)  + lsigf(mat(n),g)  * (cden(n) - mod_dens_ref)
           DO h = 1, ng
-              sigs(n,g,h) = sigs(n,g,h) + lsigs(mat(n),g,h) * (cden(n) - rcden)
+              sigs(n,g,h) = sigs(n,g,h) + lsigs(mat(n),g,h) * (cden(n) - mod_dens_ref)
           END DO
       END DO
   END DO
@@ -504,8 +504,8 @@ contains
   !Purpose: To interpolate the xsec data from xtab file for given bcon,
   ! ftem, mtem and cden
 
-  USE sdata, ONLY: m, XBRANCH, ng
-  use io,    only: ounit
+  USE data, ONLY: m, XBRANCH, ng
+  use read,    only: ounit
 
   IMPLICIT NONE
 
@@ -764,7 +764,7 @@ contains
 
     ! To perform XBRANCH data type addition
 
-  USE sdata, ONLY: XBRANCH
+  USE data, ONLY: XBRANCH
 
   IMPLICIT NONE
 
@@ -786,7 +786,7 @@ contains
 
       ! To perform XBRANCH data type substraction
 
-  USE sdata, ONLY: XBRANCH
+  USE data, ONLY: XBRANCH
 
   IMPLICIT NONE
 
@@ -808,7 +808,7 @@ contains
 
       ! To perform XBRANCH data type substraction
 
-  USE sdata, ONLY: XBRANCH, DP
+  USE data, ONLY: XBRANCH, DP
 
   IMPLICIT NONE
 

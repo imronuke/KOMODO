@@ -1,6 +1,6 @@
 MODULE th
 
-USE sdata, ONLY: DP
+USE data, ONLY: DP
 
 IMPLICIT NONE
 
@@ -14,11 +14,11 @@ SUBROUTINE th_iter(maxIter, oupt)
 !    To do thermal-hydrailics iteration
 !
 
-USE sdata, ONLY: nnod, ftem, mtem, cden, bcon, bpos, npow, pow, ppow,  &
+USE data, ONLY: nnod, ftem, mtem, cden, bcon, bpos, node_power, pow, ppow,  &
                  zdel, node_nf, ix, iy, iz, th_err, node_nf, ix, iy, iz, &
-                 th_niter, fer, ferc, ser, serc, get_time, th_time, Ke
+                 n_th_iter, flux_error, max_flux_error, fsrc_error, max_fsrc_error, get_time, th_time, Ke
 USE cmfd, ONLY: outer_th
-USE io, ONLY: ounit, scr
+USE read, ONLY: ounit, scr
 USE xsec, ONLY: XS_updt
 
 IMPLICIT NONE
@@ -44,11 +44,11 @@ DO i = 1, maxIter
     st = get_time()
 
     ! Calculate power density
-    CALL PowDis(npow)
+    CALL PowDis(node_power)
 
     ! Calculate linear power density for each nodes (W/cm)
     DO n = 1, nnod
-        pline(n) = npow(n) * pow * ppow * 0.01_DP &
+        pline(n) = node_power(n) * pow * ppow * 0.01_DP &
                  / (node_nf(ix(n),iy(n)) * zdel(iz(n)))     ! Linear power density (W/cm)
     END DO
 
@@ -63,16 +63,16 @@ DO i = 1, maxIter
     th_time = th_time + (fn-st)
 
     if (oupt > 0) then
-      write(ounit,'(I5,F13.6,3ES15.5)') i, Ke, ser, fer, th_err        ! Write outer iteration evolution
-      if (scr) write(*,'(I5,F13.6,3ES15.5)') i, Ke, ser, fer, th_err   ! Write outer iteration evolution
+      write(ounit,'(I5,F13.6,3ES15.5)') i, Ke, fsrc_error, flux_error, th_err        ! Write outer iteration evolution
+      if (scr) write(*,'(I5,F13.6,3ES15.5)') i, Ke, fsrc_error, flux_error, th_err   ! Write outer iteration evolution
     end if
 
     ! If error is small enough
-    IF (th_err < 0.01 .and. fer < ferc .and. ser < serc) EXIT
+    IF (th_err < 0.01 .and. flux_error < max_flux_error .and. fsrc_error < max_fsrc_error) EXIT
 
 END DO
 
-IF (i-1 == th_niter) THEN
+IF (i-1 == n_th_iter) THEN
   WRITE(ounit,*) '  MAXIMUM TH ITERATION REACHED.'
   WRITE(ounit,*) '  CALCULATION MIGHT BE NOT CONVERGED OR CHANGE ITERATION CONTROL'
   WRITE(*,*) '  MAXIMUM TH ITERATION REACHED.'
@@ -94,8 +94,8 @@ subroutine PowDis (p)
 !
 
 
-USE sdata, ONLY: ng, nnod, sigf, f0, vdel, powtot, mode
-USE io,    ONLY: ounit
+USE data, ONLY: ng, nnod, sigf, flux, vdel, total_power, mode
+USE read,    ONLY: ounit
 
 implicit none
 
@@ -106,29 +106,29 @@ real(dp) :: pow, vtot
 p = 0._dp
 do g= 1, ng
     do n= 1, nnod
-      pow = f0(n,g) * sigf(n,g)
+      pow = flux(n,g) * sigf(n,g)
       if (pow < 0.) pow = 0.
       p(n) = p(n) + pow
     end do
 end do
 
 ! Normalize to 1._DP
-powtot = 0._DP
+total_power = 0._DP
 vtot = 0.0
 do n = 1, nnod
-    powtot = powtot + p(n) * vdel(n)
+    total_power = total_power + p(n) * vdel(n)
     vtot   = vtot + vdel(n)
 end do
 
-if (powtot <= 0 .AND. mode /= 'FIXEDSRC') THEN
+if (total_power <= 0 .AND. mode /= 'FIXEDSRC') THEN
    write(ounit, *) '   ERROR: TOTAL NODES POWER IS ZERO OR LESS'
    write(ounit, *) '   STOP IN subroutine POWDIS'
    STOP
 end if
 
-if (powtot > 0.0) then
+if (total_power > 0.0) then
    do n = 1, nnod
-       p(n) = p(n) * vtot / powtot
+       p(n) = p(n) * vtot / total_power
    end do
 end if
 
@@ -142,7 +142,7 @@ SUBROUTINE AbsE(newF, oldF, rel)
   ! Purpose:
   !    To calculate Max Relative error
 
-USE sdata, ONLY: nnod
+USE data, ONLY: nnod
 
 IMPLICIT NONE
 
@@ -171,7 +171,7 @@ SUBROUTINE par_ave(par, ave)
 !    To calculate average fuel temp (only for active core)
 !
 
-USE sdata, ONLY: vdel, nnod, ng, nuf
+USE data, ONLY: vdel, nnod, ng, nuf
 
 IMPLICIT NONE
 
@@ -200,7 +200,7 @@ SUBROUTINE par_ave_out(par, ave)
 !    To calculate average fuel temp (only for active core)
 !
 
-USE sdata, ONLY: vdel, nnod, iz, nzz, nuf, ng, ix, iy, xyz, nxx, nyy, nzz, ystag
+USE data, ONLY: vdel, nnod, iz, nzz, nuf, ng, ix, iy, xyz, nxx, nyy, nzz, ystag
 
 IMPLICIT NONE
 
@@ -248,7 +248,7 @@ SUBROUTINE par_max(par, pmax)
 !    To calculate maximum fuel tem, coolant tem, and density
 !
 
-USE sdata, ONLY: nnod
+USE data, ONLY: nnod
 
 IMPLICIT NONE
 
@@ -271,8 +271,8 @@ SUBROUTINE getent(t,ent)
 !    To get enthalpy for given coolant temp. from steam table
 !
 
-USE sdata, ONLY: stab, ntem
-USE io, ONLY : ounit
+USE data, ONLY: stab, ntem
+USE read, ONLY : ounit
 
 IMPLICIT NONE
 
@@ -314,8 +314,8 @@ SUBROUTINE gettd(ent,t,rho,prx,kvx,tcx,Rx)
 !    To get enthalpy for given coolant temp. from steam table
 !
 
-USE sdata, ONLY: stab, ntem
-USE io, ONLY : ounit
+USE data, ONLY: stab, ntem
+USE read, ONLY : ounit
 
 IMPLICIT NONE
 
@@ -469,7 +469,7 @@ REAL(DP) FUNCTION geths(xden, tc, kv, Pr)
 !    To calculate heat transfer coef.
 !
 
-USE sdata, ONLY: dh, farea, cflow
+USE data, ONLY: dh, farea, cflow
 
 IMPLICIT NONE
 
@@ -497,9 +497,9 @@ SUBROUTINE th_trans(xpline, h)
 !    To perform fuel pin thermal transient
 !
 
-USE sdata, ONLY: nnod, mtem, cden, ftem, tin, cflow, nxx, nyy, cf, ent, heatf, &
+USE data, ONLY: nnod, mtem, cden, ftem, tin, cflow, nxx, nyy, cf, enthalpy, heat_flux, &
                  tfm, nt, rpos, rdel, rf, rg, rc, farea, dia, pi, zdel, &
-                 ix, iy, iz, frate, th_time, get_time
+                 ix, iy, iz, flow_rate, th_time, get_time
 
 IMPLICIT NONE
 
@@ -534,36 +534,36 @@ st = get_time()
 a = 0._dp; b = 0._dp; c = 0._dp;
 
 if (first) then
-  allocate(frate(nnod))
-  frate = cflow
+  allocate(flow_rate(nnod))
+  flow_rate = cflow
   first = .false.
 end if
 ! frate = cflow
 CALL getent(tin, enti)
-entp = ent
+entp = enthalpy
 
 DO n = 1, nnod
    mdens = cden(n) * 1000._DP                                    ! Coolant density (kg/m3)
-   cpline = heatf(n) * pi * dia + cf * xpline(n) * 100._DP       ! Coolant Linear power densisty (W/m)
+   cpline = heat_flux(n) * pi * dia + cf * xpline(n) * 100._DP       ! Coolant Linear power densisty (W/m)
    vol   = farea * zdel(iz(n)) * 0.01_DP                             ! channel node volume
    i = ix(n); j = iy(n); k = iz(n)
 
    IF (k == 1) THEN                                              ! Calculate coolant enthalpy
        eps = mdens * vol / h
-       ent(n) = (cpline * zdel(iz(n)) * 0.01_DP + 2._DP * frate(n) * enti &
-              + eps * entp(n)) / (eps + 2._DP * frate(n))                             ! Calculate enthalpy
-       CALL gettd(ent(n), mtem(n), cden(n), Pr, kv, tcon, R)        ! Get corresponding temp and density
-       entm(i,j)   = 2._DP * ent(n) - enti
-       frate(n)    = cflow - 0.5_dp * vol / h * R * (ent(n) - entp(n))
-       bfrate(i,j) = 2._DP * frate(n) - cflow
+       enthalpy(n) = (cpline * zdel(iz(n)) * 0.01_DP + 2._DP * flow_rate(n) * enti &
+              + eps * entp(n)) / (eps + 2._DP * flow_rate(n))                             ! Calculate enthalpy
+       CALL gettd(enthalpy(n), mtem(n), cden(n), Pr, kv, tcon, R)        ! Get corresponding temp and density
+       entm(i,j)   = 2._DP * enthalpy(n) - enti
+       flow_rate(n)    = cflow - 0.5_dp * vol / h * R * (enthalpy(n) - entp(n))
+       bfrate(i,j) = 2._DP * flow_rate(n) - cflow
    ELSE
        eps = mdens * vol / h
-       ent(n) = (cpline * zdel(iz(n)) * 0.01_DP + 2._DP * frate(n) &
-              * entm(ix(n),iy(n)) + eps * entp(n)) / (eps + 2._DP * frate(n))
-       CALL gettd(ent(n), mtem(n), cden(n), Pr, kv, tcon, R)
-       entm(i,j)   = 2._DP * ent(n) - entm(i,j)
-       frate(n)    = bfrate(i,j) - 0.5_dp * vol / h * R * (ent(n) - entp(n))
-       bfrate(i,j) = 2._DP * frate(n) - bfrate(i,j)
+       enthalpy(n) = (cpline * zdel(iz(n)) * 0.01_DP + 2._DP * flow_rate(n) &
+              * entm(ix(n),iy(n)) + eps * entp(n)) / (eps + 2._DP * flow_rate(n))
+       CALL gettd(enthalpy(n), mtem(n), cden(n), Pr, kv, tcon, R)
+       entm(i,j)   = 2._DP * enthalpy(n) - entm(i,j)
+       flow_rate(n)    = bfrate(i,j) - 0.5_dp * vol / h * R * (enthalpy(n) - entp(n))
+       bfrate(i,j) = 2._DP * flow_rate(n) - bfrate(i,j)
    END IF
 
    hs = geths(cden(n), Pr, kv, tcon)                                               ! Calculate heat transfer coef
@@ -634,7 +634,7 @@ DO n = 1, nnod
    ftem(n) = (1.-alpha) * tfm(n, 1) + alpha * tfm(n, nt-1)
 
    ! Calculate heat flux
-   heatf(n) = hs * (tfm(n, nt+1) - mtem(n))
+   heat_flux(n) = hs * (tfm(n, nt+1) - mtem(n))
 END DO
 
 !Get th_time
@@ -652,8 +652,8 @@ SUBROUTINE th_upd(xpline)
 !    To update thermal parameters
 !
 
-USE sdata, ONLY: nnod, mtem, cden, ftem, tin, ix, iy, iz, nxx, nyy, cflow, cf,  &
-                 ent, heatf, tfm, nt, rpos, rdel, rf, rg, rc, pi, zdel, dia
+USE data, ONLY: nnod, mtem, cden, ftem, tin, ix, iy, iz, nxx, nyy, cflow, cf,  &
+                 enthalpy, heat_flux, tfm, nt, rpos, rdel, rf, rg, rc, pi, zdel, dia
 
 IMPLICIT NONE
 
@@ -677,16 +677,16 @@ a = 0._dp; b = 0._dp; c = 0._dp;
 CALL getent(tin, enti)
 
 DO n = 1, nnod
-  cpline = heatf(n) * pi * dia  + cf * xpline(n) * 100._DP          ! Coolant Linear power densisty (W/m)
+  cpline = heat_flux(n) * pi * dia  + cf * xpline(n) * 100._DP          ! Coolant Linear power densisty (W/m)
   zd = zdel(iz(n)) * 0.01_DP
   IF (iz(n) == 1) THEN                                              ! For most bootom channel
-    ent(n) = enti + 0.5_DP * cpline * zd / cflow    ! Calculate coolant enthalpy
-    CALL gettd(ent(n), mtem(n), cden(n), Pr, kv, tcon)             ! Get corresponding temp and density
-    entm(ix(n),iy(n)) = 2._DP * ent(n) - enti                      ! Extrapolate enthalpy at node boundary
+    enthalpy(n) = enti + 0.5_DP * cpline * zd / cflow    ! Calculate coolant enthalpy
+    CALL gettd(enthalpy(n), mtem(n), cden(n), Pr, kv, tcon)             ! Get corresponding temp and density
+    entm(ix(n),iy(n)) = 2._DP * enthalpy(n) - enti                      ! Extrapolate enthalpy at node boundary
   ELSE
-    ent(n) = entm(ix(n),iy(n)) + 0.5_DP * cpline * zd / cflow
-    CALL gettd(ent(n), mtem(n), cden(n), Pr, kv, tcon)
-    entm(ix(n),iy(n)) = 2._DP * ent(n) - entm(ix(n),iy(n))
+    enthalpy(n) = entm(ix(n),iy(n)) + 0.5_DP * cpline * zd / cflow
+    CALL gettd(enthalpy(n), mtem(n), cden(n), Pr, kv, tcon)
+    entm(ix(n),iy(n)) = 2._DP * enthalpy(n) - entm(ix(n),iy(n))
   END IF
 
   hs = geths(cden(n), Pr, kv, tcon)
@@ -746,7 +746,7 @@ DO n = 1, nnod
   ftem(n) = (1.-alp) * tfm(n, 1) + alp * tfm(n, nt-1)
 
   ! Calculate heat flux
-  heatf(n) = hs * (tfm(n, nt+1) - mtem(n))
+  heat_flux(n) = hs * (tfm(n, nt+1) - mtem(n))
 END DO
 
 

@@ -1,6 +1,6 @@
 module CMFD
 
-  use sdata, only: dp
+  use data, only: dp
   use gpu
   implicit none
   save
@@ -13,7 +13,7 @@ contains
 
     !Purpose: to calculate FDM nodal coupling coefficients
 
-    use sdata, only: ng, nnod, ix, iy, iz, xyz, D, xdel, ydel, zdel, &
+    use data, only: ng, nnod, ix, iy, iz, xyz, D, xdel, ydel, zdel, &
     ystag, xstag, nod, nzz, xeast, xwest, ysouth, ynorth, zbott, ztop
 
     implicit none
@@ -143,7 +143,7 @@ contains
 
     !Purpose: to set indexes for CMFD matrix
 
-    use sdata, only: ix, iy, iz, ystag, xstag, nnod, nxx, nyy, nzz, ind
+    use data, only: ix, iy, iz, ystag, xstag, nnod, nxx, nyy, nzz, ind
 
     implicit none
 
@@ -226,7 +226,7 @@ contains
     !Purpose: to setup sparse penta-diagonal matrix. Elements are indexed in
     ! two-dimensional vector ind and non-zero elements strored in A
 
-    use sdata, only: nod, ix, iy, iz, xdel, ydel, zdel, &
+    use data, only: nod, ix, iy, iz, xdel, ydel, zdel, &
     ystag, xstag, nnod, sigr, nzz, ng, A
 
     implicit none
@@ -325,7 +325,7 @@ contains
   ! Purpose:
   !    To perform fission source extrapolation
 
-  USE io,    ONLY: ounit, scr
+  USE read,    ONLY: ounit, scr
 
   implicit none
 
@@ -356,9 +356,9 @@ contains
   ! Purpose:
   !    To update nodal coupling coefficients
 
-  USE sdata, ONLY: ndmax, im, jm ,km, kern, get_time, nod_time
+  USE data, ONLY: ndmax, im, jm ,km, kern, get_time, nod_time
   USE nodal, ONLY: nodal_update, nodal_update_pnm
-  USE io,    ONLY: ounit, scr
+  USE read,    ONLY: ounit, scr
 
 
   implicit none
@@ -404,8 +404,8 @@ subroutine print_keff()
 ! Purpose:
 !    To update nodal coupling coefficients
 
-USE sdata, ONLY: Ke
-USE io,    ONLY: ounit, scr
+USE data, ONLY: Ke
+USE read,    ONLY: ounit, scr
 
 implicit none
 
@@ -429,9 +429,9 @@ end subroutine print_keff
   !    To perform forward outer iteration
 
 
-  USE sdata, ONLY: ng, nnod, nout, nin, serc, ferc, fer, ser, f0, nupd, &
-                   Ke, nac, fs0, s0, ndmax, kern, get_time, fdm_time
-  USE io,    ONLY: ounit, scr, bther
+  USE data, ONLY: ng, nnod, n_outer, n_inner, max_fsrc_error, max_flux_error, flux_error, fsrc_error, flux, upd_interval, &
+                   Ke, extrp_interval, fsrc, s0, ndmax, kern, get_time, fdm_time
+  USE read,    ONLY: ounit, scr, bther
   USE nodal, ONLY: nodal_update
 
   implicit none
@@ -456,15 +456,15 @@ end subroutine print_keff
 
   !Allocate flux and fission source for first time
   if (first .and. bther == 0) then
-    allocate (f0(nnod,ng), fs0(nnod), s0(nnod,ng))
+    allocate (flux(nnod,ng), fsrc(nnod), s0(nnod,ng))
     Ke = 1._dp
-    f0 = 1._dp
-    call FSrc(fs0)
+    flux = 1._dp
+    call get_fsrc(fsrc)
     first = .false.
   end if
 
   ! Initialize keff and fission source
-  f = Integrate(fs0)
+  f = Integrate(fsrc)
   errn = 1._DP
   e1 = Integrate(errn)
 
@@ -472,11 +472,11 @@ end subroutine print_keff
   fdm_time = fdm_time + (fn-st) ! Get FDM time
 
   !Start outer iteration
-  do p=1, nout
+  do p=1, n_outer
     st = get_time()
     fc   = f         ! Save old integrated fission source
-    fs0c = fs0       ! Save old fission source
-    f0c  = f0        ! Save old flux
+    fs0c = fsrc       ! Save old fission source
+    f0c  = flux        ! Save old flux
     Keo  = Ke        ! Save old multiplication factor
     erro = errn      ! Save old fission source error/difference
     do g = 1, ng
@@ -484,28 +484,28 @@ end subroutine print_keff
       call TSrc(g, Ke, bs)
 
       !!!Inner Iteration
-      call bicg(nin, g, bs)
+      call bicg(n_inner, g, bs)
     end do
-    CALL FSrc (fs0)               !Update fission source
-    errn = fs0 - fs0c
+    CALL get_fsrc (fsrc)               !Update fission source
+    errn = fsrc - fs0c
     e2 = l2norm(errn)
-    if (MOD(p,nac) == 0) call fiss_extrp(popt,e1,e2,erro,errn,fs0)     ! Fission source extrapolation
+    if (MOD(p,extrp_interval) == 0) call fiss_extrp(popt,e1,e2,erro,errn,fsrc)     ! Fission source extrapolation
     e1 = e2                       ! Save l2 norm of the fission source error
-    f = Integrate(fs0)            ! Integrate fission source
+    f = Integrate(fsrc)            ! Integrate fission source
     Ke = Keo * f / fc             ! Update Keff
-    CALL RelE(fs0, fs0c, ser)     ! Search maximum point wise fission source Relative Error
-    CALL RelEg(f0, f0c, fer)      ! Search maximum point wise flux error
+    CALL RelE(fsrc, fs0c, fsrc_error)     ! Search maximum point wise fission source Relative Error
+    CALL RelEg(flux, f0c, flux_error)      ! Search maximum point wise flux error
     fn = get_time()
     fdm_time = fdm_time + (fn-st) ! Get FDM time
-    if (MOD(p,nupd) == 0 .and. kern /= ' FDM') call nodal_upd(popt, 1)  ! Nodal coefficients update
+    if (MOD(p,upd_interval) == 0 .and. kern /= ' FDM') call nodal_upd(popt, 1)  ! Nodal coefficients update
     if (popt > 0) then
-      write(ounit,'(I5,F13.6,2ES15.5)') p, Ke, ser, fer                 ! Write outer iteration evolution
-      if (scr) write(*,'(I5,F13.6,2ES15.5)') p, Ke, ser, fer            ! Write outer iteration evolution
+      write(ounit,'(I5,F13.6,2ES15.5)') p, Ke, fsrc_error, flux_error                 ! Write outer iteration evolution
+      if (scr) write(*,'(I5,F13.6,2ES15.5)') p, Ke, fsrc_error, flux_error            ! Write outer iteration evolution
     end if
-    if ((ser < serc) .AND. (fer < ferc) .AND. (ndmax < 1.e-2)) exit
+    if ((fsrc_error < max_fsrc_error) .AND. (flux_error < max_flux_error) .AND. (ndmax < 1.e-2)) exit
   end do
 
-  if (p-1 == nout) THEN
+  if (p-1 == n_outer) THEN
     write(*,*)
     write(*,*) '  MAXIMUM NUMBER OF OUTER ITERATION IS REACHED IN FORWARD CALCULATION.'
     write(*,*) '  CHECK PROBLEM SPECIFICATION OR CHANGE ITERATION CONTROL (%ITER).'
@@ -525,9 +525,9 @@ end subroutine print_keff
   !    To perform fixed-source outer iteration
 
 
-  USE sdata, ONLY: ng, nnod, nout, nin, serc, ferc, fer, ser, f0, nupd, &
-                   Ke, nac, fs0, s0, ndmax, kern, get_time, fdm_time
-  USE io,    ONLY: ounit, scr
+  USE data, ONLY: ng, nnod, n_outer, n_inner, max_fsrc_error, max_flux_error, flux_error, fsrc_error, flux, upd_interval, &
+                   Ke, extrp_interval, fsrc, s0, ndmax, kern, get_time, fdm_time
+  USE read,    ONLY: ounit, scr
   USE nodal, ONLY: nodal_update
 
   implicit none
@@ -550,10 +550,10 @@ end subroutine print_keff
 
   !Allocate flux and fission source for first time
   if (first) then
-    allocate (f0(nnod,ng), fs0(nnod), s0(nnod,ng))
+    allocate (flux(nnod,ng), fsrc(nnod), s0(nnod,ng))
     Ke = 1._dp
-    f0 = 1._dp
-    call FSrc(fs0)
+    flux = 1._dp
+    call get_fsrc(fsrc)
     first = .false.
   end if
 
@@ -565,36 +565,36 @@ end subroutine print_keff
   fdm_time = fdm_time + (fn-st) ! Get FDM time
 
   !Start outer iteration
-  do p=1, nout
+  do p=1, n_outer
     st = get_time()
-    fs0c = fs0       ! Save old fission source
-    f0c  = f0        ! Save old flux
+    fs0c = fsrc       ! Save old fission source
+    f0c  = flux        ! Save old flux
     erro = errn       ! Save old fission source error/difference
     do g = 1, ng
       !!!Calculate total source
       call TSrc(g, Ke, bs)
 
       !!!Inner Iteration
-      call bicg(nin, g, bs)
+      call bicg(n_inner, g, bs)
     end do
-    CALL FSrc (fs0)               !Update fission source
-    errn = fs0 - fs0c
+    CALL get_fsrc (fsrc)               !Update fission source
+    errn = fsrc - fs0c
     e2 = l2norm(errn)
-    if (MOD(p,nac) == 0) call fiss_extrp(popt,e1,e2,erro,errn,fs0)     ! Fission source extrapolation
+    if (MOD(p,extrp_interval) == 0) call fiss_extrp(popt,e1,e2,erro,errn,fsrc)     ! Fission source extrapolation
     e1 = e2                       ! Save l2 norm of the fission source error
-    CALL RelE(fs0, fs0c, ser)     ! Search maximum point wise fission source Relative Error
-    CALL RelEg(f0, f0c, fer)      ! Search maximum point wise flux error
+    CALL RelE(fsrc, fs0c, fsrc_error)     ! Search maximum point wise fission source Relative Error
+    CALL RelEg(flux, f0c, flux_error)      ! Search maximum point wise flux error
     fn = get_time()
     fdm_time = fdm_time + (fn-st) ! Get FDM time
-    if (MOD(p,nupd) == 0 .and. kern /= ' FDM') call nodal_upd(popt, 1)  ! Nodal coefficients update
+    if (MOD(p,upd_interval) == 0 .and. kern /= ' FDM') call nodal_upd(popt, 1)  ! Nodal coefficients update
     if (popt > 0) then
-      write(ounit,'(I5,2ES15.5)') p, ser, fer            ! Write outer iteration evolution
-      if (scr) write(*,'(I5,2ES15.5)') p, ser, fer      ! Write outer iteration evolution
+      write(ounit,'(I5,2ES15.5)') p, fsrc_error, flux_error            ! Write outer iteration evolution
+      if (scr) write(*,'(I5,2ES15.5)') p, fsrc_error, flux_error      ! Write outer iteration evolution
     end if
-    if ((ser < serc) .AND. (fer < ferc) .AND. (ndmax < 1.e-2)) exit
+    if ((fsrc_error < max_fsrc_error) .AND. (flux_error < max_flux_error) .AND. (ndmax < 1.e-2)) exit
   end do
 
-  if (p-1 == nout) THEN
+  if (p-1 == n_outer) THEN
     write(*,*)
     write(*,*) '  MAXIMUM NUMBER OF OUTER ITERATION IS REACHED IN FIXED-SOURCE CALCULATION.'
     write(*,*) '  CHECK PROBLEM SPECIFICATION OR CHANGE ITERATION CONTROL (%ITER).'
@@ -614,9 +614,9 @@ end subroutine print_keff
   !    To perform adjoint outer iteration
 
 
-  USE sdata, ONLY: ng, nnod, nout, nin, serc, ferc, fer, ser, f0, nupd, &
-                   Ke, nac, fs0, s0, ndmax, kern, get_time, fdm_time
-  USE io,    ONLY: ounit, scr
+  USE data, ONLY: ng, nnod, n_outer, n_inner, max_fsrc_error, max_flux_error, flux_error, fsrc_error, flux, upd_interval, &
+                   Ke, extrp_interval, fsrc, s0, ndmax, kern, get_time, fdm_time
+  USE read,    ONLY: ounit, scr
   USE nodal, ONLY: nodal_update
 
   implicit none
@@ -641,15 +641,15 @@ end subroutine print_keff
 
   !Allocate flux and fission source for first time
   if (first .and. popt > 0) then
-    allocate (f0(nnod,ng), fs0(nnod), s0(nnod,ng))
+    allocate (flux(nnod,ng), fsrc(nnod), s0(nnod,ng))
     Ke = 1._dp
-    f0 = 1._dp
-    call FSrcAd(fs0)
+    flux = 1._dp
+    call get_fsrc_adjoint(fsrc)
     first = .false.
   end if
 
   ! Initialize keff and fission source
-  f = Integrate(fs0)
+  f = Integrate(fsrc)
   errn = 1._DP
   e1 = Integrate(errn)
 
@@ -657,11 +657,11 @@ end subroutine print_keff
   fdm_time = fdm_time + (fn-st) ! Get FDM time
 
   !Start outer iteration
-  do p=1, nout
+  do p=1, n_outer
     st = get_time()
     fc   = f         ! Save old integrated fission source
-    fs0c = fs0       ! Save old fission source
-    f0c  = f0        ! Save old flux
+    fs0c = fsrc       ! Save old fission source
+    f0c  = flux        ! Save old flux
     Keo  = Ke        ! Save old multiplication factor
     erro = errn       ! Save old fission source error/difference
     do g = ng,1,-1
@@ -669,31 +669,31 @@ end subroutine print_keff
       call TSrcAd(g, Ke, bs)
 
       !!!Inner Iteration
-      call bicg(nin, g, bs)
+      call bicg(n_inner, g, bs)
     end do
-    CALL FSrcAd (fs0)               !Update fission source
-    errn = fs0 - fs0c
+    CALL get_fsrc_adjoint(fsrc)               !Update fission source
+    errn = fsrc - fs0c
     e2 = l2norm(errn)
-    if (MOD(p,nac) == 0) call fiss_extrp(popt,e1,e2,erro,errn,fs0)     ! Fission source extrapolation
+    if (MOD(p,extrp_interval) == 0) call fiss_extrp(popt,e1,e2,erro,errn,fsrc)     ! Fission source extrapolation
     e1 = e2                       ! Save l2 norm of the fission source error
-    f = Integrate(fs0)            ! Integrate fission source
+    f = Integrate(fsrc)            ! Integrate fission source
     Ke = Keo * f / fc             ! Update Keff
-    CALL RelE(fs0, fs0c, ser)     ! Search maximum point wise fission source Relative Error
-    CALL RelEg(f0, f0c, fer)      ! Search maximum point wise flux error
+    CALL RelE(fsrc, fs0c, fsrc_error)     ! Search maximum point wise fission source Relative Error
+    CALL RelEg(flux, f0c, flux_error)      ! Search maximum point wise flux error
     fn = get_time()
     fdm_time = fdm_time + (fn-st) ! Get FDM time
     ! For RODEJECT mode, adjoint calculation is approximated using
     ! nodal coefficients from forward calculation.
-    if (MOD(p,nupd) == 0 .and. kern /= ' FDM' &
+    if (MOD(p,upd_interval) == 0 .and. kern /= ' FDM' &
     .and. popt > 0) call nodal_upd(popt, 0)                       ! Nodal coefficients update
     if (popt > 0) then
-      write(ounit,'(I5,F13.6,2ES15.5)') p, Ke, ser, fer           ! Write outer iteration evolution
-      if (scr) write(*,'(I5,F13.6,2ES15.5)') p, Ke, ser, fer      ! Write outer iteration evolution
+      write(ounit,'(I5,F13.6,2ES15.5)') p, Ke, fsrc_error, flux_error           ! Write outer iteration evolution
+      if (scr) write(*,'(I5,F13.6,2ES15.5)') p, Ke, fsrc_error, flux_error      ! Write outer iteration evolution
     end if
-    if ((ser < serc) .AND. (fer < ferc) .AND. (ndmax < 1.e-2)) exit
+    if ((fsrc_error < max_fsrc_error) .AND. (flux_error < max_flux_error) .AND. (ndmax < 1.e-2)) exit
   end do
 
-  if (p-1 == nout) THEN
+  if (p-1 == n_outer) THEN
     write(*,*)
     write(*,*) '  MAXIMUM NUMBER OF OUTER ITERATION IS REACHED IN ADJOINT CALCULATION.'
     write(*,*) '  CHECK PROBLEM SPECIFICATION OR CHANGE ITERATION CONTROL (%ITER).'
@@ -713,9 +713,9 @@ end subroutine print_keff
   !    To perform TH outer iteration
 
 
-  USE sdata, ONLY: ng, nnod, nin, serc, ferc, fer, ser, f0, nupd, &
-                   Ke, nac, s0, fs0, ndmax, nth, kern, get_time, fdm_time
-  USE io,    ONLY: ounit, biter
+  USE data, ONLY: ng, nnod, n_inner, max_fsrc_error, max_flux_error, flux_error, fsrc_error, flux, upd_interval, &
+                   Ke, extrp_interval, s0, fsrc, ndmax, n_outer_th, kern, get_time, fdm_time
+  USE read,    ONLY: ounit, biter
   USE nodal, ONLY: nodal_update
 
   implicit none
@@ -739,29 +739,29 @@ end subroutine print_keff
 
   !Allocate flux and fission source for first time
   if (first) then
-    allocate (f0(nnod,ng), fs0(nnod), s0(nnod,ng))
+    allocate (flux(nnod,ng), fsrc(nnod), s0(nnod,ng))
     Ke = 1._dp
-    f0 = 1._dp
-    call FSrc(fs0)
+    flux = 1._dp
+    call get_fsrc(fsrc)
     first = .false.
   end if
 
   ! Initialize keff and fission source
-  f = Integrate(fs0)
+  f = Integrate(fsrc)
   errn = 1._DP
   e1 = Integrate(errn)
 
   fn = get_time()
   fdm_time = fdm_time + (fn-st) ! Get FDM time
 
-  if (biter == 0) nupd = int(nth/2)
+  if (biter == 0) upd_interval = int(n_outer_th/2)
 
   !Start outer iteration
-  do p=1, nth
+  do p=1, n_outer_th
     st = get_time()
     fc   = f         ! Save old integrated fission source
-    fs0c = fs0       ! Save old fission source
-    f0c  = f0        ! Save old flux
+    fs0c = fsrc       ! Save old fission source
+    f0c  = flux        ! Save old flux
     Keo  = Ke        ! Save old multiplication factor
     erro = errn       ! Save old fission source error/difference
     do g = 1, ng
@@ -769,24 +769,24 @@ end subroutine print_keff
       call TSrc(g, Ke, bs)
 
       !!!Inner Iteration
-      call bicg(nin, g, bs)
+      call bicg(n_inner, g, bs)
     end do
-    CALL FSrc (fs0)               !Update fission source
-    errn = fs0 - fs0c
+    CALL get_fsrc (fsrc)               !Update fission source
+    errn = fsrc - fs0c
     e2 = l2norm(errn)
-    if (MOD(p,nac) == 0) call fiss_extrp(0,e1,e2,erro,errn,fs0)     ! Fission source extrapolation
+    if (MOD(p,extrp_interval) == 0) call fiss_extrp(0,e1,e2,erro,errn,fsrc)     ! Fission source extrapolation
     e1 = e2                       ! Save l2 norm of the fission source error
-    f = Integrate(fs0)            ! Integrate fission source
+    f = Integrate(fsrc)            ! Integrate fission source
     Ke = Keo * f / fc             ! Update Keff
-    CALL RelE(fs0, fs0c, ser)     ! Search maximum point wise fission source Relative Error
-    CALL RelEg(f0, f0c, fer)      ! Search maximum point wise flux error
+    CALL RelE(fsrc, fs0c, fsrc_error)     ! Search maximum point wise fission source Relative Error
+    CALL RelEg(flux, f0c, flux_error)      ! Search maximum point wise flux error
     fn = get_time()
     fdm_time = fdm_time + (fn-st) ! Get FDM time
-    if (MOD(p,nupd) == 0 .and. kern /= ' FDM') then
+    if (MOD(p,upd_interval) == 0 .and. kern /= ' FDM') then
       lnupd = .false.
       call nodal_upd(0, 1)        ! Nodal coefficients update
     end if
-    if ((ser < serc) .AND. (fer < ferc) .AND. (ndmax < 1.e-2)) exit
+    if ((fsrc_error < max_fsrc_error) .AND. (flux_error < max_flux_error) .AND. (ndmax < 1.e-2)) exit
   end do
 
   if (lnupd .and. kern /= ' FDM') then
@@ -808,8 +808,8 @@ end subroutine print_keff
   !    To perform transient fixed source outer iteration
 
 
-  USE sdata, ONLY: ng, nnod, nout, nin, serc, ferc, fer, ser, f0, nupd, &
-                   nac, fs0, ndmax, exsrc, kern, get_time, fdm_time
+  USE data, ONLY: ng, nnod, n_outer, n_inner, max_fsrc_error, max_flux_error, flux_error, fsrc_error, flux, upd_interval, &
+                   extrp_interval, fsrc, ndmax, exsrc, kern, get_time, fdm_time
   USE nodal, ONLY: nodal_update
 
   implicit none
@@ -837,32 +837,32 @@ end subroutine print_keff
   fdm_time = fdm_time + (fn-st) ! Get FDM time
 
   !Start outer iteration
-  do p=1, nout
+  do p=1, n_outer
     st = get_time()
-    fs0c = fs0       ! Save old fission source
-    f0c  = f0        ! Save old flux
+    fs0c = fsrc       ! Save old fission source
+    f0c  = flux        ! Save old flux
     erro = errn      ! Save old fission source error/difference
     do g = 1, ng
       !!!Calculate total source
       call TSrcTr(g, bs)
 
       !!!Inner Iteration
-      call bicg(nin, g, bs)
+      call bicg(n_inner, g, bs)
     end do
-    CALL FSrc (fs0)               !Update fission source
-    errn = fs0 - fs0c
+    CALL get_fsrc (fsrc)               !Update fission source
+    errn = fsrc - fs0c
     e2 = l2norm(errn)
-    if (MOD(p,nac) == 0) call fiss_extrp(0,e1,e2,erro,errn,fs0)     ! Fission source extrapolation
+    if (MOD(p,extrp_interval) == 0) call fiss_extrp(0,e1,e2,erro,errn,fsrc)     ! Fission source extrapolation
     e1 = e2                       ! Save l2 norm of the fission source error
-    CALL RelE(fs0, fs0c, ser)     ! Search maximum point wise fission source Relative Error
-    CALL RelEg(f0, f0c, fer)      ! Search maximum point wise flux error
+    CALL RelE(fsrc, fs0c, fsrc_error)     ! Search maximum point wise fission source Relative Error
+    CALL RelEg(flux, f0c, flux_error)      ! Search maximum point wise flux error
     fn = get_time()
     fdm_time = fdm_time + (fn-st) ! Get FDM time
-    if (MOD(p,nupd) == 0 .and. kern /= ' FDM') call nodal_upd(0, 2)  ! Nodal coefficients update
-    if ((ser < serc) .AND. (fer < ferc) .AND. (ndmax < 1.e-2)) exit
+    if (MOD(p,upd_interval) == 0 .and. kern /= ' FDM') call nodal_upd(0, 2)  ! Nodal coefficients update
+    if ((fsrc_error < max_fsrc_error) .AND. (flux_error < max_flux_error) .AND. (ndmax < 1.e-2)) exit
   end do
 
-  if (p==nout+1) THEN
+  if (p==n_outer+1) THEN
       maxi = .TRUE.
   ELSE
       maxi = .FALSE.
@@ -880,10 +880,10 @@ end subroutine print_keff
   !    To calculate paramaters from previous time step
   !
 
-  USE sdata, ONLY: lamb, c0, iBeta, chi, mat, velo, &
-  fst, ft, nf, m, omeg, ng, nnod, dfis, nuf, &
-  bth, sth, s0, tbeta, sigrp, L
-  USE io, ONLY: bxtab
+  USE data, ONLY: lambda, c0, beta, chi, mat, neutron_velo, &
+  fsrc_prev, flux_prev, nf, m, omega, ng, nnod, dfis, nuf, &
+  big_theta, small_theta, s0, tbeta, sigrp, L
+  USE read, ONLY: bxtab
 
   ! Purpose:
      ! To update get external source for transient fixed source problem
@@ -914,17 +914,17 @@ end subroutine print_keff
         a1   = a1 - pxe
         dfis(n) = dfis(n) + m(mat(n))%iBeta(i) * a2
         dt   = dt   + m(mat(n))%lamb(i) * c0(n,i) * pxe &
-             + m(mat(n))%iBeta(i) * a1 * fst(n)
+             + m(mat(n))%iBeta(i) * a1 * fsrc_prev(n)
         dtp  = dtp + m(mat(n))%lamb(i) * c0(n,i)
       end do
 
       do g = 1, ng
-        pthet = -L(n,g) - sigrp(n,g) * ft(n,g) + s0(n,g) &
-              + (1._dp - tbeta(mat(n))) * chi(mat(n),g) * fst(n) &
+        pthet = -L(n,g) - sigrp(n,g) * flux_prev(n,g) + s0(n,g) &
+              + (1._dp - tbeta(mat(n))) * chi(mat(n),g) * fsrc_prev(n) &
               +  chi(mat(n),g) * dtp
         exsrc(n,g) = chi(mat(n),g) * dt &
-                   + exp(omeg(n,g) * ht) * ft(n,g) &
-                   / (sth * m(mat(n))%velo(g) * ht) + bth * pthet
+                   + exp(omega(n,g) * ht) * flux_prev(n,g) &
+                   / (small_theta * m(mat(n))%velo(g) * ht) + big_theta * pthet
       end do
     end do
   else
@@ -932,23 +932,23 @@ end subroutine print_keff
     do n = 1, nnod
       dt = 0._dp; dtp = 0._dp
       do i = 1, nf
-        pxe  = exp(-lamb(i)*ht)
-        a1   = (1._dp - pxe) / (lamb(i)*ht)
+        pxe  = exp(-lambda(i)*ht)
+        a1   = (1._dp - pxe) / (lambda(i)*ht)
         a2   = 1._dp - a1
         a1   = a1 - pxe
-        dfis(n) = dfis(n) + iBeta(i) * a2
-        dt   = dt   + lamb(i) * c0(n,i) * pxe &
-             + iBeta(i) * a1 * fst(n)
-        dtp  = dtp + lamb(i) * c0(n,i)
+        dfis(n) = dfis(n) + beta(i) * a2
+        dt   = dt   + lambda(i) * c0(n,i) * pxe &
+             + beta(i) * a1 * fsrc_prev(n)
+        dtp  = dtp + lambda(i) * c0(n,i)
       end do
 
       do g = 1, ng
-        pthet = -L(n,g) - sigrp(n,g) * ft(n,g) + s0(n,g) &
-              + (1._dp - tbeta(mat(n))) * chi(mat(n),g) * fst(n) &
+        pthet = -L(n,g) - sigrp(n,g) * flux_prev(n,g) + s0(n,g) &
+              + (1._dp - tbeta(mat(n))) * chi(mat(n),g) * fsrc_prev(n) &
               +  chi(mat(n),g) * dtp
         exsrc(n,g) = chi(mat(n),g) * dt &
-                   + exp(omeg(n,g) * ht) * ft(n,g) / (sth * velo(g) * ht) &
-                   + bth * pthet
+                   + exp(omega(n,g) * ht) * flux_prev(n,g) / (small_theta * neutron_velo(g) * ht) &
+                   + big_theta * pthet
       end do
     end do
   end if
@@ -957,13 +957,13 @@ end subroutine print_keff
 
  !****************************************************************************!
 
-  subroutine FSrc(fs)
+  subroutine get_fsrc(fs)
   !
   ! Purpose:
   !   To calculate fission source and fission source moments
   !
 
-  USE sdata, ONLY: nnod, nuf, ng, f0
+  USE data, ONLY: nnod, nuf, ng, flux
 
   implicit none
 
@@ -974,21 +974,21 @@ end subroutine print_keff
   fs = 0._dp
   do g = 1, ng
       do n = 1, nnod
-         fs(n)   = fs(n)   + f0 (n,g) * nuf(n,g)
+         fs(n)   = fs(n)   + flux (n,g) * nuf(n,g)
       end do
   end do
 
-  END subroutine FSrc
+  END subroutine get_fsrc
 
   !******************************************************************************!
 
-  subroutine FSrcAd(fs)
+  subroutine get_fsrc_adjoint(fs)
     !
     ! Purpose:
     !   To calculate fission source (adjoint)
     !
 
-    USE sdata, ONLY: nnod, chi, mat, ng, f0
+    USE data, ONLY: nnod, chi, mat, ng, flux
 
     implicit none
 
@@ -999,11 +999,11 @@ end subroutine print_keff
     fs = 0._dp
     do g = 1, ng
         do n = 1, nnod
-           fs(n)   = fs(n)   + f0 (n,g) * chi(mat(n),g)
+           fs(n)   = fs(n)   + flux (n,g) * chi(mat(n),g)
         end do
     end do
 
-  end subroutine FSrcAd
+  end subroutine get_fsrc_adjoint
 
   !****************************************************************************!
 
@@ -1013,7 +1013,7 @@ end subroutine print_keff
   !   To update total source
   !
 
-  USE sdata, ONLY: chi, mat, nnod, fs0, f0, ng, sigs, chi, s0, exsrc
+  USE data, ONLY: chi, mat, nnod, fsrc, flux, ng, sigs, chi, s0, exsrc
 
   implicit none
 
@@ -1026,12 +1026,12 @@ end subroutine print_keff
   s0 = 0._dp
   do h = 1, ng
       do n = 1, nnod
-          if (g /= h) s0(n,g)   = s0(n,g) + sigs(n,h,g) * f0(n,h)
+          if (g /= h) s0(n,g)   = s0(n,g) + sigs(n,h,g) * flux(n,h)
       end do
   end do
 
   do n = 1, nnod
-    bs(n) = chi(mat(n),g) * fs0(n)/Keff  + s0(n,g) + exsrc(n,g)
+    bs(n) = chi(mat(n),g) * fsrc(n)/Keff  + s0(n,g) + exsrc(n,g)
   end do
 
   end subroutine TSrc
@@ -1044,7 +1044,7 @@ end subroutine print_keff
     !   To update total source (adjoint)
     !
 
-    USE sdata, ONLY: nnod, fs0, f0, ng, sigs, nuf, s0, exsrc
+    USE data, ONLY: nnod, fsrc, flux, ng, sigs, nuf, s0, exsrc
 
     implicit none
 
@@ -1057,12 +1057,12 @@ end subroutine print_keff
     s0 = 0._dp
     do h = 1, ng
         do n = 1, nnod
-            if (g /= h) s0(n,g)   = s0(n,g) + sigs(n,g,h) * f0(n,h)
+            if (g /= h) s0(n,g)   = s0(n,g) + sigs(n,g,h) * flux(n,h)
         end do
     end do
 
     do n = 1, nnod
-      bs(n) = nuf(n,g) * fs0(n)/Keff  + s0(n,g) + exsrc(n,g)
+      bs(n) = nuf(n,g) * fsrc(n)/Keff  + s0(n,g) + exsrc(n,g)
     end do
 
   end subroutine TSrcAd
@@ -1075,7 +1075,7 @@ end subroutine print_keff
   !   To update total source for transient fixed source problem
   !
 
-  USE sdata, ONLY: chi, mat, nnod, fs0, f0, ng, sigs, chi, exsrc, &
+  USE data, ONLY: chi, mat, nnod, fsrc, flux, ng, sigs, chi, exsrc, &
   tbeta, s0, dfis
 
   implicit none
@@ -1088,12 +1088,12 @@ end subroutine print_keff
   s0 = 0._dp
   do h = 1, ng
       do n = 1, nnod
-          if (g /= h) s0(n,g)   = s0(n,g) + sigs(n,h,g) * f0(n,h)
+          if (g /= h) s0(n,g)   = s0(n,g) + sigs(n,h,g) * flux(n,h)
       end do
   end do
 
   do n = 1, nnod
-    bs(n) =  (1._dp - tbeta(mat(n)) + dfis(n)) * chi(mat(n),g) * fs0(n) &
+    bs(n) =  (1._dp - tbeta(mat(n)) + dfis(n)) * chi(mat(n),g) * fsrc(n) &
                 + s0(n,g) + exsrc(n,g)
   end do
 
@@ -1127,7 +1127,7 @@ end subroutine print_keff
     ! Purpose:
     !    To perform volume integration
 
-  USE sdata, ONLY: nnod, vdel
+  USE data, ONLY: nnod, vdel
 
   implicit none
 
@@ -1150,7 +1150,7 @@ end subroutine print_keff
     ! Purpose:
     !    To calculate Max Relative error
 
-  USE sdata, ONLY: nnod
+  USE data, ONLY: nnod
 
   implicit none
 
@@ -1179,7 +1179,7 @@ end subroutine print_keff
     ! Purpose:
     !    To calculate Max Relative error for flux
 
-  USE sdata, ONLY: nnod, ng
+  USE data, ONLY: nnod, ng
 
   implicit none
 
@@ -1206,7 +1206,7 @@ end subroutine print_keff
 
   subroutine bicg(imax,g,b)
 
-    use sdata, only: r, rs, v, p, s, t, tmp, nnod, f0
+    use data, only: r, rs, v, p, s, t, tmp, nnod, flux
 
     !Purpose: to solve linear of system equation with BiCGSTAB method
     ! (without preconditioner). Sparse matrix saved in a and indexed in rc.
@@ -1244,7 +1244,7 @@ end subroutine print_keff
     ! !$acc update self(r)
     ! write(*,*) r(1:3)
 
-    call sp_matvec(g,f0(:,g),r)
+    call sp_matvec(g,flux(:,g),r)
 
     call xpby(b, -1._dp, r, rs)
     call xew(rs, r)
@@ -1268,8 +1268,8 @@ end subroutine print_keff
       theta    = dproduct(t,t)
       omega    = dproduct(t,s)/theta
       call axpby(alpha, p, omega, s, tmp)
-      call xpby(f0(:,g), 1.0_dp, tmp, r)
-      call xew(r, f0(:,g))
+      call xpby(flux(:,g), 1.0_dp, tmp, r)
+      call xew(r, flux(:,g))
       call xpby(s, -omega, t, r)
     end do
     !$acc exit data delete(b)
@@ -1281,7 +1281,7 @@ end subroutine print_keff
 
  subroutine sp_matvec(g,x,vx)
 
-   USE sdata, ONLY: A, ind, nnod
+   USE data, ONLY: A, ind, nnod
 
    !purpose: to perform matrix vector multiplication Axb. A is a square matrix.
    ! Sparse matrix saved in A and indexed in ind

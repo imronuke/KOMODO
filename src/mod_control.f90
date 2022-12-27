@@ -1,6 +1,6 @@
 module control
 
-  use sdata, only: dp
+  use data, only: dp
   implicit none
   save
 
@@ -15,9 +15,9 @@ contains
     !    To solve forward (normal) problems
     !
 
-    use sdata, only: nnod, aprad, apaxi, afrad, ftem, mtem, cden, &
-    bcon, bpos, npow, th_niter
-    use io,    only: AsmPow, AxiPow, AsmFlux, inp_read, bther, boutp, print_outp
+    use data, only: nnod, print_rad_pow, print_axi_pow, print_flux, ftem, mtem, cden, &
+    bcon, bpos, node_power, n_th_iter
+    use read,    only: AsmPow, AxiPow, AsmFlux, inp_read, bther, boutp, print_outp
     use xsec,  only: XS_updt
     use cmfd,  only: outer,print_keff
     use th,  only: th_iter, powdis
@@ -35,25 +35,25 @@ contains
     if (bther == 0) then
       CALL outer(1)
     else
-      allocate(npow(nnod))
-      call th_iter(th_niter, 1)
+      allocate(node_power(nnod))
+      call th_iter(n_th_iter, 1)
       call print_tail()
     end if
 
     call print_keff()
 
-    IF (aprad == 1 .OR. apaxi == 1) THEN
+    IF (print_rad_pow == YES .OR. print_axi_pow == YES) THEN
         ALLOCATE(pow(nnod))
         CALL PowDis(pow)
     END IF
 
-    IF (aprad == 1) CALL AsmPow(pow)
+    IF (print_rad_pow == YES) CALL AsmPow(pow)
 
-    IF (apaxi == 1) CALL AxiPow(pow)
+    IF (print_axi_pow == YES) CALL AxiPow(pow)
 
-    IF (afrad == 1) CALL AsmFlux(1.e0_DP)
+    IF (print_flux == YES) CALL AsmFlux(1.e0_DP)
 
-    IF (boutp == 1) CALL print_outp(pow)
+    IF (boutp == YES) CALL print_outp(pow)
 
 
   END SUBROUTINE forward
@@ -67,8 +67,8 @@ contains
     !    To solve adjoint problems
     !
 
-    use sdata, only: nnod, aprad, apaxi, afrad, ftem, mtem, cden, bcon, bpos
-    use io,    only: AsmPow, AxiPow, AsmFlux, inp_read
+    use data, only: nnod, print_rad_pow, print_axi_pow, print_flux, ftem, mtem, cden, bcon, bpos
+    use read,    only: AsmPow, AxiPow, AsmFlux, inp_read
     use xsec,  only: XS_updt
     use cmfd,  only: outer_ad,print_keff
     use th,    only: powdis
@@ -87,16 +87,16 @@ contains
 
     call print_keff()
 
-    IF (aprad == 1 .OR. apaxi == 1) THEN
+    IF (print_rad_pow == YES .OR. print_axi_pow == YES) THEN
         ALLOCATE(pow(nnod))
         CALL PowDis(pow)
     END IF
 
-    IF (aprad == 1) CALL AsmPow(pow)
+    IF (print_rad_pow == YES) CALL AsmPow(pow)
 
-    IF (apaxi == 1) CALL AxiPow(pow)
+    IF (print_axi_pow == YES) CALL AxiPow(pow)
 
-    IF (afrad == 1) CALL AsmFlux(1.e0_DP)
+    IF (print_flux == YES) CALL AsmFlux(1.e0_DP)
 
   END SUBROUTINE adjoint
 
@@ -109,8 +109,8 @@ contains
     !    To solve fixed source problems
     !
 
-    use sdata, only: nnod, aprad, apaxi, afrad, ftem, mtem, cden, bcon, bpos, powtot
-    use io,    only: AsmPow, AxiPow, AsmFlux, inp_read
+    use data, only: nnod, print_rad_pow, print_axi_pow, print_flux, ftem, mtem, cden, bcon, bpos, total_power
+    use read,    only: AsmPow, AxiPow, AsmFlux, inp_read
     use xsec,  only: XS_updt
     use cmfd,  only: outer_fs
     use th,    only: powdis
@@ -127,17 +127,17 @@ contains
     !Outer iteration
     CALL outer_fs(1)
 
-    IF (aprad == 1 .OR. apaxi == 1) THEN
+    IF (print_rad_pow == YES .OR. print_axi_pow == YES) THEN
         ALLOCATE(pow(nnod))
         CALL PowDis(pow)
     END IF
 
-    IF (powtot > 0.0) THEN
-      IF (aprad == 1) CALL AsmPow(pow)
-      IF (apaxi == 1) CALL AxiPow(pow)
+    IF (total_power > 0.0) THEN
+      IF (print_rad_pow == YES) CALL AsmPow(pow)
+      IF (print_axi_pow == YES) CALL AxiPow(pow)
     END IF
 
-    IF (afrad == 1) CALL AsmFlux()
+    IF (print_flux == YES) CALL AsmFlux()
 
   END SUBROUTINE fixedsrc
 
@@ -150,9 +150,9 @@ contains
   !    To search critical boron concentration
   !
 
-  USE sdata, ONLY: Ke, rbcon, ftem, mtem, cden, bpos, nnod, fer, ser, &
-                   aprad, apaxi, afrad, npow
-  USE io, ONLY: ounit, AsmFlux, AsmPow, AxiPow
+  USE data, ONLY: Ke, rbcon, ftem, mtem, cden, bpos, nnod, flux_error, fsrc_error, &
+                   print_rad_pow, print_axi_pow, print_flux, node_power
+  USE read, ONLY: ounit, AsmFlux, AsmPow, AxiPow
   USE cmfd, ONLY: outer
   USE xsec, ONLY: XS_updt
   use th,    only: powdis
@@ -171,8 +171,8 @@ contains
   bc1 = bcon
   ke1 = Ke
 
-  WRITE(ounit,1791) 1, bc1, Ke1, ser, fer
-  WRITE(*,1791) 1, bc1, Ke1, ser, fer
+  WRITE(ounit,1791) 1, bc1, Ke1, fsrc_error, flux_error
+  WRITE(*,1791) 1, bc1, Ke1, fsrc_error, flux_error
 
   bcon = bcon + (Ke - 1.) * bcon   ! Guess next critical boron concentration
   CALL XS_updt(bcon, ftem, mtem, cden, bpos)
@@ -180,8 +180,8 @@ contains
   bc2 = bcon
   ke2 = Ke
 
-  WRITE(ounit,1791) 2, bc2, Ke2, ser, fer
-  WRITE(*,1791) 2, bc2, Ke2, ser, fer
+  WRITE(ounit,1791) 2, bc2, Ke2, fsrc_error, flux_error
+  WRITE(*,1791) 2, bc2, Ke2, fsrc_error, flux_error
 
   n = 3
   DO
@@ -192,23 +192,23 @@ contains
     bc2 = bcon
     ke1 = ke2
     ke2 = ke
-    WRITE(ounit,1791) n, bcon, Ke, ser, fer
-    WRITE(*,1791) n, bcon, Ke, ser, fer
-      IF ((ABS(Ke - 1._DP) < 1.e-5_DP) .AND. (ser < 1.e-5_DP) .AND. (fer < 1.e-5_DP)) EXIT
+    WRITE(ounit,1791) n, bcon, Ke, fsrc_error, flux_error
+    WRITE(*,1791) n, bcon, Ke, fsrc_error, flux_error
+      IF ((ABS(Ke - 1._DP) < 1.e-5_DP) .AND. (fsrc_error < 1.e-5_DP) .AND. (flux_error < 1.e-5_DP)) EXIT
       n = n + 1
       call check_ppm(n, bcon)
   END DO
 
-  ALLOCATE(npow(nnod))
-  IF (aprad == 1 .OR. apaxi == 1) THEN
-      CALL PowDis(npow)
+  ALLOCATE(node_power(nnod))
+  IF (print_rad_pow == YES .OR. print_axi_pow == YES) THEN
+      CALL PowDis(node_power)
   END IF
 
-  IF (aprad == 1) CALL AsmPow(npow)
+  IF (print_rad_pow == YES) CALL AsmPow(node_power)
 
-  IF (apaxi == 1) CALL AxiPow(npow)
+  IF (print_axi_pow == YES) CALL AxiPow(node_power)
 
-  IF (afrad == 1) CALL AsmFlux(1._DP)
+  IF (print_flux == YES) CALL AsmFlux(1._DP)
 
   1791 format(I3, F10.2, F14.5, ES14.5, ES13.5)
 
@@ -223,10 +223,10 @@ contains
   !    To search critical boron concentration with thermal feedback
   !
 
-  USE sdata, ONLY: Ke, bcon, rbcon, npow, nnod, &
-                   ser, fer, aprad, apaxi, afrad, npow, th_err, &
-                   serc, ferc
-  USE io, ONLY: ounit, AsmFlux, AsmPow, AxiPow
+  USE data, ONLY: Ke, bcon, rbcon, node_power, nnod, &
+                   fsrc_error, flux_error, print_rad_pow, print_axi_pow, print_flux, node_power, th_err, &
+                   max_fsrc_error, max_flux_error
+  USE read, ONLY: ounit, AsmFlux, AsmPow, AxiPow
   USE cmfd, ONLY: outer
   use th, only : th_iter
   use th,    only: powdis
@@ -239,15 +239,15 @@ contains
 
   call print_head()
 
-  ALLOCATE(npow(nnod))
+  ALLOCATE(node_power(nnod))
 
   bcon = rbcon
   CALL th_iter(2, 0)  ! Start thermal hydarulic iteration with current paramters
   bc1 = bcon
   ke1 = Ke
 
-  WRITE(ounit,1792) 1, bc1, Ke1, ser, fer, th_err
-  WRITE(*,1792) 1, bc1, Ke1, ser, fer, th_err
+  WRITE(ounit,1792) 1, bc1, Ke1, fsrc_error, flux_error, th_err
+  WRITE(*,1792) 1, bc1, Ke1, fsrc_error, flux_error, th_err
 
   IF (bcon < 1.e-5) THEN
     bcon = 500.
@@ -258,8 +258,8 @@ contains
   bc2 = bcon
   ke2 = Ke
 
-  WRITE(ounit,1792) 2, bc2, Ke2, ser, fer, th_err
-  WRITE(*,1792) 2, bc2, Ke2, ser, fer, th_err
+  WRITE(ounit,1792) 2, bc2, Ke2, fsrc_error, flux_error, th_err
+  WRITE(*,1792) 2, bc2, Ke2, fsrc_error, flux_error, th_err
 
   n = 3
   DO
@@ -269,22 +269,22 @@ contains
       bc2 = bcon
       ke1 = ke2
       ke2 = ke
-      WRITE(ounit,1792) n, bcon, Ke, ser, fer, th_err
-      WRITE(*,1792) n, bcon, Ke, ser, fer, th_err
-      IF ((ABS(Ke - 1._DP) < 1.e-5_DP) .AND. (ser < serc) .AND. (fer < ferc)) EXIT
+      WRITE(ounit,1792) n, bcon, Ke, fsrc_error, flux_error, th_err
+      WRITE(*,1792) n, bcon, Ke, fsrc_error, flux_error, th_err
+      IF ((ABS(Ke - 1._DP) < 1.e-5_DP) .AND. (fsrc_error < max_fsrc_error) .AND. (flux_error < max_flux_error)) EXIT
       n = n + 1
       call check_ppm(n, bcon)
   END DO
 
-  IF (aprad == 1 .OR. apaxi == 1) THEN
-      CALL PowDis(npow)
+  IF (print_rad_pow == YES .OR. print_axi_pow == YES) THEN
+      CALL PowDis(node_power)
   END IF
 
-  IF (aprad == 1) CALL AsmPow(npow)
+  IF (print_rad_pow == YES) CALL AsmPow(node_power)
 
-  IF (apaxi == 1) CALL AxiPow(npow)
+  IF (print_axi_pow == YES) CALL AxiPow(node_power)
 
-  IF (afrad == 1) CALL AsmFlux(1._DP)
+  IF (print_flux == YES) CALL AsmFlux(1._DP)
 
   call print_tail()
 
@@ -301,7 +301,7 @@ contains
   !    To check critical boron concentration search
   !
 
-  USE io, ONLY: ounit
+  USE read, ONLY: ounit
 
   IMPLICIT NONE
 
@@ -338,11 +338,11 @@ END SUBROUTINE check_ppm
     !    To print header
     !
 
-    use sdata, only: mode
-    use io,    only: ounit, scr, bther
+    use data, only: mode
+    use read,    only: ounit, scr, bther
 
     IMPLICIT NONE
-    if (mode == 'FORWARD' .and. bther == 1) then
+    if (mode == 'FORWARD' .and. bther == YES) then
       WRITE(ounit,*); WRITE(ounit,*)
       WRITE(ounit,3245); WRITE(ounit,3247) mode; WRITE(ounit,3245)
       WRITE(ounit,*)
@@ -434,8 +434,8 @@ END SUBROUTINE check_ppm
     !    To print final th paramters
     !
 
-    use sdata, only: ftem, mtem, cden, tfm
-    use io, only: ounit, scr
+    use data, only: ftem, mtem, cden, tfm
+    use read, only: ounit, scr
     use th, only : par_ave, par_max, par_ave_out
 
     IMPLICIT NONE

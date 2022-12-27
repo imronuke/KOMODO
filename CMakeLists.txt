@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 
 option(GPU    "Use OpenACC GPU          "  OFF)
-option(DEBUG  "DEBUGGING MODE           "  OFF)
+option(DEBUG  "DEBUGGING MODE           "  ON)
 
 # Set for debug only
 if(GPU)

@@ -1,6 +1,6 @@
 module nodal
 
-  use sdata, only: dp
+  use data, only: dp
   implicit none
   save
 
@@ -19,7 +19,7 @@ contains
 
     !Purpose: to calculate flux expansion coefficients using SANM
 
-    use sdata, only: ng, xyz, ystag, xstag, nyy, nzz, nxx, &
+    use data, only: ng, xyz, ystag, xstag, nyy, nzz, nxx, &
     a1n, a2n, a3n, a4n, a1p, a2p, a3p, a4p, ndmax, &
     Ln1, Lp1, xeast, xwest, ysouth, ynorth, zbott, ztop
 
@@ -137,7 +137,7 @@ contains
 
     !Purpose: to calculate flux expansion coefficients using PNM
 
-    use sdata, only: ng, xyz, ystag, xstag, nyy, nzz, nxx, &
+    use data, only: ng, xyz, ystag, xstag, nyy, nzz, nxx, &
     a1n, a2n, a3n, a4n, a1p, a2p, a3p, a4p, ndmax, &
     Ln1, Lp1, xeast, xwest, ysouth, ynorth, zbott, ztop
 
@@ -287,7 +287,7 @@ contains
 
     !Purpose: to update nodal coupling coefficients
 
-    use sdata, only: ng, ix, iy, iz, D, xdel, ydel, zdel, nod, f0, &
+    use data, only: ng, ix, iy, iz, D, xdel, ydel, zdel, nod, flux, &
     ndmax, im, jm, km
 
     implicit none
@@ -328,8 +328,8 @@ contains
 
         ! Update nodal coupling
         ndpr = nod(n,g)%dn(sf)
-        nod(n,g)%dn(sf) = (nod(n,g)%df(sf) * (f0(n,g) - f0(p,g)) - jp) &
-        / (f0(n,g) + f0(p,g))
+        nod(n,g)%dn(sf) = (nod(n,g)%df(sf) * (flux(n,g) - flux(p,g)) - jp) &
+        / (flux(n,g) + flux(p,g))
         nod(p,g)%dn(sf+1) = nod(n,g)%dn(sf)
 
         ! Check max difference on new nodal coupling coefficients
@@ -345,7 +345,7 @@ contains
 
         ! Update nodal coupling
         ndpr = nod(p,g)%dn(sf+1)
-        nod(p,g)%dn(sf+1) = -(jp / f0(p,g) + nod(p,g)%df(sf+1))
+        nod(p,g)%dn(sf+1) = -(jp / flux(p,g) + nod(p,g)%df(sf+1))
 
         ! Check max difference on new nodal coupling coefficients
         nder = ABS(nod(p,g)%dn(sf+1) - ndpr)
@@ -360,7 +360,7 @@ contains
 
         ! Update nodal coupling
         ndpr = nod(n,g)%dn(sf)
-        nod(n,g)%dn(sf) = -(jp / f0(n,g) - nod(n,g)%df(sf))
+        nod(n,g)%dn(sf) = -(jp / flux(n,g) - nod(n,g)%df(sf))
 
         ! Check max difference on new nodal coupling coefficients
         nder = ABS(nod(n,g)%dn(sf) - ndpr)
@@ -379,7 +379,7 @@ contains
 
     !Purpose: to calculate flux expansion coefficients
 
-    use sdata, only: ng, a1p, a2p, a3p, a4p, Lp1
+    use data, only: ng, a1p, a2p, a3p, a4p, Lp1
 
     implicit none
 
@@ -413,7 +413,7 @@ contains
 
     !Purpose: to calculate flux expansion coefficients
 
-    use sdata, only: ng, a1n, a2n, a3n, a4n, a2p, a4p, Ln1
+    use data, only: ng, a1n, a2n, a3n, a4n, a2p, a4p, Ln1
 
     implicit none
 
@@ -444,7 +444,7 @@ contains
 
     !Purpose: to calculate flux expansion coefficients
 
-    use sdata, only: ng, a1n, a2n, a3n, a4n, a2p, a4p, Ln1
+    use data, only: ng, a1n, a2n, a3n, a4n, a2p, a4p, Ln1
 
     implicit none
 
@@ -484,7 +484,7 @@ contains
 
     !Purpose: To get matrix vector to calculate a1 for most left node
 
-    use sdata, only: ng, xdel, ydel, zdel, ix, iy, iz, f0, D, Lp1, dc
+    use data, only: ng, xdel, ydel, zdel, ix, iy, iz, flux, D, Lp1, dc
 
     implicit none
 
@@ -535,7 +535,7 @@ contains
           end if
         end do
         b(g) = 2._dp*Pp*(Ap(g)*Hp(g)*Lp1(g) - 3._dp*a2p(g) - Gp(g)*a4p(g)) &
-             - dc(p,g,sf) * (a2p(g) + a4p(g) + f0(p,g) - Ap(g)*Lp1(g))
+             - dc(p,g,sf) * (a2p(g) + a4p(g) + flux(p,g) - Ap(g)*Lp1(g))
       else
         do h = 1, ng
           if (h == g) then
@@ -544,7 +544,7 @@ contains
             A(g,h) = dc(p,g,sf)*Ap(g)*Bcp(g,h)
           end if
         end do
-        b(g) =  dc(p,g,sf) * (a2p(g) + a4p(g) + f0(p,g) - Ap(g) * Lp1(g))
+        b(g) =  dc(p,g,sf) * (a2p(g) + a4p(g) + flux(p,g) - Ap(g) * Lp1(g))
       end if
     end do
 
@@ -556,7 +556,7 @@ contains
 
     !Purpose: To get matrix vector to calculate a1 for most right node
 
-    use sdata, only: ng, xdel, ydel, zdel, ix, iy, iz, f0, D, Lp1, Ln1, dc
+    use data, only: ng, xdel, ydel, zdel, ix, iy, iz, flux, D, Lp1, Ln1, dc
 
     implicit none
 
@@ -606,7 +606,7 @@ contains
           end if
         end do
         b(g) = -2._dp*Pn*(An(g)*Hn(g)*Ln1(g) + 3._dp*a2n(g) + Gn(g)*a4n(g)) &
-             - dc(n,g,sf) * (a2n(g) + a4n(g) + f0(n,g) + An(g)*Ln1(g))
+             - dc(n,g,sf) * (a2n(g) + a4n(g) + flux(n,g) + An(g)*Ln1(g))
       else
         do h = 1, ng
           if (h == g) then
@@ -615,7 +615,7 @@ contains
             A(g,h) = dc(n,g,sf)*An(g)*Bcn(g,h)
           end if
         end do
-        b(g) = -dc(n,g,sf) * (a2n(g) + a4n(g) + f0(n,g) + An(g) * Ln1(g))
+        b(g) = -dc(n,g,sf) * (a2n(g) + a4n(g) + flux(n,g) + An(g) * Ln1(g))
       end if
     end do
 
@@ -628,7 +628,7 @@ contains
 
     !Purpose: To setup 2Gx2G matrix and 2G vector to get a1 expansion coefficients
 
-    use sdata, only: ng, xdel, ydel, zdel, ix, iy, iz, D, f0, Ln1, Lp1, dc
+    use data, only: ng, xdel, ydel, zdel, ix, iy, iz, D, flux, Ln1, Lp1, dc
 
     implicit none
 
@@ -684,8 +684,8 @@ contains
         end if
       end do
       ! Create vector b
-        b(g+ng) = dc(p,g,sf+1) * (a2p(g) + a4p(g) + f0(p,g) - An(g)*Ln1(g)) &
-                - dc(n,g,sf)   * (a2n(g) + a4n(g) + f0(n,g) + Ap(g)*Lp1(g))
+        b(g+ng) = dc(p,g,sf+1) * (a2p(g) + a4p(g) + flux(p,g) - An(g)*Ln1(g)) &
+                - dc(n,g,sf)   * (a2n(g) + a4n(g) + flux(n,g) + Ap(g)*Lp1(g))
     end do
 
 
@@ -697,7 +697,7 @@ contains
 
     !Purpose: To  get a3 expansion coefficients
 
-    use sdata, only: ng
+    use data, only: ng
     implicit none
 
     integer, intent(in)                 :: cp       ! to indicate whether it is first node (=2 means first node)
@@ -734,7 +734,7 @@ contains
 
     !Purpose: To  get a4 expansion coefficients
 
-    use sdata, only: ng
+    use data, only: ng
 
     implicit none
 
@@ -761,7 +761,7 @@ contains
 
     !Purpose: To setup GxG matrix and b vector to get a2 expansion coefficients
 
-    use sdata, only: ng, D, f0, exsrc, xdel, ydel, zdel, ix, iy, iz
+    use data, only: ng, D, flux, exsrc, xdel, ydel, zdel, ix, iy, iz
 
     implicit none
 
@@ -803,7 +803,7 @@ contains
         else
           A(g,h) = Bcp(g,h) * Ep(g)
         end if
-        Bf(g) = Bf(g) + Bcp(g,h) * f0(n,h)
+        Bf(g) = Bf(g) + Bcp(g,h) * flux(n,h)
       end do
 
       ! Get second moment transverse leakage
@@ -823,8 +823,8 @@ contains
       !    To solve Ax=b by LU decomposition
       !
 
-      USE io,      ONLY: ounit
-      USE sdata,   ONLY: ix, iy, iz
+      USE read,      ONLY: ounit
+      USE data,   ONLY: ix, iy, iz
 
       implicit none
 
@@ -890,7 +890,7 @@ contains
 
   SUBROUTINE Lxyz (n,g,L1, L2, L3)
 
-  USE sdata, ONLY: nod, f0, xyz, ix, iy, iz, ystag, xstag, nzz, &
+  USE data, ONLY: nod, flux, xyz, ix, iy, iz, ystag, xstag, nzz, &
                    xeast, xwest, ysouth, ynorth, zbott, ztop, &
                    xdel, ydel, zdel
 
@@ -917,21 +917,21 @@ contains
     if (xeast == 2) then
       jp = 0._dp
     else
-      jp = nod(n,g)%df(1)* f0(n,g) - nod(n,g)%dn(1)* f0(n,g)
+      jp = nod(n,g)%df(1)* flux(n,g) - nod(n,g)%dn(1)* flux(n,g)
     end if
   else
-    jp = -nod(n,g)%df(1)*(f0(p,g) - f0(n,g)) - &
-          nod(n,g)%dn(1)*(f0(p,g) + f0(n,g))
+    jp = -nod(n,g)%df(1)*(flux(p,g) - flux(n,g)) - &
+          nod(n,g)%dn(1)*(flux(p,g) + flux(n,g))
   end if
   if (i == ystag(j)%smin) then
     if (xwest == 2) then
       jm = 0._dp
     else
-      jm = -nod(n,g)%df(2)*f0(n,g) - nod(n,g)%dn(2)* f0(n,g)
+      jm = -nod(n,g)%df(2)*flux(n,g) - nod(n,g)%dn(2)* flux(n,g)
     end if
   else
-    jm = -nod(n,g)%df(2)*(f0(n,g) - f0(m,g)) - &
-          nod(n,g)%dn(2)*(f0(n,g) + f0(m,g))
+    jm = -nod(n,g)%df(2)*(flux(n,g) - flux(m,g)) - &
+          nod(n,g)%dn(2)*(flux(n,g) + flux(m,g))
   end if
 
   L1 = (jp - jm) / xdel(i)
@@ -944,21 +944,21 @@ contains
     if (ynorth == 2) then
       jp = 0._dp
     else
-      jp = nod(n,g)%df(3)*f0(n,g) - nod(n,g)%dn(3)* f0(n,g)
+      jp = nod(n,g)%df(3)*flux(n,g) - nod(n,g)%dn(3)* flux(n,g)
     end if
   else
-    jp = -nod(n,g)%df(3)*(f0(p,g) - f0(n,g)) - &
-          nod(n,g)%dn(3)*(f0(p,g) + f0(n,g))
+    jp = -nod(n,g)%df(3)*(flux(p,g) - flux(n,g)) - &
+          nod(n,g)%dn(3)*(flux(p,g) + flux(n,g))
   end if
   if (j == xstag(i)%smin) then
     if (ysouth == 2) then
       jm = 0._dp
     else
-      jm = -nod(n,g)%df(4)*f0(n,g) - nod(n,g)%dn(4)* f0(n,g)
+      jm = -nod(n,g)%df(4)*flux(n,g) - nod(n,g)%dn(4)* flux(n,g)
     end if
   else
-    jm = -nod(n,g)%df(4)*(f0(n,g) - f0(m,g)) - &
-          nod(n,g)%dn(4)*(f0(n,g) + f0(m,g))
+    jm = -nod(n,g)%df(4)*(flux(n,g) - flux(m,g)) - &
+          nod(n,g)%dn(4)*(flux(n,g) + flux(m,g))
   end if
 
 
@@ -972,21 +972,21 @@ contains
     if (ztop == 2) then
       jp = 0._dp
     else
-      jp = nod(n,g)%df(5)*f0(n,g) - nod(n,g)%dn(5)* f0(n,g)
+      jp = nod(n,g)%df(5)*flux(n,g) - nod(n,g)%dn(5)* flux(n,g)
     end if
   else
-    jp = -nod(n,g)%df(5)*(f0(p,g) - f0(n,g)) - &
-          nod(n,g)%dn(5)*(f0(p,g) + f0(n,g))
+    jp = -nod(n,g)%df(5)*(flux(p,g) - flux(n,g)) - &
+          nod(n,g)%dn(5)*(flux(p,g) + flux(n,g))
   end if
   if (k == 1) then
     if (zbott == 2) then
       jm = 0._dp
     else
-      jm = -nod(n,g)%df(6)*f0(n,g) - nod(n,g)%dn(6)* f0(n,g)
+      jm = -nod(n,g)%df(6)*flux(n,g) - nod(n,g)%dn(6)* flux(n,g)
     end if
   else
-    jm = -nod(n,g)%df(6)*(f0(n,g) - f0(m,g)) - &
-          nod(n,g)%dn(6)*(f0(n,g) + f0(m,g))
+    jm = -nod(n,g)%df(6)*(flux(n,g) - flux(m,g)) - &
+          nod(n,g)%dn(6)*(flux(n,g) + flux(m,g))
   end if
 
   L3 = (jp - jm) / zdel(k)
@@ -998,7 +998,7 @@ contains
 
   SUBROUTINE get_source ()
 
-  USE sdata, ONLY: nnod, ng, exsrc
+  USE data, ONLY: nnod, ng, exsrc
 
   ! Purpose:
      ! To update get source for the nodal update
@@ -1036,7 +1036,7 @@ contains
 
   SUBROUTINE TLUpd1 (u,n,g,Lmom1)
 
-  USE sdata, ONLY: xdel, ydel, zdel, xstag, ystag, nzz, &
+  USE data, ONLY: xdel, ydel, zdel, xstag, ystag, nzz, &
                    xwest, xeast, ynorth, ysouth, zbott, ztop, &
                    ix, iy, iz, xyz, D
 
@@ -1192,7 +1192,7 @@ contains
 
   SUBROUTINE TLUpd2 (u,n,g,Lmom2)
 
-  USE sdata, ONLY: xdel, ydel, zdel, xstag, ystag, nzz, &
+  USE data, ONLY: xdel, ydel, zdel, xstag, ystag, nzz, &
                    xwest, xeast, ynorth, ysouth, zbott, ztop, &
                    ix, iy, iz, xyz, D
 
@@ -1337,7 +1337,7 @@ contains
     !Purpose: To calculate Buckling for node n and direction u
 
 
-    use sdata, only: ng, xdel, ydel, zdel, ix, iy, iz, Ke, &
+    use data, only: ng, xdel, ydel, zdel, ix, iy, iz, Ke, &
     sigr, D, chi, mat, nuf, sigs, Ke, tbeta, dfis
     implicit none
 
@@ -1398,7 +1398,7 @@ contains
 
   SUBROUTINE get_ABEFGH (n,u,Aa,Bb,Ee,Ff,Gg,Hh)
 
-  USE sdata, ONLY: ng, xdel, ydel, zdel, ix, iy, iz, D, sigr
+  USE data, ONLY: ng, xdel, ydel, zdel, ix, iy, iz, D, sigr
 
   ! Purpose:
      ! To calaculate A,B,E,F,G,H paramters used to calculate matrix elements for
