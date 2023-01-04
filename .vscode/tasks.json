@@ -5,7 +5,7 @@
             "label": "build",
             "type": "shell",
             // "command": "make -j 4",
-            "command": "make",
+            "command": "cd bld && make",
             "options": {
                 "cwd": "${workspaceRoot}"
             },

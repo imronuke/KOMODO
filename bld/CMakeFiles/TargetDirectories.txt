@@ -1,0 +1,3 @@
+/home/imronuke/wsl/github/KOMODO/bld/CMakeFiles/komodo.dir
+/home/imronuke/wsl/github/KOMODO/bld/CMakeFiles/edit_cache.dir
+/home/imronuke/wsl/github/KOMODO/bld/CMakeFiles/rebuild_cache.dir

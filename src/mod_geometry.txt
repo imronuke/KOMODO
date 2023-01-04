@@ -1,0 +1,13 @@
+module geometry
+
+    use constant, only : dp
+
+    implicit none
+
+    save
+
+    type :: node_size_type
+ 
+    end type
+    
+end module

@@ -1,25 +1,22 @@
 module data
 
     use constant
-    use node_h,   only: node_type
   
     implicit none
   
     save
     
-    character(len=length_line) :: mode
-    
-    integer :: ng                                        ! number of groups
-    integer :: nmat                                      ! number of materials
-    integer :: nnod                                      ! Number of nodes
-  
-    type(node_type), allocatable  :: node(:)             ! Node data
+    character(len=length_word) :: mode
   
     ! Flux and fission source
     real(dp), allocatable, target :: flux(:,:)           ! node-averaged flux
-    real(dp), allocatable         :: flux_prev(:,:)      ! previousnode-averaged flux
-    real(dp), allocatable, target :: fsrc(:)             ! Fission source
-    real(dp), allocatable         :: fsrc_prev(:)        ! Previous fission source
+
+    ! Geometry
+    integer                       :: nx, ny, nz          ! Number of assemblies in x, y, and z directions
+    integer, allocatable          :: xdiv(:)             ! Assembly division in x direction
+    integer, allocatable          :: ydiv(:)             ! Assembly division in y direction
+    integer, allocatable          :: zdiv(:)             ! Assembly division in z direction
+    real(dp)                      :: core_height         ! core height
   
     ! Iteration Control
     real(dp) :: max_flux_error = 1.e-5    ! Flux Error Criteria
@@ -94,17 +91,5 @@ module data
     !Timing
     real(dp) :: fdm_time = 0., nod_time = 0., xs_time = 0., &
     inp_time = 0., th_time = 0.
-    
-    contains
-    
-    function get_time() result (time)
-    
-        implicit none
-    
-        real(dp) :: time
-    
-        call cpu_time(time)
-    
-    end function
 
 end module

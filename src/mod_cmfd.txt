@@ -1209,11 +1209,7 @@ end subroutine print_keff
     use data, only: r, rs, v, p, s, t, tmp, nnod, flux
 
     !Purpose: to solve linear of system equation with BiCGSTAB method
-    ! (without preconditioner). Sparse matrix saved in a and indexed in rc.
-    ! a dimension is (#non_zero_elements)
-    ! rc dimension is (2,#non_zero_elements+1)
-    ! adapted from:
-    ! https://www.cfd-online.com/Wiki/Sample_code_for_BiCGSTAB_-_Fortran_90
+    ! adapted from : https://www.cfd-online.com/Wiki/Sample_code_for_BiCGSTAB_-_Fortran_90
 
     implicit none
 
@@ -1238,11 +1234,6 @@ end subroutine print_keff
     end if
 
     !$acc enter data copyin(b)
-
-    ! write(*,*) r(1:3)
-    ! call gpu_initialize(r, 3.0_dp)
-    ! !$acc update self(r)
-    ! write(*,*) r(1:3)
 
     call sp_matvec(g,flux(:,g),r)
 

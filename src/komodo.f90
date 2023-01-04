@@ -3,13 +3,15 @@ PROGRAM main
 USE constant,   ONLY: dp !, mode, transient_warning, fdm_time, nod_time, xs_time, &
 ! inp_time, th_time, get_time
 USE read,      ONLY: inp_read
+use time
 ! USE control, ONLY: forward, adjoint, fixedsrc, cbsearch, cbsearcht
 ! USE trans, ONLY: rod_eject, rod_eject_th
 
-IMPLICIT NONE
+implicit none
 
-REAL(DP) :: st, fn, tot_time
+type(timer) :: m
 
+call m % on
 ! Read input
 ! st = get_time()
 call inp_read()
@@ -18,7 +20,7 @@ call inp_read()
 
 ! if (scr) then
   write(*,*)
-  write(*,*) ' reading input ... done'
+  write(*,*) 'READING INPUT ... DONE'
 ! end if
 
 ! SELECT CASE(mode)
@@ -79,6 +81,9 @@ call inp_read()
 ! 1129 format (4X,'------------------------------------------')
 ! 1130 format (4X,'Total time           :', F10.4)
 
+call m % off
+
+write(*,*) m % elapsed_time
 WRITE(*,*)
 WRITE(*,*) "  KOMODO EXIT NORMALLY"
 

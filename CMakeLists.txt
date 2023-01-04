@@ -1,18 +1,19 @@
 cmake_minimum_required(VERSION 3.15)
 
 option(GPU    "Use OpenACC GPU          "  OFF)
-option(DEBUG  "DEBUGGING MODE           "  ON)
+option(DEBUG  "DEBUGGING MODE           "  OFF)
 
 # Set for debug only
 if(GPU)
-   set(CMAKE_Fortran_FLAGS "-fast -ta=tesla:lineinfo -Minfo=accel,ccff -Mfree -Mpreprocess -Mbackslash")
+   # set(CMAKE_Fortran_FLAGS "-fast -ta=tesla:lineinfo -Minfo=accel,ccff -Mfree -Mpreprocess -Mbackslash")
+   set(CMAKE_Fortran_FLAGS "-fast -Mfree -Mpreprocess -Mbackslash")
    set(CMAKE_Fortran_COMPILER nvfortran )
 else()
    if(DEBUG)
-      set(CMAKE_Fortran_FLAGS "-cpp -fbacktrace -g -pedantic -fbounds-check -ffpe-trap=invalid,overflow,underflow")
+      set(CMAKE_Fortran_FLAGS "-cpp -std=f2008 -pg -fbacktrace -g -pedantic -fbounds-check -ffpe-trap=invalid,overflow,underflow -Wall")
       set(CMAKE_Fortran_COMPILER gfortran )
    else()
-      set(CMAKE_Fortran_FLAGS "-cpp -O4")
+      set(CMAKE_Fortran_FLAGS "-cpp -std=f2008 -march=native -O3 -pg")
       set(CMAKE_Fortran_COMPILER gfortran )
    endif()
 endif()

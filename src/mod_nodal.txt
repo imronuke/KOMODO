@@ -861,7 +861,6 @@ contains
           end do
       end do
 
-
       !Solve y in Ly = b (Forward substitution)
       y(1) = b(1)
       do i=2,msize

@@ -1,8 +1,8 @@
 module read
-
     use constant
-    ! use data
+    use data
     use util
+    use fdm
     
     implicit none
     
@@ -11,20 +11,19 @@ module read
     character(length_line) :: iname, oname
     
     ! ind is used to read x indicator in beginning of input buffer line.
-    ! This to prevent reading next line
+    ! This to prevent READING next line
     character(LEN=1) :: ind
     
     character(length_line) :: message    ! error message
     character(length_line) :: iline       ! Input line
     
     !Ouput options
-    LOGICAL, parameter :: ogeom = .TRUE.  ! Geometry output print option
-    LOGICAL, parameter :: oxsec = .TRUE.  ! Macroscopic CXs output print option
-    LOGICAL, parameter :: scr   = .TRUE.  ! Terminal ouput print option
+    logical, parameter :: ogeom = .TRUE.  ! Geometry output print option
+    logical, parameter :: oxsec = .TRUE.  ! Macroscopic CXs output print option
+    logical, parameter :: scr   = .TRUE.  ! Terminal ouput print option
     
     ! Input, output and buffer input file unit number
     integer :: iunit                      !input file unit number
-    integer :: ounit                      !output file unit number
     integer :: buff                       !input buffer file unit number (entire input)
     
     ! Input buffer file unit number for each card
@@ -45,15 +44,35 @@ module read
     integer :: boutp = NO
     
     ! This declaration is to notify that the error in separated card file (in case so)
-    integer, dimension(ncard) :: unit_array                       ! Array of buffer unit number
-    character(length_card), dimension(ncard) :: card_array = &    ! Array of card name
-      (/'MODE', 'XSEC', 'GEOM', 'case', 'ESRC', 'ITER', 'PRNT', 'ADF ', 'CROD', 'BCON', &
-      'FTEM', 'MTEM', 'CDEN', 'CBCS', 'EJCT', 'THER', 'XTAB', 'KERN', 'EXTR', 'THET', &
-      'OUTP' /)
-    character(LEN=100), dimension(:), allocatable :: file_array   ! Array of card file
+    integer, allocatable                :: unit_array(:)     ! Array of buffer unit number
+    character(length_card), allocatable :: card_array(:)     ! Array of card name
+    character(length_line), allocatable :: file_array(:)     ! Array of card file
     
     logical :: is_nuf_exist = .true.     ! logical variable to check the presence of fissile material
     logical :: is_sigf_exist = .true.    ! logical variable to check the presence of fissile material
+    ! Temporary XSEC
+    integer               :: ng                  ! number of energy group
+    integer               :: nmat                ! number of materials
+    real(dp), allocatable :: sigtr(:,:)          ! Transport macroscopic XSEC
+    real(dp), allocatable :: siga (:,:)          ! Absorption macroscopic XSEC
+    real(dp), allocatable :: nuf  (:,:)          ! nu*fission macroscopic XSEC
+    real(dp), allocatable :: sigf (:,:)          ! fission macroscopic XSEC
+    real(dp), allocatable :: sigs (:,:,:)        ! Scattering macroscopic XSEC
+    real(dp), allocatable :: chi  (:,:)          ! neutron fission spectrum
+    ! Geometry
+    integer                                :: nxx, nyy, nzz
+    integer                                :: np                   ! Number of planars
+    integer, dimension(:,:,:), allocatable :: mat_map              ! node-wise material map
+    integer, dimension(:), allocatable     :: zpln                 ! Planar assignment to z direction
+    real(dp), dimension(:), allocatable    :: xsize, ysize, zsize  ! Assembly size for each direction
+    
+    type :: MAT_ASGN                                            ! Material assignment
+        integer, dimension(:,:), allocatable :: asm             ! Material assignment into assembly
+        integer, dimension(:,:), allocatable :: node            ! Material assignment into nodes
+    end type
+    type(MAT_ASGN), dimension(:), allocatable :: planar         ! planar
+    real(dp), allocatable :: xdel(:), ydel(:), zdel(:)
+    type(core_rect) :: fdm
     
     
     contains
@@ -64,25 +83,23 @@ module read
     !===============================================================================================!
     
     subroutine inp_read()
-
-        integer :: g, i, N
+        integer :: N
     
         N = command_argument_count()
         if (N < 1) then
-           stop "ERROR: no input. Run KOMODO followed by the input"
+        stop "ERROR: no input. Run KOMODO followed by the input"
         else
-           call get_command_argument(1,iname) !Grab the first command line argument
+        call get_command_argument(1,iname) !Grab the first command line argument
         endif
         
-        iname = TRIM(iname)
+        iname = trim(iname)
         
         iunit =  open_file ('read', iname)
         
-        oname = TRIM(iname) // '.out'
-        oname = TRIM(oname)
+        oname = trim(iname) // '.out'
+        oname = trim(oname)
         
-        ounit =  open_file ('write', iname)
-
+        ounit =  open_file ('write', oname)
         umode =  open_file ('scratch')
         uxsec =  open_file ('scratch')
         ugeom =  open_file ('scratch')
@@ -104,15 +121,20 @@ module read
         uextr =  open_file ('scratch')
         uthet =  open_file ('scratch')
         uoutp =  open_file ('scratch')
-
+        allocate(unit_array(ncard))
         unit_array = &             ! Array of buffer unit number
         (/umode, uxsec, ugeom, ucase, uesrc, uiter, uprnt, uadf,  ucrod, ubcon, &
         uftem, umtem, ucden, ucbcs, uejct, uther, uxtab, ukern, uextr, uthet, &
         uoutp /)
+        allocate(card_array(ncard))
+        card_array(:) = &    ! Array of card name
+        (/'MODE', 'XSEC', 'GEOM', 'case', 'ESRC', 'ITER', 'PRNT', 'ADF ', 'CROD', 'BCON', &
+        'FTEM', 'MTEM', 'CDEN', 'CBCS', 'EJCT', 'THER', 'XTAB', 'KERN', 'EXTR', 'THET', &
+        'OUTP' /)
         
         ! By default, card file names are the input file name
         allocate (file_array(ncard))
-        file_array = ADJUSTL(iname)
+        file_array = adjustl(iname)
         
         ! Echo the input to the output file
         call print_header()
@@ -131,54 +153,49 @@ module read
         rewind(uther); rewind(uxtab); rewind(ukern); rewind(uextr); rewind(uthet)
         rewind(uoutp)
         
-        ! Start reading buffer files for each input card buffer
-        write(ounit,*)
-        write(ounit,*)
-        write(ounit,1008)
-        write(ounit,*) &
-        ' ******************************************************************************'
+        ! Start READING buffer files for each input card buffer
+        write(ounit,*) ' ************************', '  START READING INPUT  ', '*******************************'
+        ! Card MODE
+        if (bmode == YES) then
+            call inp_mode(umode)
+        else
+            write(ounit,1021) '%MODE'
+            stop
+        end if
         
-        ! ! Card MODE
-        ! if (bmode == 1) then
-        !     call inp_mode(umode)
-        ! else
-        !     write(ounit,1021) '%MODE'
-        !     stop
-        ! end if
+        ! Card case
+        if (bcase == YES) call inp_case (ucase)
         
-        ! ! Card case
-        ! if (bcase == 1) call inp_case (ucase)
+        ! Card %KERN
+        if (bkern==1) then
+          call inp_kernel(ukern)
+        else
+          if (scr) then
+            write(*,*)
+            write(*,*) ' NODAL KERNEL  : SEMI-ANALYTIC NODAL METHOD'
+          end if
+        end if
         
-        ! ! Card %KERN
-        ! if (bkern==1) then
-        !   call inp_kern(ukern)
-        ! else
-        !   if (scr) then
-        !     write(*,*)
-        !     write(*,*) ' NODAL KERNEL  : SEMI-ANALYTIC NODAL METHOD'
-        !   end if
-        ! end if
-        
-        ! ! Card XSEC
-        ! if (bxsec == 1) then
-        !     call inp_xsec(uxsec)
+        ! Card XSEC
+        if (bxsec == YES) then
+            call inp_xsec(uxsec)
         ! else if (bxtab == 1) then
         !     call inp_xtab(uxtab)
-        ! else
-        !     write(ounit,1021) '%XSEC OR %XTAB'
-        !     write(*,1021) '%XSEC OR %XTAB'
-        !     stop
-        ! end if
+        else
+            write(ounit,1021) '%XSEC OR %XTAB'
+            write(*,1021) '%XSEC OR %XTAB'
+            stop
+        end if
         
-        ! ! Card GEOM
-        ! if (bgeom == 1) then
-        !     call inp_geom1(ugeom)
-        !     call inp_geom2(ugeom)
-        ! else
-        !     write(ounit,1021) '%GEOM'
-        !     write(*,1021) '%GEOM'
-        !     stop
-        ! end if
+        ! Card GEOM
+        if (bgeom == YES) then
+            call inp_geom1(ugeom)
+            call inp_geom2(ugeom)
+        else
+            write(ounit,1021) '%GEOM'
+            write(*,1021) '%GEOM'
+            stop
+        end if
         
         ! ! Card PRNT
         ! if (bprnt == 1) call inp_prnt (uprnt)
@@ -239,8 +256,8 @@ module read
         
         ! if (boutp == 1) call inp_outp(uoutp)
         
-        ! ! Miscellaneous things
-        ! call misc()
+        ! Miscellaneous things
+        call finalize_input()
         
         ! ! Card ITER
         ! if (biter == 1) call inp_iter (uiter)
@@ -340,12 +357,9 @@ module read
         
         write(ounit,*)
         write(ounit,*)
-        write(ounit,*) &
-        ' ************************', '  STOP READING INPUT  ', '********************************'
+        write(ounit,*) ' ************************', '  STOP READING INPUT  ', '********************************'
         
-        1008 format (30X, 'START READING INPUT')
-        1021 format(2X, 'CARD ', A, ' doES NOT PRESENT. THIS CARD IS MANDATORY')
-        1041 format(2X, 'CARD ', A, ' doES NOT PRESENT. THIS CARD IS MANDATORY FOR ', A,' CALCULATION MODE')
+        1021 format(2X, 'CARD ', A, ' DOES NOT PRESENT. THIS CARD IS MANDATORY')
         
         
         close(UNIT=umode); close(UNIT=uxsec); close(UNIT=ugeom); close(UNIT=ucase)
@@ -355,27 +369,21 @@ module read
         close(UNIT=uxtab); close(UNIT=ukern); close(UNIT=uextr); close(UNIT=uthet)
         close(UNIT=uoutp)
         close(UNIT=buff)
-    
+        deallocate(file_array, unit_array, card_array)
     
     end subroutine inp_read
-
     !===============================================================================================!
     ! To print the header                                                                           !
     !===============================================================================================!
     
     subroutine print_header()
         
-        integer :: eof
-        integer :: nline
-        
         write(ounit, 2409)
         write(ounit, 2411)
         write(ounit, 2412)
         write(ounit, 2409)
         write(ounit, *)
-        write(ounit, *)
         
-        write(*, *)
         write(*, *)
         write(*, 2409)
         write(*, 2411)
@@ -383,8 +391,8 @@ module read
         write(*, 2409)
         
         2409 format(11X, '###########################################################')
-        2411 format(11X, '#                 KOMOdo Version: 0.2                     #')
-        2412 format(11X, '#           open NUCLEAR REACTOR SIMULATOR                #')
+        2411 format(11X, '#                 KOMODO Version: 0.2                     #')
+        2412 format(11X, '#           OPEN NUCLEAR REACTOR SIMULATOR                #')
     
     end subroutine
     
@@ -397,25 +405,23 @@ module read
         integer :: eof
         integer :: nline
         
-#ifdef __GIT
         write(*, *)
         write(*, *) "GIT COMMIT SHA    : ", __GIT_COMMIT_HASH
         write(*, *) "GIT COMMIT DATE   : ", __GIT_DATE
         write(*, *) "GIT COMMIT BRANCH : ", __GIT_BRANCH
         write(*, *)
-#endif
         write(*, *)
         write(*, *)
         
         
-        write(ounit,1002) 'STARTS'
+        write(ounit,*) '  =============================INPUT DATA STARTS HERE==========================='
         
         nline = 0
         do
             read(iunit, '(A200)', IOSTAT=eof) iline
             nline = nline + 1
             if (eof < 0) then
-                write(ounit,1002) 'ENDS'
+                write(ounit,*) '  =============================INPUT DATA ENDS HERE==========================='
                 write(ounit,*)
                 exit
             end if
@@ -423,8 +429,6 @@ module read
         end do
         
         1001 format (2X, I4, ': ', A200)
-        1002 format    (2X, '=============================INPUT DATA',A7, &
-                            ' HERE===========================')
         rewind (iunit)
     
     end subroutine inp_echo
@@ -451,21 +455,17 @@ module read
             ln = ln+1
             read (inunit, '(A200)', IOSTAT=eof) iline
             if (eof < 0) exit                          !Check end of file
-
-            iline = TRIM(ADJUSTL(iline))               ! Remove trailing blanks and adjust to left
+            iline = trim(adjustl(iline))               ! Remove trailing blanks and adjust to left
             comm = index(iline, mark)                  ! Find position '!' if any
-
             ! if there is no '!' and no first 20 blank spaces (in case line is blank)
             if (comm == 0 .AND. iline(1:20) /= '                    ')  then
-                write(buffer,1012)'x ',ln,iline        ! 'x' is used to prevent reading next line
+                write(buffer,1012)'x ',ln,iline        ! 'x' is used to prevent READING next line
             end if
-
             !if the first character is not '!'
             if (comm > 1) then
                 iline = iline(1:comm-1)       ! Take only part of input
                 write(buffer,1012)'x ',ln, iline
             end if
-
         end do
         
         rewind(buffer)
@@ -496,15 +496,15 @@ module read
             if (eof < 0) exit                                                             !Check end of file
         
             ! users can place the card input into separated file.
-            ! if the card is placed in a separated file as indicated by keyword FILE
+            ! if the card is placed in a separated file as indicated by keyword 'FILE'
             if (index(lower_case(iline),'file') > 0) then
                 backspace(buffer)
                 read (buffer, '(A2,I5,A200)') ind, ln, iline
                 
-                iline                                 = ADJUSTL(iline)                       ! Adjust to left
+                iline                                 = adjustl(iline)                       ! Adjust to left
                 comm                                  = index(iline, ' ')                    ! Get space position
-                fname                                 = TRIM(ADJUSTL(iline(comm+1:200)))     ! Get card file name
-                file_array(GETLOC(unit_array, bunit)) = fname                                ! Change default file name for error notification
+                fname                                 = trim(adjustl(iline(comm+1:200)))     ! Get card file name
+                file_array(findloc(unit_array, bunit)) = fname                                ! Change default file name for error notification
                 xunit                                 = open_file('read', fname)             ! open card file
     
                 call remove_comments(xunit, '!', cunit)                                      ! Remove comments in card file
@@ -513,837 +513,783 @@ module read
                 do
                     read (cunit, '(A2,I5,A200)', IOSTAT=eof) ind, ln, iline
                     if (eof < 0) exit                                                          !Check end of file
-                    write(bunit, 1019) 'x ',ln, iline                                          ! 'x' used to prevent reading next line
+                    write(bunit, 1019) 'x ',ln, iline                                          ! 'x' used to prevent READING next line
                 end do
                 close(xunit); close(cunit)
             end if
         
             per = index(iline,'%')
             if (per > 0) then              ! if %card detected
-              iline = iline(per+1:200)
-              iline = TRIM(ADJUSTL(iline))
-              card  = trim(iline)
-              select case (card)
-              case('MODE'); bunit = umode; bmode = YES
-              case('XSEC'); bunit = uxsec; bxsec = YES
-              case('GEOM'); bunit = ugeom; bgeom = YES
-              case('case'); bunit = ucase; bcase = YES
-              case('ESRC'); bunit = uesrc; besrc = YES
-              case('ITER'); bunit = uiter; biter = YES
-              case('PRNT'); bunit = uprnt; bprnt = YES
-              case('ADF') ; bunit = uadf ; badf  = YES
-              case('CROD'); bunit = ucrod; bcrod = YES
-              case('EJCT'); bunit = uejct; bejct = YES
-              case('CBCS'); bunit = ucbcs; bcbcs = YES
-              case('FTEM'); bunit = uftem; bftem = YES
-              case('MTEM'); bunit = umtem; bmtem = YES
-              case('CDEN'); bunit = ucden; bcden = YES
-              case('BCON'); bunit = ubcon; bbcon = YES
-              case('THER'); bunit = uther; bther = YES
-              case('XTAB'); bunit = uxtab; bxtab = YES
-              case('KERN'); bunit = ukern; bkern = YES
-              case('EXTR'); bunit = uextr; bextr = YES
-              case('THET'); bunit = uthet; bthet = YES
-              case('OUTP'); bunit = uoutp; boutp = YES
-              case DEFAULT
+            iline = iline(per+1:200)
+            iline = trim(adjustl(iline))
+            card  = trim(iline)
+            select case (upper_case(card))
+            case('MODE'); bunit = umode; bmode = YES
+            case('XSEC'); bunit = uxsec; bxsec = YES
+            case('GEOM'); bunit = ugeom; bgeom = YES
+            case('CASE'); bunit = ucase; bcase = YES
+            case('ESRC'); bunit = uesrc; besrc = YES
+            case('ITER'); bunit = uiter; biter = YES
+            case('PRNT'); bunit = uprnt; bprnt = YES
+            case('ADF') ; bunit = uadf ; badf  = YES
+            case('CROD'); bunit = ucrod; bcrod = YES
+            case('EJCT'); bunit = uejct; bejct = YES
+            case('CBCS'); bunit = ucbcs; bcbcs = YES
+            case('FTEM'); bunit = uftem; bftem = YES
+            case('MTEM'); bunit = umtem; bmtem = YES
+            case('CDEN'); bunit = ucden; bcden = YES
+            case('BCON'); bunit = ubcon; bbcon = YES
+            case('THER'); bunit = uther; bther = YES
+            case('XTAB'); bunit = uxtab; bxtab = YES
+            case('KERN'); bunit = ukern; bkern = YES
+            case('EXTR'); bunit = uextr; bextr = YES
+            case('THET'); bunit = uthet; bthet = YES
+            case('OUTP'); bunit = uoutp; boutp = YES
+            case DEFAULT
                 write(ounit,1014) ln, iline
                 write(*,1014) ln, iline
                 stop
-              end select
+            end select
             end if
             ! write input buffer for each card
-            if (per == 0) write(bunit, 1019) 'x ',ln, iline  ! 'x' used to prevent reading next line
+            if (per == 0) write(bunit, 1019) 'x ',ln, iline  ! 'x' used to prevent READING next line
         end do
         
         1014 format(2X, 'AT LINE', I3, ' : THIS IS A WRONG INPUT CARD : ', A8)
         1019 format(A2, I5,' ',A200)
     
     end subroutine inp_rewrite
-    
-    !******************************************************************************!
-    
-    ! subroutine inp_mode (xbunit)
-    ! !
-    ! ! Purpose:
-    ! !    To read case mode in input
-    ! !
-    
-    ! USE data, ONLY: mode
-    
-    ! IMPLICIT NONE
-    
-    ! integer, intent(in) :: xbunit
-    
-    ! integer :: ln   !Line number
-    ! integer :: ios  ! IOSTAT status
-    ! character(LEN=60) :: mode_desc
-    
-    ! read(xbunit, '(A2, I5,A100)', IOSTAT=ios) ind, ln, mode
-    ! message = ' error in reading MODE'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
-    
-    
-    ! mode = TRIM(ADJUSTL(mode))  ! ADJUSTL = MOVE PRECEDING BLANK TO TRAILING
-    
-    ! select case(mode)
-    ! case('FORWARD')
-    !     mode_desc = TRIM(ADJUSTL('FORWARD CALCULATION'))
-    ! case('ADJOINT')
-    !   mode_desc = TRIM(ADJUSTL('ADJOINT CALCULATION'))
-    ! case('FIXEDSRC')
-    !   mode_desc = TRIM(ADJUSTL('FIXED SOURCE CALCULATION'))
-    ! case('RODEJECT')
-    !   if (bther == 0) then
-    !     mode_desc = TRIM(ADJUSTL('ROD EJECTION CALCULATION WITHOUT T-H FEEDBACK'))
-    !   else
-    !     mode_desc = TRIM(ADJUSTL('ROD EJECTION CALCULATION WITH T-H FEEDBACK'))
-    !   end if
-    ! case('BCSEARCH')
-    !   if (bther == 0) then
-    !     mode_desc = TRIM(ADJUSTL('CRITICAL BORON CONCENTRATION SEARCH' &
-    !     // ' WITHOUT T-H FEEDBACK'))
-    !   else
-    !     mode_desc = TRIM(ADJUSTL('CRITICAL BORON CONCENTRATION SEARCH' &
-    !     // ' WITH T-H FEEDBACK'))
-    !   end if
-    ! case DEFAULT
-    !   write(ounit,1032) mode
-    !   write(*,1032) mode
-    !   stop
-    ! end select
-    
-    ! write(ounit,1031) mode_desc
-    ! write(ounit,*)
-    ! if (scr) then
-    !   write(*,1031) mode_desc
-    !   write(*,*)
-    ! end if
-    
-    ! 1031 format(2X, 'CALCULATION MODE : ', A60)
-    ! 1032 format(2X, 'MODE : ', A10, ' IS UNIDENTifIED')
-    
-    ! end subroutine inp_mode
-    
-    ! !******************************************************************************!
-    
-    ! subroutine inp_case (xbunit)
-    ! !
-    ! ! Purpose:
-    ! !    To read case card in input
-    ! !
-    
-    ! IMPLICIT NONE
-    
-    ! integer, intent(in) :: xbunit
-    
-    ! character(LEN=100) :: case_id
-    ! character(LEN=100) :: case_exp
-    
-    ! integer :: ln   !Line number
-    ! integer :: ios  ! IOSTAT status
-    
-    ! read(xbunit, '(A2, I5,A100)', IOSTAT=ios) ind, ln, case_id
-    ! message = ' error in case ID'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
-    ! read(xbunit, '(A2, I5,A100)', IOSTAT=ios) ind, ln, case_exp
-    ! message = ' error in case description'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
-    
-    ! case_id = TRIM(ADJUSTL(case_id))
-    ! case_exp = TRIM(ADJUSTL(case_exp))
-    
-    ! write(ounit,1006) case_id
-    ! write(ounit,1007) case_exp
-    ! if (scr) then
-    !   write(*,1006) case_id
-    !   write(*,1007) case_exp
-    ! end if
-    ! 1006 format(2X, 'case ID : ', A100)
-    ! 1007 format(2X, A100)
-    
-    ! end subroutine inp_case
-    
-    ! !******************************************************************************!
-    
-    ! subroutine inp_xsec (xbunit)
-    ! !
-    ! ! Purpose:
-    ! !    To read CROSS SECTIONS card in input
-    ! !
-    
-    ! USE data, ONLY: nmat, ng, xsigtr, xsiga, xnuf, xsigf, &
-    !                  xsigs, xD, xsigr, chi, mode
-    
-    ! IMPLICIT NONE
-    
-    ! integer, intent(in) :: xbunit
-    
-    ! integer :: i, g, h
-    ! integer :: ln   !Line number
-    ! integer :: ios  ! IOSTAT status
-    ! real(dp) :: dum
-    ! integer, dimension(:), allocatable :: group
-    ! integer :: comm1, comm2
-    
-    ! write(ounit,*)
-    ! write(ounit,*)
-    ! write(ounit,*) '           >>>> readING MACROSCOPIC CROSS SECTIONS <<<<'
-    ! write(ounit,*) '           --------------------------------------------'
-    
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, ng, nmat
-    ! message = ' error in material number'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
-    
-    
-    ! allocate(group(ng))
-    ! do g = 1,ng
-    !    group(g) = g
-    ! end do
-    
-    ! allocate(xsigtr(nmat,ng))
-    ! allocate(xsiga (nmat,ng))
-    ! allocate(xnuf  (nmat,ng))
-    ! allocate(xsigf (nmat,ng))
-    ! allocate(xsigs (nmat,ng,ng))
-    ! allocate(xD    (nmat,ng))
-    ! allocate(xsigr (nmat,ng))
-    ! allocate(chi  (nmat,ng))
-    
-    ! ! To ancticipate users make mistake when they use %XTAB instead of %XSEC
-    ! read(xbunit, '(A200)') iline
-    ! comm1 = index(iline, '/')
-    ! comm2 = index(iline, '\')
-    ! if (comm1 > 0 .OR. comm2 > 0) then
-    !   write(ounit, *) '  ERROR: SLASH (/) OR BACKSLASH (\) NOT ACCEPTED IN %XSEC CARD '
-    !   write(*, *) '  ERROR: SLASH (/) OR BACKSLASH (\) NOT ACCEPTED IN %XSEC CARD '
-    !   stop
-    ! end if
-    ! backspace(xbunit)
-    
-    ! ! reading MACROSCOPIC CXs
-    ! do i= 1, nmat
-    !     do g= 1, ng
-    !         read(xbunit, *, IOSTAT=ios) ind, ln, xsigtr(i,g), &
-    !         xsiga(i,g), xnuf(i,g), xsigf(i,g), &
-    !         chi(i,g), (xsigs(i,g,h), h = 1, ng)
-    !         message = ' error in cross section data'
-    !         call er_message(ounit, ios, ln, message, buf=xbunit)
-    
-    !         ! Check CXs values
-    !         if (xsigtr(i,g) <= 0.0) then
-    !             write(ounit,1020)i, g
-    !             stop
-    !         end if
-    !         if (xnuf(i,g) > 0.) is_nuf_exist = .FALSE.
-    !         if (xsigf(i,g) > 0.) is_sigf_exist = .FALSE.
-    
-    !         xD(i,g) = 1./(3.*xsigtr(i,g))
-    !         dum = 0.0
-    !         do h= 1, ng
-    !             if (g /= h) dum = dum + xsigs(i,g,h)
-    !         end do
-    !         xsigr(i,g) =  xsiga(i,g) + dum
-    !     end do
-    ! end do
-    
-    
-    ! ! Writing output
-    ! if (oxsec) then
-    !     do i= 1, nmat
-    !         write(ounit,*)
-    !         write(ounit,1009) i
-    !         write(ounit,1011)'GROUP', 'TRANSPORT', 'DifFUSION', 'ABSORPTION', &
-    !         'REMOVAL', 'NU*FISS', 'KAP*FIS','FISS. SPCTR'
-    !         do g= 1, ng
-    !             write(ounit,1010) g, xsigtr(i,g), xD(i,g), xsiga(i,g), &
-    !             xsigr(i,g), xnuf(i,g), xsigf(i,g), chi(i,g)
-    !         end do
-    !         write(ounit,*)'  --SCATTERING MATRIX--'
-    !         write(ounit,'(4X, A5, 20I11)') "G/G'", (group(g), g=1,ng)
-    !         do g= 1, ng
-    !             write(ounit,1015)g, (xsigs(i,g,h), h=1,ng)
-    !         end do
-    !     end do
-    ! end if
-    
-    ! if (is_nuf_exist .AND. mode /= 'FIXEDSRC') then
-    !     write(ounit, *) "ERROR: The Problem has no fission material (nu*fission for all materials are zero)"
-    !     stop
-    ! end if
-    ! if (is_sigf_exist .AND. mode /= 'FIXEDSRC') then
-    !     write(ounit, *) "ERROR: The Problem has no fission material (fission xsec for all materials are zero)"
-    !     stop
-    ! end if
-    
-    ! write(ounit,*)
-    ! write(ounit,*) ' ...Macroscopic CX Card is successfully read...'
-    
-    ! 1009 format(5X, 'MATERIAL', I3)
-    ! 1011 format(2X, A7, A12, A11, A12, A9, A11, A11, A14)
-    ! 1010 format(2X, I6, F13.6, F10.6, F11.6, F12.6, F11.6, ES12.5, F10.6)
-    ! 1015 format(4X, I3, F16.6, 20F12.6)
-    ! 1020 format(2X, 'ERROR: Transport cross section (sigtr)is zero or negative in material: ', I3, ' ;group: ', I3)
-    
-    ! deallocate(group)
-    ! deallocate(xD, xsigr)
-    
-    ! end subroutine inp_xsec
-    
-    ! !******************************************************************************!
-    
-    ! subroutine inp_geom1 (xbunit)
-    ! !
-    ! ! Purpose:
-    ! !    To read geometry card in input (1st part)
-    ! !
-    
-    ! USE data, ONLY: nx, ny, nz, nxx, nyy, nzz, xdel, ydel, zdel, &
-    !                 xdiv, ydiv, zdiv
-    
-    ! IMPLICIT NONE
-    
-    ! integer, intent(in) :: xbunit
-    
-    ! integer :: ln, ios
-    
-    ! integer :: i, j, k, lx, ly, lz, xtot, ytot, ztot
-    ! real(dp) :: div
-    
-    ! write(ounit,*)
-    ! write(ounit,*)
-    ! write(ounit,*) '           >>>>>readING CORE GEOMETRY<<<<<'
-    ! write(ounit,*) '           -------------------------------'
-    
-    ! ! read number of assemblies in x, y and z directions
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, nx, ny, nz
-    ! message = ' error in reading number assemblies'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
-    
-    ! ! Limit values of nx, ny and nz
-    ! ! Limit values of nx, ny and nz
-    ! if (nx < 2) then
-    !     write(ounit,*) '  Error: nx shall be at least 2'
-    !     write(*,*)     '  Error: nx shall be at least 2'
-    !     stop
-    ! end if
-    ! if (ny < 2) then
-    !     write(ounit,*) '  Error: ny shall be at least 2'
-    !     write(*,*)     '  Error: ny shall be at least 2'
-    !     stop
-    ! end if
-    ! if (nz < 2) then
-    !     write(ounit,*) '  Error: nz shall be at least 2'
-    !     write(*,*)     '  Error: nz shall be at least 2'
-    !     stop
-    ! end if
-    
-    ! allocate(xsize(nx), ysize(ny), zsize(nz))
-    ! allocate(xdiv(nx), ydiv(ny), zdiv(nz))
-    
-    ! ! read assembly sizes and assembly division in x, y and z directions
-    ! ! x-direction
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, (xsize(i), i=1,nx)
-    ! message = ' error in reading x-direction assembly sizes'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, (xdiv(i), i=1,nx)
-    ! message = ' error in reading x-direction assembly division'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
-    ! ! y-direction
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, (ysize(j), j=1,ny)
-    ! message = ' error in reading y-direction assembly sizes'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, (ydiv(j), j=1,ny)
-    ! message = ' error in reading y-direction assembly division'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
-    ! ! z-direction
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, (zsize(k), k=1,nz)
-    ! message = ' error in reading z-direction assembly sizes'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, (zdiv(k), k=1,nz)
-    ! message = ' error in reading z-direction assembly division'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
-    
-    ! !Calculate number of nodes in x, y and z directions
-    ! !x-direction
-    ! nxx=0
-    ! do i= 1,nx
-    !    nxx = nxx+xdiv(i)
-    ! end do
-    ! !y-direction
-    ! nyy=0
-    ! do j= 1,ny
-    !    nyy = nyy+ydiv(j)
-    ! end do
-    ! !z-direction
-    ! nzz=0
-    ! do k= 1,nz
-    !    nzz = nzz+zdiv(k)
-    ! end do
-    
-    ! ! Limit values of nxx, nyy and nzz
-    ! if (nxx > 800) then
-    !     write(ounit,*) '  Error: nxx shall be maximum 800'
-    !     write(*,*) '  Error: nxx shall be maximum 800'
-    !     stop
-    ! end if
-    ! if (nyy > 800) then
-    !     write(ounit,*) '  Error: nyy shall be maximum 800'
-    !     write(*,*) '  Error: nyy shall be maximum 800'
-    !     stop
-    ! end if
-    ! if (nzz > 800) then
-    !     write(ounit,*) '  Error: nzz shall be maximum 800'
-    !     write(*,*) '  Error: nzz shall be maximum 800'
-    !     stop
-    ! end if
-    
-    ! allocate(xdel(nxx), ydel(nyy), zdel(nzz))
-    
-    ! !Calculate delta x, y, and z (node sizes)
-    ! !Delta x
-    ! xtot=0
-    ! do i= 1,nx
-    !     div = xsize(i)/real(xdiv(i))
-    !     do lx= 1, xdiv(i)
-    !     xtot = xtot+1
-    !     xdel(xtot) = div
-    !     end do
-    ! end do
-    ! !Delta y
-    ! ytot=0
-    ! do j= 1,ny
-    !     div = ysize(j)/real(ydiv(j))
-    !     do ly= 1, ydiv(j)
-    !     ytot = ytot+1
-    !     ydel(ytot) = div
-    !     end do
-    ! end do
-    ! !Delta z
-    ! ztot=0
-    ! do k= 1,nz
-    !     div = zsize(k)/real(zdiv(k))
-    !     do lz= 1, zdiv(k)
-    !     ztot = ztot+1
-    !     zdel(ztot) = div
-    !     end do
-    ! end do
-    
-    ! end subroutine inp_geom1
-    
-    ! !******************************************************************************!
-    
-    ! subroutine inp_geom2 (xbunit)
-    ! !
-    ! ! Purpose:
-    ! !    To read geometry card in input (2nd part)
-    ! !
-    
-    ! USE data, ONLY: nx, ny, nz, nxx, nyy, nzz, xdel, ydel, zdel, &
-    !                 xwest, xeast, ynorth, ysouth, zbott, ztop, nnod, &
-    !                 xstag, ystag, xdiv, ydiv, zdiv, nmat, coreh
-    
-    ! IMPLICIT NONE
-    
-    ! integer, intent(in) :: xbunit
-    
-    ! integer :: ln, ios
-    
-    ! integer :: i, j, k, lx, ly, lz, xtot, ytot, ztot
-    ! character(LEN=2), dimension(nxx, nyy) :: mmap
-    ! integer, parameter :: xm = 36
-    ! integer :: ip, ipr, kp
-    ! integer :: xs, xf
-    
-    ! ! reading number of planar
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, np
-    ! message = ' error in reading number of planars'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
-    
-    ! !reading planar assignment into z-direction
-    ! allocate(zpln(nz))
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, (zpln(k), k=1,nz)
-    ! message = ' error in reading planar assignment'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
-    
-    ! do k = 1, nz
-    !     if (zpln(k) > np) then
-    !         write(ounit,'(2X,A15,I3,A35)') 'ERROR: PLANAR ', &
-    !         zpln(k), ' IS GREATER THAN NUMBER OF PLANAR'
-    !         stop
-    !     end if
-    !     if (zpln(k) < 1) then
-    !         write(ounit,'(2X,A)') 'ERROR: PLANAR SHOULD BE AT LEAST 1'
-    !         stop
-    !     end if
-    ! end do
-    
-    ! ! reading material assignment for each planar
-    ! allocate(planar(np))
-    ! do k= 1,np
-    !     allocate(planar(k)%asm (nx,ny))
-    !     allocate(planar(k)%node(nxx,nyy))
-    !     do j= ny, 1, -1
-    !         read(xbunit, *, IOSTAT=ios) ind, ln, (planar(k)%asm(i,j), i=1,nx)
-    !         message = ' error in reading planar'
-    !         call er_message(ounit, ios, ln, message, buf=xbunit)
-    !     end do
-    ! end do
-    
-    ! ! Material assignment into nodes (not part for geom output)
-    ! allocate (mnum(nxx, nyy, nzz))
-    
-    ! ztot = 0
-    ! do k= 1, nz
-    !     do lz= 1, zdiv(k)
-    !         ztot = ztot+1
-    !         ytot = 0
-    !         do j= 1, ny
-    !             do ly= 1, ydiv(j)
-    !                 ytot = ytot+1
-    !                 xtot = 0
-    !                 do i= 1, nx
-    !                     do lx= 1, xdiv(i)
-    !                         xtot = xtot+1
-    !                         mnum(xtot, ytot, ztot) = planar(zpln(k))%asm(i,j)
-    !                         if (mnum(xtot, ytot, ztot) > nmat) then
-    !                             write(ounit,'(2X,A17,I3,A37)') 'ERROR: MATERIAL ', &
-    !                             mnum(xtot, ytot, ztot), ' IS GREATER THAN NUMBER OF MATERIAL'
-    !                             write(*,'(2X,A17,I3,A37)') 'ERROR: MATERIAL ', &
-    !                             mnum(xtot, ytot, ztot), ' IS GREATER THAN NUMBER OF MATERIAL'
-    !                             stop
-    !                         end if
-    !                         if (mnum(xtot, ytot, ztot) < 0) then
-    !                             write(ounit,'(2X,A)') 'ERROR: NEGATIVE MATERIAL FOUND'
-    !                             write(*,'(2X,A)') 'ERROR: NEGATIVE MATERIAL FOUND'
-    !                             stop
-    !                         end if
-    !                     end do
-    !                 end do
+    !===============================================================================================!
+    ! To provide error message                                                                     !
+    !===============================================================================================!
+    
+    subroutine input_error (funit, iost, ln, mess, xtab, buf)
+    
+        integer, intent(in) :: funit, iost, ln
+        character(LEN=*), intent(in) :: mess
+        integer, OPTIONAL, intent(in) :: xtab, buf
+        
+        if (iost < 0) then
+            write(funit,*)
+            write(*,*)
+            write(*,*)''//achar(27)//'[31m OOPS! WE FOUND AN ERROR.'//achar(27)//'[0m'
+        
+            if (PRESENT(xtab)) then
+                write(funit, 1014) ln, xtab
+            else
+                write(funit, 1006) card_array(findloc(unit_array,buf))
+                write(funit, 1013) ln, file_array(findloc(unit_array,buf))
+            end if
+            write(funit,*) mess
+            if (PRESENT(xtab)) then
+                write(*, 1014) ln, xtab
+            else
+                write(*, 1006) card_array(findloc(unit_array,buf))
+                write(*, 1013) ln, file_array(findloc(unit_array,buf))
+            end if
+            write(*,*) mess
+            1013 format(2x, 'THIS LINE NEEDS MORE INPUT DATA. LINE', I4, &
+            ' IN FILE : ', A100)
+            1014 format(2x, 'ERROR: LINE', I4, &
+            'IN XTAB FILE FOR MATERIAL NUMBER' , I4, '. IT NEEDS MORE DATA')
+            stop
+        end if
+        
+        if (iost > 0) then
+            write(funit,*)
+            write(*,*)
+            write(*,*)''//achar(27)//'[31m OOPS! WE FOUND AN ERROR.'//achar(27)//'[0m'
+        
+            if (PRESENT(xtab)) then
+                write(funit, 1005) ln, xtab
+            else
+                    write(funit, 1006) card_array(findloc(unit_array,buf))
+                    write(funit, 1004) ln, file_array(findloc(unit_array,buf))
+            end if
+            write(funit,*) mess
+            if (PRESENT(xtab)) then
+                write(*, 1005) ln, xtab
+            else
+                write(*, 1006) card_array(findloc(unit_array,buf))
+                write(*, 1004) ln, file_array(findloc(unit_array,buf))
+            end if
+            write(*,*) mess
+            1006 format(2X, 'ERROR: THERE IS AN ERROR IN CARD %', A4)
+            1004 format(2X, 'PLEASE CHECK LINE NUMBER', I4, ' IN FILE : ', A100)
+            1005 format(2X, 'ERROR: PLEASE CHECK LINE NUMBER', I4, &
+            ' IN XTAB FILE FOR MATERIAL NUMBER ', I4)
+            stop
+        end if
+    
+    end subroutine input_error
+    
+    !===============================================================================================!
+    ! To read calculation mode of the given problem                                                 !
+    !===============================================================================================!
+    
+    subroutine inp_mode (xbunit)
+    
+        integer, intent(in) :: xbunit
+        
+        integer           :: ln   !Line number
+        integer           :: ios  ! IOSTAT status
+        character(LEN=60) :: mode_desc
+        
+        read(xbunit, '(A2, I5,A30)', IOSTAT=ios) ind, ln, mode
+        message = ' error in READING MODE'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        mode = trim(adjustl(mode))
+        select case(upper_case(mode))
+        case('FORWARD')
+            mode_desc = trim(adjustl('FORWARD CALCULATION'))
+        case('ADJOINT')
+            mode_desc = trim(adjustl('ADJOINT CALCULATION'))
+        case('FIXEDSRC')
+            mode_desc = trim(adjustl('FIXED SOURCE CALCULATION'))
+        case('RODEJECT')
+            if (bther == 0) then
+                mode_desc = trim(adjustl('ROD EJECTION CALCULATION WITHOUT T-H FEEDBACK'))
+            else
+                mode_desc = trim(adjustl('ROD EJECTION CALCULATION WITH T-H FEEDBACK'))
+            end if
+        case('BCSEARCH')
+            if (bther == 0) then
+                mode_desc = trim(adjustl('CRITICAL BORON CONCENTRATION SEARCH' &
+                // ' WITHOUT T-H FEEDBACK'))
+            else
+                mode_desc = trim(adjustl('CRITICAL BORON CONCENTRATION SEARCH' &
+                // ' WITH T-H FEEDBACK'))
+            end if
+        case DEFAULT
+            write(ounit,1032) mode
+            write(*,1032) mode
+            stop
+        end select
+        
+        write(ounit,1031) mode_desc
+        write(ounit,*)
+        write(*,1031) mode_desc
+        write(*,*)
+        
+        1031 format(2X, 'CALCULATION MODE : ', A60)
+        1032 format(2X, 'MODE : ', A10, ' IS UNIDENTIFIED')
+    
+    end subroutine inp_mode
+    
+    !===============================================================================================!
+    ! To read problem case description                                                              !
+    !===============================================================================================!
+    
+    subroutine inp_case (xbunit)
+    
+        integer, intent(in) :: xbunit
+        
+        character(length_line) :: case_id
+        character(length_line) :: case_exp
+        
+        integer :: ln   !Line number
+        integer :: ios  ! IOSTAT status
+        
+        read(xbunit, '(A2, I5,A100)', IOSTAT=ios) ind, ln, case_id
+        message = ' error in CASE ID'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        read(xbunit, '(A2, I5,A100)', IOSTAT=ios) ind, ln, case_exp
+        message = ' error in case description'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        case_id = trim(adjustl(case_id))
+        case_exp = trim(adjustl(case_exp))
+        
+        write(ounit,1006) case_id
+        write(ounit,1007) case_exp
+        
+        write(*,1006) case_id
+        write(*,1007) case_exp
+        1006 format(2X, 'CASE ID : ', A100)
+        1007 format(2X, A100)
+    
+    end subroutine inp_case
+    
+    !===============================================================================================!
+    ! To read multi-group XS                                                                        !
+    !===============================================================================================!
+    
+    subroutine inp_xsec(xbunit)
+    
+        integer, intent(in) :: xbunit
+        
+        integer                            :: i, g, h
+        real(dp), allocatable              :: D    (:,:)          ! Diffusion coefficient
+        real(dp), allocatable              :: sigr (:,:)          ! Removal macroscopic XSEC
+        integer                            :: ln   !Line number
+        integer                            :: ios  ! IOSTAT status
+        real(dp)                           :: dum
+        integer, dimension(:), allocatable :: group
+        integer                            :: comm1, comm2
+        
+        write(ounit,*)
+        write(ounit,*) '           >>>> READING MACROSCOPIC CROSS SECTIONS <<<<'
+        write(ounit,*) '           --------------------------------------------'
+        
+        read(xbunit, *, IOSTAT=ios) ind, ln, ng, nmat
+        message = ' error in number of material and energy group'
+        call input_error(ounit, ios, ln, message, buf=xbunit)  
+        
+        allocate(group(ng))
+        do g = 1,ng
+            group(g) = g
+        end do
+        
+        allocate(sigtr(nmat,ng))
+        allocate(siga (nmat,ng))
+        allocate(nuf  (nmat,ng))
+        allocate(sigf (nmat,ng))
+        allocate(sigs (nmat,ng,ng))
+        allocate(chi  (nmat,ng))
+        allocate(D    (nmat,ng))
+        allocate(sigr (nmat,ng))
+        
+        ! To ancticipate users make mistake when they use %XTAB instead of %XSEC
+        read(xbunit, '(A200)') iline
+        comm1 = index(iline, '/')
+        comm2 = index(iline, '\')
+        if (comm1 > 0 .OR. comm2 > 0) then
+            write(ounit, *) '  ERROR: SLASH (/) OR BACKSLASH (\) NOT ACCEPTED IN %XSEC CARD '
+            write(*, *) '  ERROR: SLASH (/) OR BACKSLASH (\) NOT ACCEPTED IN %XSEC CARD '
+            stop
+        end if
+        backspace(xbunit)
+        
+        ! READING MACROSCOPIC CXs
+        do i = 1, nmat
+            do g = 1, ng
+                read(xbunit, *, IOSTAT=ios) ind, ln, sigtr(i,g), &
+                siga(i,g), nuf(i,g), sigf(i,g), chi(i,g), (sigs(i,g,h), h = 1, ng)
+                message = ' error in cross section data'
+                call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+                ! Check CXs values
+                if (sigtr(i,g) <= 0.0) then
+                    write(ounit,1020)i, g
+                    stop
+                end if
+                if (nuf(i,g) > 0.) is_nuf_exist = .FALSE.
+                if (sigf(i,g) > 0.) is_sigf_exist = .FALSE.
+        
+                D(i,g) = 1./(3.*sigtr(i,g))
+                dum = 0.0
+                do h= 1, ng
+                    if (g /= h) dum = dum + sigs(i,g,h)
+                end do
+                sigr(i,g) =  siga(i,g) + dum
+            end do
+        end do
+        
+        
+        ! Writing output
+        do i= 1, nmat
+            write(ounit,1009) i
+            write(ounit,1011)'GROUP', 'TRANSPORT', 'DIFFUSION', 'ABSORPTION', &
+            'REMOVAL', 'NU*FISS', 'KAP*FIS','FISS. SPCTR'
+            do g= 1, ng
+                write(ounit,1010) g, sigtr(i,g), D(i,g), siga(i,g), &
+                sigr(i,g), nuf(i,g), sigf(i,g), chi(i,g)
+            end do
+            write(ounit,*)'  --SCATTERING MATRIX--'
+            write(ounit,'(4X, A5, 20I11)') "G/G'", (group(g), g=1,ng)
+            do g= 1, ng
+                write(ounit,1015)g, (sigs(i,g,h), h=1,ng)
+            end do
+        end do
+        
+        if (is_nuf_exist .AND. mode /= 'FIXEDSRC') then
+            write(ounit, *) "ERROR: The Problem has no fission material (nu*fission for all materials are zero)"
+            stop
+        end if
+        if (is_sigf_exist .AND. mode /= 'FIXEDSRC') then
+            write(ounit, *) "ERROR: The Problem has no fission material (fission xsec for all materials are zero)"
+            stop
+        end if
+        
+        write(ounit,*)
+        write(ounit,*) ' ...Macroscopic CX Card is successfully read...'
+        
+        1009 format(5X, 'MATERIAL', I3)
+        1011 format(2X, A7, A12, A11, A12, A9, A11, A11, A14)
+        1010 format(2X, I6, F13.6, F10.6, F11.6, F12.6, F11.6, ES12.5, F10.6)
+        1015 format(4X, I3, F16.6, 20F12.6)
+        1020 format(2X, 'ERROR: Transport cross section (sigtr)is zero or negative in material: ', I3, ' ;group: ', I3)
+        
+        deallocate(group)
+        deallocate(D, sigr)
+    end subroutine inp_xsec
+    
+    !===============================================================================================!
+    ! To read geometry card in input (1st part)                                                     !
+    !===============================================================================================!
+    
+    subroutine inp_geom1(xbunit)
+    
+        integer, intent(in) :: xbunit
+        
+        integer      :: ln, ios
+        integer      :: i, j, k
+        integer      :: lx, ly, lz
+        integer      :: xtot, ytot, ztot
+        real(dp)     :: div
+        
+        write(ounit,*)
+        write(ounit,*)
+        write(ounit,*) '           >>>>>READING CORE GEOMETRY<<<<<'
+        write(ounit,*) '           -------------------------------'
+        
+        ! read number of assemblies in x, y and z directions
+        read(xbunit, *, IOSTAT=ios) ind, ln, nx, ny, nz
+        message = ' error in READING number assemblies'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        ! Limit values of nx, ny and nz
+        if (nx < 2) then
+            call fatal_error(ounit, 'Error: nx shall be at least 2')
+        end if
+        if (ny < 2) then
+            call fatal_error(ounit, 'Error: ny shall be at least 2')
+        end if
+        if (nz < 2) then
+            call fatal_error(ounit, 'Error: nz shall be at least 2')
+        end if
+        
+        allocate(xsize(nx), ysize(ny), zsize(nz))
+        allocate(xdiv(nx), ydiv(ny), zdiv(nz))
+        
+        ! read assembly sizes and assembly division in x, y and z directions
+        ! x-direction
+        read(xbunit, *, IOSTAT=ios) ind, ln, (xsize(i), i=1,nx)
+        message = ' error in READING x-direction assembly sizes'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        read(xbunit, *, IOSTAT=ios) ind, ln, (xdiv(i), i=1,nx)
+        message = ' error in READING x-direction assembly division'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        ! y-direction
+        read(xbunit, *, IOSTAT=ios) ind, ln, (ysize(j), j=1,ny)
+        message = ' error in READING y-direction assembly sizes'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        read(xbunit, *, IOSTAT=ios) ind, ln, (ydiv(j), j=1,ny)
+        message = ' error in READING y-direction assembly division'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        ! z-direction
+        read(xbunit, *, IOSTAT=ios) ind, ln, (zsize(k), k=1,nz)
+        message = ' error in READING z-direction assembly sizes'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        read(xbunit, *, IOSTAT=ios) ind, ln, (zdiv(k), k=1,nz)
+        message = ' error in READING z-direction assembly division'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        !Calculate number of nodes in x, y and z directions
+        !x-direction
+        nxx=0
+        do i= 1,nx
+        nxx = nxx+xdiv(i)
+        end do
+        !y-direction
+        nyy=0
+        do j= 1,ny
+        nyy = nyy+ydiv(j)
+        end do
+        !z-direction
+        nzz=0
+        do k= 1,nz
+        nzz = nzz+zdiv(k)
+        end do
+        
+        ! Limit values of nxx, nyy and nzz
+        if (nxx > 800) then
+            call fatal_error(ounit, 'Error: nxx shall be maximum 800')
+        end if
+        if (nyy > 800) then
+            call fatal_error(ounit, 'Error: nyy shall be maximum 800')
+        end if
+        if (nzz > 800) then
+            call fatal_error(ounit, 'Error: nzz shall be maximum 800')
+        end if
+        !Calculate delta x, y, and z (node sizes)
+        allocate(xdel(nxx), ydel(nyy), zdel(nzz))
+        !Delta x
+        xtot=0
+        do i= 1,nx
+            div = xsize(i)/REAL(xdiv(i))
+            do lx= 1, xdiv(i)
+                xtot = xtot+1
+                xdel(xtot) = div
+            end do
+        end do
+        !Delta y
+        ytot=0
+        do j= 1,ny
+            div = ysize(j)/REAL(ydiv(j))
+            do ly= 1, ydiv(j)
+                ytot = ytot+1
+                ydel(ytot) = div
+            end do
+        end do
+        !Delta z
+        ztot=0
+        do k= 1,nz
+            div = zsize(k)/REAL(zdiv(k))
+            do lz= 1, zdiv(k)
+                ztot = ztot+1
+                zdel(ztot) = div
+            end do
+        end do
+    end subroutine inp_geom1
+    
+    !===============================================================================================!
+    ! To read geometry card in input (2nd part)                                                     !
+    !===============================================================================================!
+    
+    subroutine inp_geom2 (xbunit)
+    
+        integer, intent(in) :: xbunit
+        
+        integer            :: ln, ios
+        integer            :: i, j, k, lx, ly, lz, xtot, ytot, ztot
+        character(LEN=2)   :: mmap(nxx, nyy)
+        integer, parameter :: xm = 36
+        integer            :: ip, ipr, kp
+        integer            :: x_start, x_finish
+        integer            :: xeast, xwest, ynorth, ysouth, zbott, ztop
+        
+        ! READING number of planar
+        read(xbunit, *, IOSTAT=ios) ind, ln, np
+        message = ' error in reading number of planars'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        !READING planar assignment into z-direction
+        allocate(zpln(nz))
+        read(xbunit, *, IOSTAT=ios) ind, ln, (zpln(k), k=1,nz)
+        message = ' error in reading planar assignment'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        do k = 1, nz
+            if (zpln(k) > np) then
+                write(ounit,'(2X,A15,I3,A35)') 'ERROR: PLANAR ', &
+                zpln(k), ' IS GREATER THAN NUMBER OF PLANAR'
+                stop
+            end if
+            if (zpln(k) < 1) then
+                write(ounit,'(2X,A)') 'ERROR: PLANAR SHOULD BE AT LEAST 1'
+                stop
+            end if
+        end do
+        
+        ! READING material assignment for each planar
+        allocate(planar(np))
+        do k= 1,np
+            allocate(planar(k)%asm (nx,ny))
+            allocate(planar(k)%node(nxx,nyy))
+            do j= ny, 1, -1
+                read(xbunit, *, IOSTAT=ios) ind, ln, (planar(k)%asm(i,j), i=1,nx)
+                message = ' error in READING planar'
+                call input_error(ounit, ios, ln, message, buf=xbunit)
+            end do
+        end do
+        
+        ! Material assignment into nodes (not part for geom output)
+        allocate (mat_map(nxx, nyy, nzz))
+        
+        ztot = 0
+        do k= 1, nz
+            do lz= 1, zdiv(k)
+                ztot = ztot+1
+                ytot = 0
+                do j= 1, ny
+                    do ly= 1, ydiv(j)
+                        ytot = ytot+1
+                        xtot = 0
+                        do i= 1, nx
+                            do lx= 1, xdiv(i)
+                                xtot = xtot+1
+                                mat_map(xtot, ytot, ztot) = planar(zpln(k))%asm(i,j)
+                                if (mat_map(xtot, ytot, ztot) > nmat) call fatal_error(ounit, 'ERROR: MATERIAL ' // &
+                                    n2c(mat_map(xtot, ytot, ztot)) // ' IS GREATER THAN NUMBER OF MATERIAL')
+                                if (mat_map(xtot, ytot, ztot) < 0) call fatal_error(ounit, 'ERROR: NEGATIVE MATERIAL FOUND')
+                            end do
+                        end do
+                    end do
+                end do
+            end do
+        end do
+        
+        ! Assign assembly wise planar to node wise planar for output
+        ztot = 0
+        do k= 1, np
+            ytot = 0
+            do j= 1, ny
+                do ly= 1, ydiv(j)
+                    ytot = ytot+1
+                    xtot = 0
+                    do i= 1, nx
+                        do lx= 1, xdiv(i)
+                            xtot = xtot+1
+                            planar(k)%node(xtot,ytot) = planar(k)%asm(i,j)
+                        end do
+                    end do
+                end do
+            end do
+        end do
+        
+        !READING Boundary Conditions
+        read(xbunit, *, IOSTAT=ios) ind, ln, xeast, xwest, ynorth, ysouth, zbott, ztop
+        message = ' error in READING boundary conditions'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        if (xeast > 2 .OR. xwest > 2 .OR. ynorth > 2 .OR. ysouth > 2 .OR. zbott > 2 .OR. ztop > 2) &
+        call fatal_error(ounit, 'Boundary condition values must be smaller than 3')
+        
+        
+        ! Wrting core geometry output
+        if (ogeom) then
+            write(ounit,*)' Number of assembly in x, y and z directions respectively :'
+            write(ounit,*) nx, ny, nz
+            write(ounit,*)' Number of nodes in x, y and z directions respectively :'
+            write(ounit,*) nxx, nyy, nzz
+            write(ounit,*)
+            write(ounit,1016) 'x','x'
+            write(ounit,'(2X,10F7.2)')(xdel(i), i=1,nxx)
+            write(ounit,1016) 'y','y'
+            write(ounit,'(2X,10F7.2)')(ydel(j), j=1,nyy)
+            write(ounit,*)
+        
+            if (nxx < 100) then
+            ip = nxx/xm
+            ipr = MOD(nxx,xm) - 1
+            do k= 1,np
+        
+                do j = 1, nyy
+                    do i = 1, nxx
+                        if (planar(k)%node(i,j) == 0) then
+                            mmap(i,j) = '  '
+                        else
+                            write (mmap(i,j),'(I2)') planar(k)%node(i,j)
+                            mmap(i,j) = trim(adjustl(mmap(i,j)))
+                        end if
+                    end do
+                end do
+        
+                write(ounit,1017) k
+                x_start = 1; x_finish = xm
+                do kp = 1, ip
+                    write(ounit,'(6X,100I3)') (i, i = x_start, x_finish)
+                    do j= nyy, 1, -1
+                        write(ounit,'(2X,I4,1X,100A3)') j, (mmap(i,j), i=x_start, x_finish)
+                    end do
+                    x_start = x_start + xm
+                    x_finish = x_finish + xm
+                end do
+        
+                write(ounit,'(6X,100I3)') (i, i = x_start, x_start+ipr)
+                if (x_start+ipr > x_start) then
+                    do j= nyy, 1, -1
+                        write(ounit,'(2X,I4,1X,100A3)') j, (mmap(i,j), i=x_start, x_start+ipr)
+                    end do
+                end if
+            end do
+            end if
+        
+            write(ounit,*)
+            write(ounit,1018)
+            write(ounit,*) '--------------------------------------'
+            write(ounit,*) '  Plane Number     Planar Region    delta-z'
+            ztot = nzz
+            do k= nz, 1, -1
+                do lz= 1, zdiv(k)
+                    if (ztot == nzz) then
+                        write(ounit,'(I9, A6, I13, F15.2)') ztot, ' (TOP)', zpln(k), zdel(ztot)
+                    else if (ztot == 1) then
+                        write(ounit,'(I9, A9, I10, F15.2)') ztot, ' (BOTTOM)', zpln(k), zdel(ztot)
+                    else
+                        write(ounit,'(I9, I19, F15.2)') ztot, zpln(k), zdel(ztot)
+                    end if
+                    ztot = ztot - 1
+                end do
+            end do
+            write(ounit,*)
+            write(ounit,*) '  Boundary conditions'
+        
+            if (xwest == ZERO_FLUX) then
+                write(ounit,*)' X-directed West   : ZERO FLUX'
+            else if (xwest == ZERO_INCOMING) then
+                write(ounit,*)' X-directed West   : ZERO INCOMING CURRENT'
+            else
+                write(ounit,*)' X-directed West   : REFLECTIVE'
+            end if
+        
+            if (xeast == ZERO_FLUX) then
+                write(ounit,*)' X-directed East   : ZERO FLUX'
+            else if (xeast == ZERO_INCOMING) then
+                write(ounit,*)' X-directed East   : ZERO INCOMING CURRENT'
+            else
+                write(ounit,*)' X-directed East   : REFLECTIVE'
+            end if
+        
+            if (ynorth == ZERO_FLUX) then
+                write(ounit,*)' Y-directed North  : ZERO FLUX'
+            else if (ynorth == ZERO_INCOMING) then
+                write(ounit,*)' Y-directed North  : ZERO INCOMING CURRENT'
+            else
+                write(ounit,*)' Y-directed North  : REFLECTIVE'
+            end if
+        
+            if (ysouth == ZERO_FLUX) then
+                write(ounit,*)' Y-directed South  : ZERO FLUX'
+            else if (ysouth == ZERO_INCOMING) then
+                write(ounit,*)' Y-directed South  : ZERO INCOMING CURRENT'
+            else
+                write(ounit,*)' Y-directed South  : REFLECTIVE'
+            end if
+        
+            if (zbott == ZERO_FLUX) then
+                write(ounit,*)' Z-directed Bottom : ZERO FLUX'
+            else if (zbott == ZERO_INCOMING) then
+                write(ounit,*)' Z-directed Bottom : ZERO INCOMING CURRENT'
+            else
+                write(ounit,*)' Z-directed Bottom : REFLECTIVE'
+            end if
+        
+            if (ztop == ZERO_FLUX) then
+                write(ounit,*)' Z-directed Top    : ZERO FLUX'
+            else if (ztop == ZERO_INCOMING) then
+                write(ounit,*)' Z-directed Top    : ZERO INCOMING CURRENT'
+            else
+                write(ounit,*)' Z-directed Top    : REFLECTIVE'
+            end if
+        end if
+        
+        
+        1016 format(2X,A,'-directed nodes division (delta-',A,')')
+        1017 format(3X, 'Material Map for Planar Region : ', I2)
+        1018 format(2X, 'Planar Region Assignment to planes.')
+        
+        write(ounit,*)
+        write(ounit,*) ' ...Core geometry is successfully read...'
+        call set_fdm_parameters(fdm, ng, nxx, nyy, nzz, nmat, mat_map, &
+        xeast, xwest, ynorth, ysouth, ztop, zbott, ounit)
+    
+    end subroutine inp_geom2
+
+    !===============================================================================================!
+    ! To determine nodal kernel 
+    !===============================================================================================!
+
+    subroutine inp_kernel (xbunit)
+        
+        integer, intent(in) :: xbunit
+        
+        integer :: ln   !Line number
+        integer :: ios  ! IOSTAT status
+        CHARACTER (length_line) :: kern_desc
+        
+        
+        read(xbunit, *, IOSTAT=ios) ind, ln, kern
+        message = ' error in nodal kernel'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        kern = trim(ADJUSTR(kern))
+        if (kern /= ' FDM' .and. kern /= ' PNM' .and. kern /= 'SANM') then
+          write(*,1646) kern
+          write(*,*) ' NODAL KERNEL OPTIONS: FDM, PNM OR SANM'
+          write(ounit,1646) kern
+          write(ounit,*) ' NODAL KERNEL OPTIONS: FDM, PNM OR SANM'
+          stop
+        end if
+        
+        if (kern == ' FDM') then
+          kern_desc = "FINITE DifFERENCE METHOD"
+        else if (kern == ' PNM') then
+          kern_desc = "POLYNOMIAL NODAL METHOD"
+        else
+          kern_desc = "SEMI-ANALYTIC NODAL METHOD"
+        end if
+        kern_desc = trim(adjustl(kern_desc))
+        
+        write(ounit,*)
+        write(ounit,*)
+        write(ounit,*) '             >>>>>READING NODAL KERNEL<<<<<'
+        write(ounit,*) '           ------------------------------------'
+        
+        write(ounit,1648) kern_desc
+        if (scr) then
+          write(*,*)
+          write(*,1648) kern_desc
+        end if
+        
+        1646 format (2X, 'ERROR: COULD NOT RECOGNIZE NODAL KERNEL: ', A4)
+        1648 format (2X, 'NODAL KERNEL  : ', A30)
+        
+    end subroutine
+    
+    !===============================================================================================!
+    ! To finalize input process
+    !===============================================================================================!
+    
+    subroutine finalize_input ()
+    
+        integer  :: k
+        real(dp), allocatable :: f0(:,:)
+    !     integer  :: n, g, noz
+    !     ! set Number of nodes (nnod)
+    !     nnod = 0
+    !     do k = 1, nzz
+    !         do j = 1, nyy
+    !             do i = ystag(j)%smin, ystag(j)%smax
+    !                 nnod = nnod + 1
     !             end do
     !         end do
     !     end do
-    ! end do
+    !     allocate(node(nnod))
+    !     allocate(flux(nnod, ng))
+        call set_nodes(fdm, kern, mat_map, xdel, ydel, zdel, &
+        sigtr, siga, nuf, sigf, sigs, chi)
+        allocate(f0(fdm % nnod, fdm % ng))
+        call outer_iter(fdm, 1.e-5_dp, 1.e-5_dp, f0, max_outer=1000, max_inner=2, &
+        extrp = 5, print_iter = .true.)
+        ! Calculate core height
+        ! core_height = 0._DP
+        ! do k = 1, nzz
+        !     core_height = core_height + zdel(k)
+        ! end do
+        
+        ! ! Calculate nodes' volume
+        ! allocate(vdel(nnod))
+        ! do i = 1, nnod
+        !     vdel(i) = xdel(ix(i)) * ydel(iy(i)) * zdel(iz(i))
+        ! end do
+        
+        ! ! Calculate number of non-zero element in the CMFD Matrix
+        ! noz = 0
+        ! do n = 1, nnod
+        !   i = ix(n); j = iy(n); k = iz(n)         ! Set i, j, k
+        !   if (k /= 1) noz = noz + 1
+        !   if (j /= xstag(i)%smin) noz = noz + 1
+        !   if (i /= ystag(j)%smin) noz = noz + 1
+        !   noz = noz + 1
+        !   if (i /= ystag(j)%smax) noz = noz + 1
+        !   if (j /= xstag(i)%smax) noz = noz + 1
+        !   if (k /= nzz) noz = noz + 1
+        ! end do
+        
+        ! allocate(A(ng))
+        ! do g = 1, ng
+        !     allocate(A(g)%elmn(noz))
+        ! end do
+        ! allocate(ind%col(noz))
+        ! allocate(ind%row(nnod+1))
+        
+        ! ! calaculate default nodal update interval
+        ! upd_interval = ceiling((nxx + nyy + nzz) / 2.5)
     
-    ! ! Assign assembly wise planar to node wise planar for output
-    ! ztot = 0
-    ! do k= 1, np
-    !   ytot = 0
-    !   do j= 1, ny
-    !       do ly= 1, ydiv(j)
-    !           ytot = ytot+1
-    !           xtot = 0
-    !           do i= 1, nx
-    !               do lx= 1, xdiv(i)
-    !                   xtot = xtot+1
-    !                   planar(k)%node(xtot,ytot) = planar(k)%asm(i,j)
-    !               end do
-    !           end do
-    !       end do
-    !   end do
-    ! end do
-    
-    ! ! -Indexing non zero material for staggered mesh-
-    ! allocate(ystag(nyy), xstag(nxx))
-    ! !Indexing non zero material for staggered mesh along y direction
-    ! do j= 1, nyy
-    !     ystag(j)%smin = nxx
-    !     do i = 1, nxx
-    !         if (mnum(i,j,1) /= 0) then
-    !             ystag(j)%smin = i
-    !             exit
-    !         end if
-    !     end do
-    ! end do
-    
-    ! do j= 1, nyy
-    !     ystag(j)%smax = 0
-    !     do i = nxx, 1, -1
-    !         if (mnum(i,j,1) /= 0) then
-    !             ystag(j)%smax = i
-    !             exit
-    !         end if
-    !     end do
-    ! end do
-    
-    ! !Indexing non zero material for staggered mesh along x direction
-    ! do i= 1, nxx
-    !     xstag(i)%smin = nyy
-    !     do j = 1, nyy
-    !         if (mnum(i,j,1) /= 0) then
-    !             xstag(i)%smin = j
-    !             exit
-    !         end if
-    !     end do
-    ! end do
-    
-    ! do i= 1, nxx
-    !     xstag(i)%smax = 0
-    !     do j = nyy, 1, -1
-    !         if (mnum(i,j,1) /= 0) then
-    !             xstag(i)%smax = j
-    !             exit
-    !         end if
-    !     end do
-    ! end do
-    
-    ! ! Checking zero material between non-zero material
-    ! do k = 1, nzz
-    !     do j = 1, nyy
-    !         do i = ystag(j)%smin, ystag(j)%smax
-    !             if (mnum(i,j,k) == 0) then
-    !                 write(ounit,*) 'Zero material found inside core. Check material assignment'
-    !                 stop
-    !             end if
-    !         end do
-    !     end do
-    ! end do
-    ! do k = 1, nzz
-    !     do i = 1, nxx
-    !         do j = xstag(i)%smin, xstag(i)%smax
-    !             if (mnum(i,j,k) == 0) then
-    !                 write(ounit,*) 'Zero material found inside core. Check material assignment'
-    !                 stop
-    !             end if
-    !         end do
-    !     end do
-    ! end do
-    
-    ! !reading Boundary Conditions
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, xeast, xwest, ynorth, ysouth, zbott, ztop
-    ! message = ' error in reading boundary conditions'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
-    
-    ! if (xeast > 2 .OR. xwest > 2 .OR. ynorth > 2 .OR. ysouth > 2 &
-    ! .OR. zbott > 2 .OR. ztop > 2) then
-    !   write(*,1019) ln
-    !   stop
-    ! end if
-    
-    
-    ! ! Wrting core geometry output
-    ! if (ogeom) then
-    !     write(ounit,*)' Number of assembly in x, y and z directions respectively :'
-    !     write(ounit,*) nx, ny, nz
-    !     write(ounit,*)' Number of nodes in x, y and z directions respectively :'
-    !     write(ounit,*) nxx, nyy, nzz
-    !     write(ounit,*)
-    !     write(ounit,1016) 'x','x'
-    !     write(ounit,'(2X,10F7.2)')(xdel(i), i=1,nxx)
-    !     write(ounit,1016) 'y','y'
-    !     write(ounit,'(2X,10F7.2)')(ydel(j), j=1,nyy)
-    !     write(ounit,*)
-    
-    !     if (nxx < 100) then
-    !       ip = nxx/xm
-    !       ipr = MOD(nxx,xm) - 1
-    !       do k= 1,np
-    
-    !           do j = 1, nyy
-    !               do i = 1, nxx
-    !                   if (planar(k)%node(i,j) == 0) then
-    !                       mmap(i,j) = '  '
-    !                   else
-    !                       write (mmap(i,j),'(I2)') planar(k)%node(i,j)
-    !                       mmap(i,j) = TRIM(ADJUSTL(mmap(i,j)))
-    !                   end if
-    !               end do
-    !           end do
-    
-    !           write(ounit,1017) k
-    !           xs = 1; xf = xm
-    !           do kp = 1, ip
-    !               write(ounit,'(6X,100I3)') (i, i = xs, xf)
-    !               do j= nyy, 1, -1
-    !                   write(ounit,'(2X,I4,1X,100A3)') j, (mmap(i,j), i=xs, xf)
-    !               end do
-    !               xs = xs + xm
-    !               xf = xf + xm
-    !           end do
-    
-    !           write(ounit,'(6X,100I3)') (i, i = xs, xs+ipr)
-    !           if (xs+ipr > xs) then
-    !               do j= nyy, 1, -1
-    !                   write(ounit,'(2X,I4,1X,100A3)') j, (mmap(i,j), i=xs, xs+ipr)
-    !               end do
-    !           end if
-    !       end do
-    !     end if
-    
-    !     write(ounit,*)
-    !     write(ounit,1018)
-    !     write(ounit,*) '--------------------------------------'
-    !     write(ounit,*) '  Plane Number     Planar Region    delta-z'
-    !     ztot = nzz
-    !     do k= nz, 1, -1
-    !         do lz= 1, zdiv(k)
-    !             if (ztot == nzz) then
-    !                 write(ounit,'(I9, A6, I13, F15.2)') ztot, ' (TOP)', zpln(k), zdel(ztot)
-    !             else if (ztot == 1) then
-    !                  write(ounit,'(I9, A9, I10, F15.2)') ztot, ' (BOTTOM)', zpln(k), zdel(ztot)
-    !             else
-    !                 write(ounit,'(I9, I19, F15.2)') ztot, zpln(k), zdel(ztot)
-    !             end if
-    !             ztot = ztot - 1
-    !         end do
-    !     end do
-    !     write(ounit,*)
-    !     write(ounit,*) '  Boundary conditions'
-    
-    !     if (xwest == 0) then
-    !         write(ounit,*)' X-directed West   : ZERO FLUX'
-    !     else if (xwest == 1) then
-    !         write(ounit,*)' X-directed West   : ZERO INCOMING CURRENT'
-    !     else
-    !         write(ounit,*)' X-directed West   : REFLECTIVE'
-    !     end if
-    
-    !     if (xeast == 0) then
-    !         write(ounit,*)' X-directed East   : ZERO FLUX'
-    !     else if (xeast == 1) then
-    !         write(ounit,*)' X-directed East   : ZERO INCOMING CURRENT'
-    !     else
-    !         write(ounit,*)' X-directed East   : REFLECTIVE'
-    !     end if
-    
-    !     if (ynorth == 0) then
-    !         write(ounit,*)' Y-directed North  : ZERO FLUX'
-    !     else if (ynorth == 1) then
-    !         write(ounit,*)' Y-directed North  : ZERO INCOMING CURRENT'
-    !     else
-    !         write(ounit,*)' Y-directed North  : REFLECTIVE'
-    !     end if
-    
-    !     if (ysouth == 0) then
-    !         write(ounit,*)' Y-directed South  : ZERO FLUX'
-    !     else if (ysouth == 1) then
-    !         write(ounit,*)' Y-directed South  : ZERO INCOMING CURRENT'
-    !     else
-    !         write(ounit,*)' Y-directed South  : REFLECTIVE'
-    !     end if
-    
-    !     if (zbott == 0) then
-    !         write(ounit,*)' Z-directed Bottom : ZERO FLUX'
-    !     else if (zbott == 1) then
-    !         write(ounit,*)' Z-directed Bottom : ZERO INCOMING CURRENT'
-    !     else
-    !         write(ounit,*)' Z-directed Bottom : REFLECTIVE'
-    !     end if
-    
-    !     if (ztop == 0) then
-    !         write(ounit,*)' Z-directed Top    : ZERO FLUX'
-    !     else if (ztop == 1) then
-    !         write(ounit,*)' Z-directed Top    : ZERO INCOMING CURRENT'
-    !     else
-    !         write(ounit,*)' Z-directed Top    : REFLECTIVE'
-    !     end if
-    ! end if
-    
-    
-    ! 1016 format(2X,A,'-directed nodes division (delta-',A,')')
-    ! 1017 format(3X, 'Material Map for Planar Region : ', I2)
-    ! 1018 format(2X, 'Planar Region Assignment to planes.')
-    ! 1019 format(2X, 'ERROR: Wrong boundary conditions in line : ', I4)
-    
-    ! write(ounit,*)
-    ! write(ounit,*) ' ...Core geometry is successfully read...'
-    
-    ! ! Calculate core height
-    ! coreh = 0._DP
-    ! do k = 1, nzz
-    !     coreh = coreh + zdel(k)
-    ! end do
-    
-    ! ! set Number of nodes (nnod)
-    ! nnod = 0
-    ! do k = 1, nzz
-    !     do j = 1, nyy
-    !         do i = ystag(j)%smin, ystag(j)%smax
-    !             nnod = nnod + 1
-    !         end do
-    !     end do
-    ! end do
-    
-    ! end subroutine inp_geom2
-    
-    ! !******************************************************************************!
-    
-    ! subroutine misc ()
-    ! !
-    ! ! Purpose:
-    ! !    To assign material xsec to nodes
-    ! !    To arranges the nodes into 1-D array instead of 3-D array
-    ! !    To allocate CMFD matrix index
-    ! !    etc
-    
-    
-    ! USE data, ONLY: nxx, nyy, nzz, ix, iy, iz, xyz, &
-    !                  nnod, sigtr, siga, nuf, sigf, &
-    !                  sigs, D, sigr, ng, ystag, xstag, &
-    !                  xdel, ydel, zdel, vdel, upd_interval, &
-    !                  mat, ind, A
-    
-    ! IMPLICIT NONE
-    
-    ! integer :: i, j, k, n, g, noz
-    
-    ! allocate(ix(nnod), iy(nnod), iz(nnod))
-    ! allocate(xyz(nxx, nyy, nzz))
-    ! allocate(mat(nnod))
-    
-    ! ! Set ix, iy, iz and xyz
-    ! n = 0
-    ! xyz = 0
-    ! do k = 1, nzz      ! VERY IMPORTANT: NEVER CHANGE THE ORDERS OF THESE NESTED LOOPS
-    !     do j = 1, nyy
-    !         do i = ystag(j)%smin, ystag(j)%smax
-    !              n = n + 1
-    !              ix(n) = i
-    !              iy(n) = j
-    !              iz(n) = k
-    !              xyz(i,j,k) = n
-    !              mat(n) = mnum(i,j,k)
-    !         end do
-    !     end do
-    ! end do
-    
-    ! allocate(sigtr(nnod,ng))
-    ! allocate(siga (nnod,ng))
-    ! allocate(nuf  (nnod,ng))
-    ! allocate(sigf (nnod,ng))
-    ! allocate(sigs (nnod,ng,ng))
-    ! allocate(D    (nnod,ng))
-    ! allocate(sigr (nnod,ng))
-    
-    ! ! Calculate nodes' volume
-    ! allocate(vdel(nnod))
-    ! do i = 1, nnod
-    !     vdel(i) = xdel(ix(i)) * ydel(iy(i)) * zdel(iz(i))
-    ! end do
-    
-    ! ! Calculate number of non-zero element in the CMFD Matrix
-    ! noz = 0
-    ! do n = 1, nnod
-    !   i = ix(n); j = iy(n); k = iz(n)         ! Set i, j, k
-    !   if (k /= 1) noz = noz + 1
-    !   if (j /= xstag(i)%smin) noz = noz + 1
-    !   if (i /= ystag(j)%smin) noz = noz + 1
-    !   noz = noz + 1
-    !   if (i /= ystag(j)%smax) noz = noz + 1
-    !   if (j /= xstag(i)%smax) noz = noz + 1
-    !   if (k /= nzz) noz = noz + 1
-    ! end do
-    
-    ! allocate(A(ng))
-    ! do g = 1, ng
-    !     allocate(A(g)%elmn(noz))
-    ! end do
-    ! allocate(ind%col(noz))
-    ! allocate(ind%row(nnod+1))
-    
-    ! ! calaculate default nodal update interval
-    ! upd_interval = ceiling((nxx + nyy + nzz) / 2.5)
-    
-    ! end subroutine misc
+    end subroutine
     
     ! !******************************************************************************!
     
@@ -1373,21 +1319,21 @@ module read
     
     ! write(ounit,*)
     ! write(ounit,*)
-    ! write(ounit,*) '           >>>>>readING EXTRA SOURCE<<<<<'
+    ! write(ounit,*) '           >>>>>READING EXTRA SOURCE<<<<<'
     ! write(ounit,*) '           -------------------------------'
     
     ! ! read number of source
     ! read(xbunit, *, IOSTAT=ios) ind, ln, nsrc
-    ! message = ' error in reading number of extra source'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
+    ! message = ' error in READING number of extra source'
+    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     
     ! allocate(spec(ng), spos(nx,ny))
     
     ! do n = 1, nsrc
     !     ! read source density
     !     read(xbunit, *, IOSTAT=ios) ind, ln, sden
-    !     message = ' error in reading source density'
-    !     call er_message(ounit, ios, ln, message, buf=xbunit)
+    !     message = ' error in READING source density'
+    !     call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     
     !     if (sden <= 0.0) then
     !         write(ounit,*) '  ERROR: SOURCE DENSITY SHALL BE GREATER THAN ZERO'
@@ -1396,8 +1342,8 @@ module read
     
     !     ! read source spectrum
     !     read(xbunit, *, IOSTAT=ios) ind, ln, (spec(g), g = 1, ng)
-    !     message = ' error in reading source spectrum'
-    !     call er_message(ounit, ios, ln, message, buf=xbunit)
+    !     message = ' error in READING source spectrum'
+    !     call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     
     !     ! Is total spectrum = 1._DP?
     !     summ = 0._DP
@@ -1420,8 +1366,8 @@ module read
     !     ! read source position
     !     do
     !         read(xbunit, *, IOSTAT=ios) ind, ln, zpos
-    !         message = ' error in reading axial position (zpos) of extra source'
-    !         call er_message(ounit, ios, ln, message, buf=xbunit)
+    !         message = ' error in READING axial position (zpos) of extra source'
+    !         call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     !         if (zpos < 1) exit
     !         if (zpos > nz) then
     !             write(ounit,* ) '  ERROR: WRONG EXTRA SOURCES POSITION (ZPOS)'
@@ -1431,8 +1377,8 @@ module read
     !         spos = '0'
     !         do
     !             read(xbunit, *, IOSTAT=ios) ind, ln, xpos, ypos
-    !             message = ' error in reading radial position (xpos and ypos) of extra source'
-    !             call er_message(ounit, ios, ln, message, buf=xbunit)
+    !             message = ' error in READING radial position (xpos and ypos) of extra source'
+    !             call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     !             if (xpos < 1 .OR. ypos < 1) exit
     
     !             if (xpos > nx) then
@@ -1517,12 +1463,12 @@ module read
     
     ! read(xbunit, *, IOSTAT=ios) ind, ln, n_outer, n_inner, max_fsrc_error, max_flux_error, extrp_interval, upd_interval, &
     ! n_th_iter, n_outer_th
-    ! message = ' error in reading iteration control'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
+    ! message = ' error in READING iteration control'
+    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     
     ! write(ounit,*)
     ! write(ounit,*)
-    ! write(ounit,*) '           >>>>>readING ITERATION CONTROL<<<<<'
+    ! write(ounit,*) '           >>>>>READING ITERATION CONTROL<<<<<'
     ! write(ounit,*) '           ------------------------------------'
     
     ! write(ounit,'(A,I5)') '  MAXIMUM NUMBER OF OUTER ITERATION                     : ', n_outer
@@ -1561,70 +1507,13 @@ module read
     
     ! write(ounit,*)
     ! write(ounit,*)
-    ! write(ounit,*) '           >>>>>readING FLUX TRANSformatION<<<<<'
+    ! write(ounit,*) '           >>>>>READING FLUX TRANSformatION<<<<<'
     ! write(ounit,*) '           -------------------------------------'
     ! write(ounit,1571)
     
     ! 1571 format (2X, 'EXPONENTIAL FLUX TRANSformatION IS ACTIVE')
     
     ! end subroutine inp_extr
-    
-    ! !******************************************************************************!
-    
-    ! subroutine inp_kern (xbunit)
-    
-    ! !
-    ! ! Purpose:
-    ! !    To determine nodal kernel
-    
-    ! USE data, ONLY:  kern
-    
-    ! IMPLICIT NONE
-    
-    ! integer, intent(in) :: xbunit
-    
-    ! integer :: ln   !Line number
-    ! integer :: ios  ! IOSTAT status
-    ! CHARACTER (LEN=30) :: kern_desc
-    
-    
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, kern
-    ! message = ' error in reading iteration control'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
-    
-    ! kern = TRIM(ADJUSTR(kern))
-    ! if (kern /= ' FDM' .and. kern /= ' PNM' .and. kern /= 'SANM') then
-    !   write(*,1646) kern
-    !   write(*,*) ' NODAL KERNEL OPTIONS: FDM, PNM OR SANM'
-    !   write(ounit,1646) kern
-    !   write(ounit,*) ' NODAL KERNEL OPTIONS: FDM, PNM OR SANM'
-    !   stop
-    ! end if
-    
-    ! if (kern == ' FDM') then
-    !   kern_desc = "FINITE DifFERENCE METHOD"
-    ! else if (kern == ' PNM') then
-    !   kern_desc = "POLYNOMIAL NODAL METHOD"
-    ! else
-    !   kern_desc = "SEMI-ANALYTIC NODAL METHOD"
-    ! end if
-    ! kern_desc = TRIM(ADJUSTL(kern_desc))
-    
-    ! write(ounit,*)
-    ! write(ounit,*)
-    ! write(ounit,*) '             >>>>>readING NODAL KERNEL<<<<<'
-    ! write(ounit,*) '           ------------------------------------'
-    
-    ! write(ounit,1648) kern_desc
-    ! if (scr) then
-    !   write(*,*)
-    !   write(*,1648) kern_desc
-    ! end if
-    
-    ! 1646 format (2X, 'ERROR: COULD NOT RECOGNIZE NODAL KERNEL: ', A4)
-    ! 1648 format (2X, 'NODAL KERNEL  : ', A30)
-    
-    ! end subroutine inp_kern
     
     ! !******************************************************************************!
     
@@ -1645,7 +1534,7 @@ module read
     
     ! read(xbunit, *, IOSTAT=ios) ind, ln, small_theta
     ! message = ' error in theta in %THETA card'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
+    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     
     ! if (small_theta < 0.001) then
     !   write(*,*)
@@ -1661,7 +1550,7 @@ module read
     
     ! write(ounit,*)
     ! write(ounit,*)
-    ! write(ounit,*) '               >>>>>readING THETA CARD<<<<<'
+    ! write(ounit,*) '               >>>>>READING THETA CARD<<<<<'
     ! write(ounit,*) '           ------------------------------------'
     
     ! write(ounit,'(A,F6.2)') '  THETA IS  : ', small_theta
@@ -1689,8 +1578,8 @@ module read
     ! character(LEN=3) :: caprad='YES', capaxi='YES', cafrad='YES'
     
     ! read(xbunit, *, IOSTAT=ios) ind, ln, print_rad_pow, print_axi_pow, print_flux
-    ! message = ' error in reading output print option'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
+    ! message = ' error in READING output print option'
+    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     
     ! if (print_rad_pow == 0) caprad='NO'
     ! if (print_axi_pow == 0) capaxi='NO'
@@ -1698,7 +1587,7 @@ module read
     
     ! write(ounit,*)
     ! write(ounit,*)
-    ! write(ounit,*) '           >>>>>readING OUTPUT PRINT OPTION<<<<<'
+    ! write(ounit,*) '           >>>>>READING OUTPUT PRINT OPTION<<<<<'
     ! write(ounit,*) '           -------------------------------------'
     
     ! write(ounit,'(A,A)') '  RADIAL ASSEMBLY POWER DISTRIBUTION : ', caprad
@@ -1748,14 +1637,14 @@ module read
     
     ! write(ounit,*)
     ! write(ounit,*)
-    ! write(ounit,*) '         >>>>>readING ASSEMBLY DISCONTINUITY FACTOR<<<<<'
+    ! write(ounit,*) '         >>>>>READING ASSEMBLY DISCONTINUITY FACTOR<<<<<'
     ! write(ounit,*) '         -----------------------------------------------'
     
     ! do i = 1, nmat
     !     do g = 1, ng
     !         read(xbunit, *, IOSTAT=ios) ind, ln, (mdc(i,g)%dc(j), j = 1, 6)
-    !         message = ' error in reading Assembly Discontinuity Factor (ADF)'
-    !         call er_message(ounit, ios, ln, message, buf=xbunit)
+    !         message = ' error in READING Assembly Discontinuity Factor (ADF)'
+    !         call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     !     end do
     ! end do
     
@@ -1772,8 +1661,8 @@ module read
     ! !!! ADF ROTATION
     ! do
     !     read(xbunit, *, IOSTAT=ios) ind, ln, rot
-    !     message = ' error in reading ADF Rotation'
-    !     call er_message(ounit, ios, ln, message, buf=xbunit)
+    !     message = ' error in READING ADF Rotation'
+    !     call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     !     if (rot < 1) exit
     !     if (rot > 3) then
     !         write(ounit,*) '  ERROR: MAXIMUM ADF ROTATION IS 3 TIMES'
@@ -1782,8 +1671,8 @@ module read
     
     !     do
     !         read(xbunit, *, IOSTAT=ios) ind, ln, x1, x2, y1, y2, z1, z2
-    !         message = ' error in reading ADF Rotation'
-    !         call er_message(ounit, ios, ln, message, buf=xbunit)
+    !         message = ' error in READING ADF Rotation'
+    !         call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     !         if (x1 < 1 .OR. x2 < 1 .OR. y1 < 1 .OR. y2 < 1 .OR. z1 < 1 .OR. z2 < 1) exit
     !         if (x1 > nx .OR. x2 > nx .OR. y1 > ny .OR. y2 > ny .OR. z1 > nz .OR. z2 > nz) then
     !             write(ounit,*) '  ERROR: WRONG POSITION FOR ADF ROTATION. ' // &
@@ -1832,7 +1721,7 @@ module read
     !                     cadf(i,j) = '      '
     !                 else
     !                     write (cadf(i,j),'(F6.4)') xdc(i,j,zp,g)%dc(1)
-    !                     cadf(i,j) = TRIM(ADJUSTL(cadf(i,j)))
+    !                     cadf(i,j) = trim(adjustl(cadf(i,j)))
     !                 end if
     !             end do
     !         end do
@@ -1864,7 +1753,7 @@ module read
     !                     cadf(i,j) = '      '
     !                 else
     !                     write (cadf(i,j),'(F6.4)') xdc(i,j,zp,g)%dc(2)
-    !                     cadf(i,j) = TRIM(ADJUSTL(cadf(i,j)))
+    !                     cadf(i,j) = trim(adjustl(cadf(i,j)))
     !                 end if
     !             end do
     !         end do
@@ -1896,7 +1785,7 @@ module read
     !                     cadf(i,j) = '      '
     !                 else
     !                     write (cadf(i,j),'(F6.4)') xdc(i,j,zp,g)%dc(3)
-    !                     cadf(i,j) = TRIM(ADJUSTL(cadf(i,j)))
+    !                     cadf(i,j) = trim(adjustl(cadf(i,j)))
     !                 end if
     !             end do
     !         end do
@@ -1928,7 +1817,7 @@ module read
     !                     cadf(i,j) = '      '
     !                 else
     !                     write (cadf(i,j),'(F6.4)') xdc(i,j,zp,g)%dc(4)
-    !                     cadf(i,j) = TRIM(ADJUSTL(cadf(i,j)))
+    !                     cadf(i,j) = trim(adjustl(cadf(i,j)))
     !                 end if
     !             end do
     !         end do
@@ -1960,7 +1849,7 @@ module read
     !                     cadf(i,j) = '      '
     !                 else
     !                     write (cadf(i,j),'(F6.4)') xdc(i,j,zp,g)%dc(5)
-    !                     cadf(i,j) = TRIM(ADJUSTL(cadf(i,j)))
+    !                     cadf(i,j) = trim(adjustl(cadf(i,j)))
     !                 end if
     !             end do
     !         end do
@@ -1992,7 +1881,7 @@ module read
     !                     cadf(i,j) = '      '
     !                 else
     !                     write (cadf(i,j),'(F6.4)') xdc(i,j,zp,g)%dc(6)
-    !                     cadf(i,j) = TRIM(ADJUSTL(cadf(i,j)))
+    !                     cadf(i,j) = trim(adjustl(cadf(i,j)))
     !                 end if
     !             end do
     !         end do
@@ -2152,23 +2041,23 @@ module read
     
     ! write(ounit,*)
     ! write(ounit,*)
-    ! write(ounit,*) '           >>>> readING CONTROL RODS INSERTION <<<<'
+    ! write(ounit,*) '           >>>> READING CONTROL RODS INSERTION <<<<'
     ! write(ounit,*) '           --------------------------------------------'
     
     ! read(xbunit, *, IOSTAT=ios) ind, ln, nbank, nstep
-    ! message = ' error in reading number of control rod bank and max. number of steps'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
+    ! message = ' error in READING number of control rod bank and max. number of steps'
+    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     
     ! read(xbunit, *, IOSTAT=ios) ind, ln, zero_pos, step_size
-    ! message = ' error in reading zeroth step rod position and step size'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
+    ! message = ' error in READING zeroth step rod position and step size'
+    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     
     ! allocate(bpos(nbank))
     
     ! !!! read CONTROL ROD BANK POSITIONS
     ! read(xbunit, *, IOSTAT=ios) ind, ln, (bpos(i), i = 1, nbank)
-    ! message = ' error in reading bank position'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
+    ! message = ' error in READING bank position'
+    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     
     
     ! !!! Check Control Rod Bank POSITION
@@ -2193,8 +2082,8 @@ module read
     ! !!! read CONTROL ROD BANK MAP
     ! do j = ny, 1, -1
     !     read(xbunit, *, IOSTAT=ios) ind, ln, (bmap(i,j), i = 1, nx)
-    !     message = ' error in reading control rod bank map'
-    !     call er_message(ounit, ios, ln, message, buf=xbunit)
+    !     message = ' error in READING control rod bank map'
+    !     call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     !     do i = 1, nx
     !         if (bmap(i,j) > nbank) then
     !             write(ounit,*) '  ERROR: BANK NUMBER ON CR BANK MAP IS GREATER THAN NUMBER OF BANK'
@@ -2222,8 +2111,8 @@ module read
     !       do g= 1, ng
     !           read(xbunit, *, IOSTAT=ios) ind, ln, dsigtr(i,g), &
     !           dsiga(i,g), dnuf(i,g), dsigf(i,g), (dsigs(i,g,h), h = 1, ng)
-    !           message = ' error in reading macro xs changes due to control rod insertion'
-    !           call er_message(ounit, ios, ln, message, buf=xbunit)
+    !           message = ' error in READING macro xs changes due to control rod insertion'
+    !           call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     !       end do
     !   end do
     ! end if
@@ -2334,7 +2223,7 @@ module read
     
     ! write(ounit,*)
     ! write(ounit,*)
-    ! write(ounit,*) '           >>>>     readING ROD EJECTION DATA      <<<<'
+    ! write(ounit,*) '           >>>>     READING ROD EJECTION DATA      <<<<'
     ! write(ounit,*) '           --------------------------------------------'
     
     ! allocate(tmove(nbank), bspeed(nbank), mdir(nbank), fbpos(nbank))
@@ -2344,9 +2233,9 @@ module read
     ! do i = 1, nbank
     !     read(xbunit, *, IOSTAT=ios) ind, ln, fbpos(i), tmove(i), bspeed(i)
     !     write (cnb,'(I4)') nbank
-    !     cnb = TRIM(ADJUSTL(cnb))
-    !     message = ' error in reading Final CR Bank Position, time to move and speed for bank : ' // cnb
-    !     call er_message(ounit, ios, ln, message, buf=xbunit)
+    !     cnb = trim(adjustl(cnb))
+    !     message = ' error in READING Final CR Bank Position, time to move and speed for bank : ' // cnb
+    !     call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     !     if (fbpos(i) > nstep) then
     !       write(ounit, 1889) ln
     !       write(*, 1889) ln
@@ -2365,24 +2254,24 @@ module read
     ! ! read time for CR to be ejected
     ! read(xbunit, *, IOSTAT=ios) ind, ln, total_time, time_step_1, time_mid, time_step_2
     ! message = ' error in time parameters'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
+    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     
     ! if (bxtab == 0) then  ! if XTAB File does not present
     !   ! read beta (delayed neutron fraction)
     !   read(xbunit, *, IOSTAT=ios) ind, ln, (beta(i), i = 1, nf)
-    !   message = ' error in reading delayed netron fraction (beta)'
-    !   call er_message(ounit, ios, ln, message, buf=xbunit)
+    !   message = ' error in READING delayed netron fraction (beta)'
+    !   call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     
     !   ! read precusor decay constant
     !   read(xbunit, *, IOSTAT=ios) ind, ln, (lambda(i), i = 1, nf)
-    !   message = ' error in reading precusor decay constant'
-    !   call er_message(ounit, ios, ln, message, buf=xbunit)
+    !   message = ' error in READING precusor decay constant'
+    !   call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     
     !   ! read neutron velocity
     !   allocate(neutron_velo(ng))
     !   read(xbunit, *, IOSTAT=ios) ind, ln, (neutron_velo(g), g = 1, ng)
-    !   message = ' error in reading neutron velocity'
-    !   call er_message(ounit, ios, ln, message, buf=xbunit)
+    !   message = ' error in READING neutron velocity'
+    !   call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     ! end if
     
     
@@ -2487,13 +2376,13 @@ module read
     
     ! write(ounit,*)
     ! write(ounit,*)
-    ! write(ounit,*) '           >>>> readING BORON CONCENTRATION FOR BC SEARCH <<<<'
+    ! write(ounit,*) '           >>>> READING BORON CONCENTRATION FOR BC SEARCH <<<<'
     ! write(ounit,*) '           --------------------------------------------------'
     
     ! ! read Boron Concentration
     ! read(xbunit, *, IOSTAT=ios) ind, ln, rbcon
-    ! message = ' error in reading bc guess and bc reference'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
+    ! message = ' error in READING bc guess and bc reference'
+    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     
     ! if (bxtab == 0) then  ! if XTAB File does not present
     !   allocate(csigtr(nmat,ng))
@@ -2507,8 +2396,8 @@ module read
     !       do g= 1, ng
     !           read(xbunit, *, IOSTAT=ios) ind, ln, csigtr(i,g), &
     !           csiga(i,g), cnuf(i,g), csigf(i,g), (csigs(i,g,h), h = 1, ng)
-    !           message = ' error in reading macro xs changes per ppm boron changes'
-    !           call er_message(ounit, ios, ln, message, buf=xbunit)
+    !           message = ' error in READING macro xs changes per ppm boron changes'
+    !           call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     !       end do
     !   end do
     ! end if
@@ -2575,13 +2464,13 @@ module read
     
     ! write(ounit,*)
     ! write(ounit,*)
-    ! write(ounit,*) '           >>>>       readING BORON CONCENTRATION        <<<<'
+    ! write(ounit,*) '           >>>>       READING BORON CONCENTRATION        <<<<'
     ! write(ounit,*) '           --------------------------------------------------'
     
     ! ! read Boron Concentration
     ! read(xbunit, *, IOSTAT=ios) ind, ln, bcon, rbcon
-    ! message = ' error in reading boron concentration and boron concentration reference'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
+    ! message = ' error in READING boron concentration and boron concentration reference'
+    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     
     ! if (bxtab == 0) then  ! if xtab file present
     !   ! read CX changes per ppm born change
@@ -2594,8 +2483,8 @@ module read
     !       do g= 1, ng
     !           read(xbunit, *, IOSTAT=ios) ind, ln, csigtr(i,g), &
     !           csiga(i,g), cnuf(i,g), csigf(i,g), (csigs(i,g,h), h = 1, ng)
-    !           message = ' error in reading macro xs changes per ppm boron changes'
-    !           call er_message(ounit, ios, ln, message, buf=xbunit)
+    !           message = ' error in READING macro xs changes per ppm boron changes'
+    !           call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     !       end do
     !   end do
     ! end if
@@ -2667,13 +2556,13 @@ module read
     
     ! write(ounit,*)
     ! write(ounit,*)
-    ! write(ounit,*) '           >>>>      readING FUEL TEMPERATURE      <<<<'
+    ! write(ounit,*) '           >>>>      READING FUEL TEMPERATURE      <<<<'
     ! write(ounit,*) '           --------------------------------------------'
     
     ! ! read Fuel Temperature
     ! read(xbunit, *, IOSTAT=ios) ind, ln, cftem, fuel_temp_ref
-    ! message = ' error in reading average fuel temperature and fuel temperature reference'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
+    ! message = ' error in READING average fuel temperature and fuel temperature reference'
+    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     
     ! ! ASSIGN CFTEM to FTEM
     ! if (bther == 0) allocate (ftem(nnod))
@@ -2686,8 +2575,8 @@ module read
     !       do g= 1, ng
     !           read(xbunit, *, IOSTAT=ios) ind, ln, fsigtr(i,g), &
     !           fsiga(i,g), fnuf(i,g), fsigf(i,g), (fsigs(i,g,h), h = 1, ng)
-    !           message = ' error in reading macro xs changes per fuel temperature changes'
-    !           call er_message(ounit, ios, ln, message, buf=xbunit)
+    !           message = ' error in READING macro xs changes per fuel temperature changes'
+    !           call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     !       end do
     !   end do
     ! end if
@@ -2764,13 +2653,13 @@ module read
     
     ! write(ounit,*)
     ! write(ounit,*)
-    ! write(ounit,*) '           >>>>   readING MODERATOR TEMPERATURE    <<<<'
+    ! write(ounit,*) '           >>>>   READING MODERATOR TEMPERATURE    <<<<'
     ! write(ounit,*) '           --------------------------------------------'
     
     ! ! read Moderator Temperature
     ! read(xbunit, *, IOSTAT=ios) ind, ln, cmtem, mod_temp_ref
-    ! message = ' error in reading Moderator temperature and Moderator temperature reference'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
+    ! message = ' error in READING Moderator temperature and Moderator temperature reference'
+    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     
     ! ! ASSIGN CMTEM to MTEM
     ! if (bther == 0) allocate (mtem(nnod))
@@ -2783,8 +2672,8 @@ module read
     !       do g= 1, ng
     !           read(xbunit, *, IOSTAT=ios) ind, ln, msigtr(i,g), &
     !           msiga(i,g), mnuf(i,g), msigf(i,g), (msigs(i,g,h), h = 1, ng)
-    !           message = ' error in reading macro xs changes per Moderator temperature changes'
-    !           call er_message(ounit, ios, ln, message, buf=xbunit)
+    !           message = ' error in READING macro xs changes per Moderator temperature changes'
+    !           call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     !       end do
     !   end do
     ! end if
@@ -2861,13 +2750,13 @@ module read
     
     ! write(ounit,*)
     ! write(ounit,*)
-    ! write(ounit,*) '           >>>>       readING COOLANT DENSITY      <<<<'
+    ! write(ounit,*) '           >>>>       READING COOLANT DENSITY      <<<<'
     ! write(ounit,*) '           --------------------------------------------'
     
     ! ! read Coolant Density
     ! read(xbunit, *, IOSTAT=ios) ind, ln, ccden, mod_dens_ref
-    ! message = ' error in reading Coolant Density and Coolant Density reference'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
+    ! message = ' error in READING Coolant Density and Coolant Density reference'
+    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     
     ! !ASSIGN CCDEN TO CDEN
     ! if (bther == 0) allocate (cden(nnod))
@@ -2880,8 +2769,8 @@ module read
     !       do g= 1, ng
     !           read(xbunit, *, IOSTAT=ios) ind, ln, lsigtr(i,g), &
     !           lsiga(i,g), lnuf(i,g), lsigf(i,g), (lsigs(i,g,h), h = 1, ng)
-    !           message = ' error in reading macro xs changes per Coolant Density changes'
-    !           call er_message(ounit, ios, ln, message, buf=xbunit)
+    !           message = ' error in READING macro xs changes per Coolant Density changes'
+    !           call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     !       end do
     !   end do
     ! end if
@@ -2969,30 +2858,30 @@ module read
     
     ! write(ounit,*)
     ! write(ounit,*)
-    ! write(ounit,*) '           >>>>   readING THERMAL-HYDRAULIC DATA   <<<<'
+    ! write(ounit,*) '           >>>>   READING THERMAL-HYDRAULIC DATA   <<<<'
     ! write(ounit,*) '           --------------------------------------------'
     
     ! allocate (ftem(nnod), mtem(nnod), cden(nnod))
     
     ! ! read Percent Power
     ! read(xbunit, *, IOSTAT=ios) ind, ln, ppow
-    ! message = ' error in reading percent power'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
+    ! message = ' error in READING percent power'
+    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     
     ! ! read reactor Power
     ! read(xbunit, *, IOSTAT=ios) ind, ln, pow
-    ! message = ' error in reading reactor full thermal power'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
+    ! message = ' error in READING reactor full thermal power'
+    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     
     ! ! read inlet coolant temp. (Kelvin) and  FA flow rate (kg/s)
     ! read(xbunit, *, IOSTAT=ios) ind, ln, tin, cmflow
-    ! message = ' error in reading coolant inlet temp. and Fuel Assembly mass flow rate'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
+    ! message = ' error in READING coolant inlet temp. and Fuel Assembly mass flow rate'
+    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     
     ! ! read fuel pin geometry in meter
     ! read(xbunit, *, IOSTAT=ios) ind, ln, rf, tg, tc, ppitch
-    ! message = ' error in reading fuel meat rad., gap thickness, clad thickness and pin pitch'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
+    ! message = ' error in READING fuel meat rad., gap thickness, clad thickness and pin pitch'
+    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     
     ! ! Check gap and clad thickness
     ! if (tg > 0.25 * rf) then
@@ -3006,13 +2895,13 @@ module read
     
     ! ! read Number of fuel pins and guide tubes
     ! read(xbunit, *, IOSTAT=ios) ind, ln, nfpin, ngt
-    ! message = ' error in reading number of fuel pins and guide tubes'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
+    ! message = ' error in READING number of fuel pins and guide tubes'
+    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     
     ! ! read Fraction of heat deposited in the coolant
     ! read(xbunit, *, IOSTAT=ios) ind, ln, cf
-    ! message = ' error in reading fraction of heat deposited in the coolant'
-    ! call er_message(ounit, ios, ln, message, buf=xbunit)
+    ! message = ' error in READING fraction of heat deposited in the coolant'
+    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
     
     ! if (cf < 0. .or. cf > 1.0) stop "The value of the fraction of heat " &
     ! // "deposited in the coolant is incorrect"
@@ -3156,95 +3045,6 @@ module read
     
     ! !******************************************************************************!
     
-    ! subroutine er_message (funit, iost, ln, mess, xtab, buf)
-    ! !
-    ! ! Purpose:
-    ! !    To provide error message
-    ! !
-    
-    ! IMPLICIT NONE
-    
-    ! integer, intent(in) :: funit, iost, ln
-    ! character(LEN=*), intent(in) :: mess
-    ! integer, OPTIONAL, intent(in) :: xtab, buf
-    
-    ! if (iost < 0) then
-    !   write(funit,*)
-    !   write(*,*)
-    !   write(*,*)''//achar(27)//'[31m OOPS! WE FOUND AN ERROR.'//achar(27)//'[0m'
-    
-    !   if (PRESENT(xtab)) then
-    !     write(funit, 1014) ln, xtab
-    !   else
-    !     write(funit, 1006) card_array(GETLOC(unit_array,buf))
-    !     write(funit, 1013) ln, file_array(GETLOC(unit_array,buf))
-    !   end if
-    !   write(funit,*) mess
-    !   if (PRESENT(xtab)) then
-    !     write(*, 1014) ln, xtab
-    !   else
-    !     write(*, 1006) card_array(GETLOC(unit_array,buf))
-    !     write(*, 1013) ln, file_array(GETLOC(unit_array,buf))
-    !   end if
-    !   write(*,*) mess
-    !   1013 format(2x, 'THIS LINE NEEDS MORE INPUT DATA. LINE', I4, &
-    !   ' IN FILE : ', A100)
-    !   1014 format(2x, 'ERROR: LINE', I4, &
-    !   'IN XTAB FILE FOR MATERIAL NUMBER' , I4, '. IT NEEDS MORE DATA')
-    !   stop
-    ! end if
-    
-    ! if (iost > 0) then
-    !   write(funit,*)
-    !   write(*,*)
-    !   write(*,*)''//achar(27)//'[31m OOPS! WE FOUND AN ERROR.'//achar(27)//'[0m'
-    
-    !   if (PRESENT(xtab)) then
-    !     write(funit, 1005) ln, xtab
-    !   else
-    !     write(funit, 1006) card_array(GETLOC(unit_array,buf))
-    !     write(funit, 1004) ln, file_array(GETLOC(unit_array,buf))
-    !   end if
-    !   write(funit,*) mess
-    !   if (PRESENT(xtab)) then
-    !     write(*, 1005) ln, xtab
-    !   else
-    !     write(*, 1006) card_array(GETLOC(unit_array,buf))
-    !     write(*, 1004) ln, file_array(GETLOC(unit_array,buf))
-    !   end if
-    !   write(*,*) mess
-    !   1006 format(2X, 'ERROR: THERE IS AN ERROR IN CARD %', A4)
-    !   1004 format(2X, 'PLEASE CHECK LINE NUMBER', I4, ' IN FILE : ', A100)
-    !   1005 format(2X, 'ERROR: PLEASE CHECK LINE NUMBER', I4, &
-    !   ' IN XTAB FILE FOR MATERIAL NUMBER ', I4)
-    !   stop
-    ! end if
-    
-    ! end subroutine er_message
-    
-    ! !****************************************************************************!
-    
-    ! FUNCTION GETLOC(arr, elm) RESULT (loc)
-    
-    !   !Purpose: To  get location of an element in an array
-    
-    !   integer, dimension(:), intent(in)  :: arr    ! input array
-    !   integer, intent(in)  :: elm                  ! element whose location is wanted to find
-    !   integer :: loc
-    
-    !   integer :: i
-    
-    !   do i = 1, SIZE(arr)
-    !     if (arr(i) == elm) then
-    !       loc = i
-    !       exit
-    !     end if
-    !   end do
-    
-    ! end FUNCTION GETLOC
-    
-    ! !******************************************************************************!
-    
     ! subroutine print_outp(fn)
     
     !     !
@@ -3321,13 +3121,13 @@ module read
     !                     cpow(i,j,k) = '     '
     !                 else
     !                     write (cpow(i,j,k),'(F6.3)') fasm(i,j,k)
-    !                     cpow(i,j,k) = TRIM(cpow(i,j,k))
+    !                     cpow(i,j,k) = trim(cpow(i,j,k))
     !                 end if
     !             end do
     !         end do
     !     end do
         
-    !     open (UNIT=102, FILE=TRIM(iname) // '_3d_power.out', STATUS='REPLACE', ACTION='write')
+    !     open (UNIT=102, FILE=trim(iname) // '_3d_power.out', STATUS='REPLACE', ACTION='write')
     
     !     ! Print assembly power distribution
     !     write(102,*) '   3-D Power Distribution'
@@ -3461,7 +3261,7 @@ module read
     !             cpow(i,j) = '     '
     !         else
     !             write (cpow(i,j),'(F6.3)') fasm(i,j)
-    !             cpow(i,j) = TRIM(cpow(i,j))
+    !             cpow(i,j) = trim(cpow(i,j))
     !         end if
     !     end do
     ! end do
@@ -3721,7 +3521,7 @@ module read
     !       do i = 1, nx
     !           if (fasm(i,j,g) > 0.) then
     !             write (cflx(i,j,g),'(ES10.3)') fasm(i,j,g)
-    !             cflx(i,j,g) = TRIM(ADJUSTL(cflx(i,j,g)))
+    !             cflx(i,j,g) = trim(adjustl(cflx(i,j,g)))
     !           else
     !             cflx(i,j, g) = '         '
     !           end if
@@ -3822,7 +3622,7 @@ module read
     ! end type
     ! type(XFILE), dimension(:), allocatable :: xtab
     
-    ! LOGICAL, dimension(:), allocatable :: noty   !to check if this buffer was read or not?
+    ! logical, dimension(:), allocatable :: noty   !to check if this buffer was read or not?
     ! integer, parameter :: xunit = 998  !XTAB file unit number
     ! integer, parameter :: tunit = 999  !XTAB Buffer unit number
     ! integer :: comm  ! Position of comment mark
@@ -3832,26 +3632,26 @@ module read
     
     ! write(ounit,*)
     ! write(ounit,*)
-    ! write(ounit,*) '           >>>> readING TABULAR XSEC FILE <<<<'
+    ! write(ounit,*) '           >>>> READING TABULAR XSEC FILE <<<<'
     ! write(ounit,*) '           --------------------------------------------'
     
     ! read(xbunit, *, IOSTAT=iost) ind, ln, ng, nmat  !read numbef of group and material
     ! message = ' error in material number'
-    ! call er_message(ounit, iost, ln, message)
+    ! call inp_error_message(ounit, iost, ln, message)
     
     ! allocate(chi(nmat,ng))
     ! allocate(xtab(nmat), noty(nmat), m(nmat))
     ! noty = .TRUE.
     
-    ! ! reading input file for XTAB file names and composition number
+    ! ! READING input file for XTAB file names and composition number
     ! do i= 1, nmat
     !     read(xbunit, '(A2,I5,A200)', IOSTAT=iost) ind, ln, iline
-    !     iline = ADJUSTL(iline)                !Adjust to left
+    !     iline = adjustl(iline)                !Adjust to left
     !     comm = index(iline, ' ')              ! Get space position
     !     xtab(i)%fname = iline(1:comm-1)       !Get xtab file name
     !     read(iline(comm:100),*) xtab(i)%cnum  ! Get composition number (convert to integer)
-    !     message = ' error in reading XTAB files'
-    !     call er_message(ounit, iost, ln, message)
+    !     message = ' error in READING XTAB files'
+    !     call inp_error_message(ounit, iost, ln, message)
     ! end do
     
     ! ! Starting to read XTAB File, remove comments and write to buffer file
@@ -3866,19 +3666,19 @@ module read
     !     !This loop to read another composition in the same XTAB file
     !     do j = i, nmat
     !       ! if next material has the same file name
-    !       if (TRIM(ADJUSTL(xtab(i)%fname)) == TRIM(ADJUSTL(xtab(j)%fname))) then
+    !       if (trim(adjustl(xtab(i)%fname)) == trim(adjustl(xtab(j)%fname))) then
     
     !         !read buffer file and saved the xsec and transient data
     !         rewind(tunit)
     !         read(tunit, *,IOSTAT=iost) ind, ln, m(j)%tadf, m(j)%trod     ! read input control
-    !         message = ' ERROR IN XTAB FILE ' // TRIM(ADJUSTL(xtab(j)%fname)) &
+    !         message = ' ERROR IN XTAB FILE ' // trim(adjustl(xtab(j)%fname)) &
     !         // ': CANNOT read CONTROL parameterS'
-    !         call er_message(ounit, iost, ln, message, XTAB=j)
+    !         call inp_error_message(ounit, iost, ln, message, XTAB=j)
     
     !         read(tunit, *, IOSTAT=iost) ind, ln, m(j)%nd, m(j)%nb, m(j)%nf, m(j)%nm    ! read number of branch
-    !         message = ' ERROR IN XTAB FILE '// TRIM(ADJUSTL(xtab(j)%fname))&
+    !         message = ' ERROR IN XTAB FILE '// trim(adjustl(xtab(j)%fname))&
     !          // ': CANNOT read BRANCH DIMENSION'
-    !         call er_message(ounit, iost, ln, message)
+    !         call inp_error_message(ounit, iost, ln, message)
     
     !         ! Check branch dimension
     !         if (m(j)%nd < 1 .OR. m(j)%nb < 1 .OR. m(j)%nf < 1 .OR. m(j)%nm < 1) then
@@ -3949,22 +3749,22 @@ module read
     !         !read fission spectrum
     !         read(tunit, *, IOSTAT=iost) ind, ln, (chi(j,g), g = 1, ng)
     !         message = ' ERROR IN XTAB FILE: CANNOT read FISSION SPECTRUM'
-    !         call er_message(ounit, iost, ln, message, XTAB=j)
+    !         call inp_error_message(ounit, iost, ln, message, XTAB=j)
     !         !read neutron Inverse velocity
     !         read(tunit, *, IOSTAT=iost) ind, ln, (m(j)%velo(g), g = 1, ng)
     !         message = ' ERROR IN XTAB FILE: CANNOT read Inverse Velocity'
-    !         call er_message(ounit, iost, ln, message, XTAB=j)
+    !         call inp_error_message(ounit, iost, ln, message, XTAB=j)
     !         do g = 1, ng
     !           m(j)%velo(g) = 1._DP/m(j)%velo(g)  !COnvert to velocity
     !         end do
     !         ! read decay constant
     !         read(tunit, *, IOSTAT=iost) ind, ln, (m(j)%lamb(t), t = 1, nf)
     !         message = ' ERROR IN XTAB FILE: CANNOT read DECAY CONSTANT'
-    !         call er_message(ounit, iost, ln, message, XTAB=j)
+    !         call inp_error_message(ounit, iost, ln, message, XTAB=j)
     !         ! read beta
     !         read(tunit, *, IOSTAT=iost) ind, ln, (m(j)%iBeta(t), t = 1, nf)
     !         message = ' ERROR IN XTAB FILE: CANNOT read DELAYED NEUTRON FRACTION'
-    !         call er_message(ounit, iost, ln, message, XTAB=j)
+    !         call inp_error_message(ounit, iost, ln, message, XTAB=j)
     
     !         ! if read, indicate that it has been read
     !         noty(j) = .FALSE.
@@ -3990,7 +3790,7 @@ module read
     !   do i= 1, nmat
     !       write(ounit,*)
     !       write(ounit,1709) i
-    !       write(ounit,'(A,I3)') '     XTAB FILE '// TRIM(ADJUSTL(xtab(i)%fname)) &
+    !       write(ounit,'(A,I3)') '     XTAB FILE '// trim(adjustl(xtab(i)%fname)) &
     !       // '. COMPOSITION NUMBER', xtab(i)%cnum
     !       write(ounit,1707)'GROUP', 'TRANSPORT', 'DifFUSION', 'ABSORPTION', &
     !       'NU*FISS', 'KAP*FIS','FISS. SPCTR', 'NEUTRON VELOCITY'
@@ -4043,9 +3843,9 @@ module read
     ! if (dim > 1) then                         ! if branch DIMENSION > 1
     !   allocate(par(dim))
     !   read(tunit, *, IOSTAT=iost) ind, ln, par(1:dim)
-    !   message = ' ERROR IN XTAB FILE '// TRIM(ADJUSTL(fname))&
+    !   message = ' ERROR IN XTAB FILE '// trim(adjustl(fname))&
     !    // ': CANNOT read BRANCH parameterS ' // messPar
-    !   call er_message(ounit, iost, ln, message, XTAB=matnum)
+    !   call inp_error_message(ounit, iost, ln, message, XTAB=matnum)
     !   do k = 2, dim
     !     if (par(k-1) > par(k)) then
     !       write(ounit,*) "  ERROR IN XTAB FILE  ", fname
@@ -4087,7 +3887,7 @@ module read
     !         else
     !           message = ' ERROR IN XTAB FILE: CANNOT read RODDED TRANSPORT XSEC'
     !         end if
-    !         call er_message(ounit, iost, ln, message, XTAB=mnum)
+    !         call inp_error_message(ounit, iost, ln, message, XTAB=mnum)
     !       end do
     !     end do
     !   end do
@@ -4104,7 +3904,7 @@ module read
     !         else
     !           message = ' ERROR IN XTAB FILE: CANNOT read RODDED ABSORPTION XSEC'
     !         end if
-    !         call er_message(ounit, iost, ln, message, XTAB=mnum)
+    !         call inp_error_message(ounit, iost, ln, message, XTAB=mnum)
     !       end do
     !     end do
     !   end do
@@ -4121,7 +3921,7 @@ module read
     !         else
     !           message = ' ERROR IN XTAB FILE: CANNOT read RODDED NU*SIGF XSEC'
     !         end if
-    !         call er_message(ounit, iost, ln, message, XTAB=mnum)
+    !         call inp_error_message(ounit, iost, ln, message, XTAB=mnum)
     !       end do
     !     end do
     !   end do
@@ -4138,7 +3938,7 @@ module read
     !         else
     !           message = ' ERROR IN XTAB FILE: CANNOT read RODDED KAPPA*SIGF XSEC'
     !         end if
-    !         call er_message(ounit, iost, ln, message, XTAB=mnum)
+    !         call inp_error_message(ounit, iost, ln, message, XTAB=mnum)
     !       end do
     !     end do
     !   end do
@@ -4156,7 +3956,7 @@ module read
     !           else
     !             message = ' ERROR IN XTAB FILE: CANNOT read RODDED SCATTERING XSEC'
     !           end if
-    !           call er_message(ounit, iost, ln, message, XTAB=mnum)
+    !           call inp_error_message(ounit, iost, ln, message, XTAB=mnum)
     !         end do
     !       end do
     !     end do
@@ -4180,7 +3980,7 @@ module read
     !           else
     !             message = ' ERROR IN XTAB FILE: CANNOT read RODDED ADFs'
     !           end if
-    !           call er_message(ounit, iost, ln, message, XTAB=mnum)
+    !           call inp_error_message(ounit, iost, ln, message, XTAB=mnum)
     !         end do
     !       end do
     !     end do
@@ -4198,7 +3998,7 @@ module read
     !             else
     !               message = ' ERROR IN XTAB FILE: CANNOT read RODDED TRANSPORT ADFs'
     !             end if
-    !             call er_message(ounit, iost, ln, message, XTAB=mnum)
+    !             call inp_error_message(ounit, iost, ln, message, XTAB=mnum)
     !           end do
     !         end do
     !       end do

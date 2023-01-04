@@ -1,28 +1,75 @@
-program test
+module shape_mod
 
-    use iso_c_binding
+type shape
+    integer :: color
+    logical :: filled
+    integer :: x
+    integer :: y
+contains
+    procedure :: initialize
+end type shape
 
-    implicit none
+type, extends(shape) :: rectangle
+        integer :: length
+        integer :: width
+end type rectangle
 
-    real(8), target :: a(1000), b
-    real(8), pointer :: pa(:), pb
+type, extends(rectangle) :: square
+end type square
 
-    pa => a
-    pb => b
+contains
 
-    write(*,*) sizeof(a)
-    write(*,*) sizeof(pa)
-    write(*,*) sizeof(b)
-    write(*,*) sizeof(pb)
+subroutine initialize(sh, color, filled, x, y, length, width)
+    ! initialize shape objects
+    class(shape) :: sh
+    integer :: color
+    logical :: filled
+    integer :: x
+    integer :: y
+    integer, optional :: length
+    integer, optional :: width
 
-    ! contains
+    sh%color = color
+    sh%filled = filled
+    sh%x = x
+    sh%y = y
     
-    ! subroutine s1(x)
+    select type (sh)
+    type is (shape)
+          ! no further initialization required
+    class is (rectangle)
+        ! rectangle or square specific initializations
+        if (present(length))  then
+           sh%length = length
+        else
+           sh%length = 0
+        endif
+        if (present(width)) then
+            sh%width = width
+        else
+            sh%width = 0
+        endif
+    class default
+      ! give error for unexpected/unsupported type
+         stop 'initialize: unexpected type for sh object!'
+    end select
+    
+end subroutine initialize
 
-    !     real(8) :: x(:)
+subroutine init(sh)
+    class(shape) :: sh
+    class(shape), allocatable :: als
+    
+    select type (sh)
+    type is (shape)
+      allocate(shape::als)
+    type is (rectangle)
+      allocate(rectangle::als)
+      als % length = 1.0
+    type is (square)
+      allocate(square::als)
+    end select
+    
+  end subroutine init
 
-    !     write(*,*) c_sizeof(x)
-
-    ! end subroutine
-
-end program
+end module
