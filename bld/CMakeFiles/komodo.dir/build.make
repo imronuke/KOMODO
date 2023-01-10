@@ -69,18 +69,18 @@ include CMakeFiles/komodo.dir/progress.make
 # Include the compile flags for this target's objects.
 include CMakeFiles/komodo.dir/flags.make
 
-CMakeFiles/komodo.dir/src/constant.f90.o: CMakeFiles/komodo.dir/flags.make
-CMakeFiles/komodo.dir/src/constant.f90.o: ../src/constant.f90
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/imronuke/wsl/github/KOMODO/bld/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building Fortran object CMakeFiles/komodo.dir/src/constant.f90.o"
-	/bin/gfortran $(Fortran_DEFINES) $(Fortran_INCLUDES) $(Fortran_FLAGS) -c /home/imronuke/wsl/github/KOMODO/src/constant.f90 -o CMakeFiles/komodo.dir/src/constant.f90.o
+CMakeFiles/komodo.dir/src/control.f90.o: CMakeFiles/komodo.dir/flags.make
+CMakeFiles/komodo.dir/src/control.f90.o: ../src/control.f90
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/imronuke/wsl/github/KOMODO/bld/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building Fortran object CMakeFiles/komodo.dir/src/control.f90.o"
+	/bin/gfortran $(Fortran_DEFINES) $(Fortran_INCLUDES) $(Fortran_FLAGS) -c /home/imronuke/wsl/github/KOMODO/src/control.f90 -o CMakeFiles/komodo.dir/src/control.f90.o
 
-CMakeFiles/komodo.dir/src/constant.f90.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing Fortran source to CMakeFiles/komodo.dir/src/constant.f90.i"
-	/bin/gfortran $(Fortran_DEFINES) $(Fortran_INCLUDES) $(Fortran_FLAGS) -E /home/imronuke/wsl/github/KOMODO/src/constant.f90 > CMakeFiles/komodo.dir/src/constant.f90.i
+CMakeFiles/komodo.dir/src/control.f90.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing Fortran source to CMakeFiles/komodo.dir/src/control.f90.i"
+	/bin/gfortran $(Fortran_DEFINES) $(Fortran_INCLUDES) $(Fortran_FLAGS) -E /home/imronuke/wsl/github/KOMODO/src/control.f90 > CMakeFiles/komodo.dir/src/control.f90.i
 
-CMakeFiles/komodo.dir/src/constant.f90.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling Fortran source to assembly CMakeFiles/komodo.dir/src/constant.f90.s"
-	/bin/gfortran $(Fortran_DEFINES) $(Fortran_INCLUDES) $(Fortran_FLAGS) -S /home/imronuke/wsl/github/KOMODO/src/constant.f90 -o CMakeFiles/komodo.dir/src/constant.f90.s
+CMakeFiles/komodo.dir/src/control.f90.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling Fortran source to assembly CMakeFiles/komodo.dir/src/control.f90.s"
+	/bin/gfortran $(Fortran_DEFINES) $(Fortran_INCLUDES) $(Fortran_FLAGS) -S /home/imronuke/wsl/github/KOMODO/src/control.f90 -o CMakeFiles/komodo.dir/src/control.f90.s
 
 CMakeFiles/komodo.dir/src/data.f90.o: CMakeFiles/komodo.dir/flags.make
 CMakeFiles/komodo.dir/src/data.f90.o: ../src/data.f90
@@ -147,18 +147,18 @@ CMakeFiles/komodo.dir/src/nodal.f90.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling Fortran source to assembly CMakeFiles/komodo.dir/src/nodal.f90.s"
 	/bin/gfortran $(Fortran_DEFINES) $(Fortran_INCLUDES) $(Fortran_FLAGS) -S /home/imronuke/wsl/github/KOMODO/src/nodal.f90 -o CMakeFiles/komodo.dir/src/nodal.f90.s
 
-CMakeFiles/komodo.dir/src/node.f90.o: CMakeFiles/komodo.dir/flags.make
-CMakeFiles/komodo.dir/src/node.f90.o: ../src/node.f90
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/imronuke/wsl/github/KOMODO/bld/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Building Fortran object CMakeFiles/komodo.dir/src/node.f90.o"
-	/bin/gfortran $(Fortran_DEFINES) $(Fortran_INCLUDES) $(Fortran_FLAGS) -c /home/imronuke/wsl/github/KOMODO/src/node.f90 -o CMakeFiles/komodo.dir/src/node.f90.o
+CMakeFiles/komodo.dir/src/print.f90.o: CMakeFiles/komodo.dir/flags.make
+CMakeFiles/komodo.dir/src/print.f90.o: ../src/print.f90
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/imronuke/wsl/github/KOMODO/bld/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Building Fortran object CMakeFiles/komodo.dir/src/print.f90.o"
+	/bin/gfortran $(Fortran_DEFINES) $(Fortran_INCLUDES) $(Fortran_FLAGS) -c /home/imronuke/wsl/github/KOMODO/src/print.f90 -o CMakeFiles/komodo.dir/src/print.f90.o
 
-CMakeFiles/komodo.dir/src/node.f90.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing Fortran source to CMakeFiles/komodo.dir/src/node.f90.i"
-	/bin/gfortran $(Fortran_DEFINES) $(Fortran_INCLUDES) $(Fortran_FLAGS) -E /home/imronuke/wsl/github/KOMODO/src/node.f90 > CMakeFiles/komodo.dir/src/node.f90.i
+CMakeFiles/komodo.dir/src/print.f90.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing Fortran source to CMakeFiles/komodo.dir/src/print.f90.i"
+	/bin/gfortran $(Fortran_DEFINES) $(Fortran_INCLUDES) $(Fortran_FLAGS) -E /home/imronuke/wsl/github/KOMODO/src/print.f90 > CMakeFiles/komodo.dir/src/print.f90.i
 
-CMakeFiles/komodo.dir/src/node.f90.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling Fortran source to assembly CMakeFiles/komodo.dir/src/node.f90.s"
-	/bin/gfortran $(Fortran_DEFINES) $(Fortran_INCLUDES) $(Fortran_FLAGS) -S /home/imronuke/wsl/github/KOMODO/src/node.f90 -o CMakeFiles/komodo.dir/src/node.f90.s
+CMakeFiles/komodo.dir/src/print.f90.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling Fortran source to assembly CMakeFiles/komodo.dir/src/print.f90.s"
+	/bin/gfortran $(Fortran_DEFINES) $(Fortran_INCLUDES) $(Fortran_FLAGS) -S /home/imronuke/wsl/github/KOMODO/src/print.f90 -o CMakeFiles/komodo.dir/src/print.f90.s
 
 CMakeFiles/komodo.dir/src/read.f90.o: CMakeFiles/komodo.dir/flags.make
 CMakeFiles/komodo.dir/src/read.f90.o: ../src/read.f90
@@ -173,9 +173,35 @@ CMakeFiles/komodo.dir/src/read.f90.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling Fortran source to assembly CMakeFiles/komodo.dir/src/read.f90.s"
 	/bin/gfortran $(Fortran_DEFINES) $(Fortran_INCLUDES) $(Fortran_FLAGS) -S /home/imronuke/wsl/github/KOMODO/src/read.f90 -o CMakeFiles/komodo.dir/src/read.f90.s
 
+CMakeFiles/komodo.dir/src/stagger.f90.o: CMakeFiles/komodo.dir/flags.make
+CMakeFiles/komodo.dir/src/stagger.f90.o: ../src/stagger.f90
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/imronuke/wsl/github/KOMODO/bld/CMakeFiles --progress-num=$(CMAKE_PROGRESS_9) "Building Fortran object CMakeFiles/komodo.dir/src/stagger.f90.o"
+	/bin/gfortran $(Fortran_DEFINES) $(Fortran_INCLUDES) $(Fortran_FLAGS) -c /home/imronuke/wsl/github/KOMODO/src/stagger.f90 -o CMakeFiles/komodo.dir/src/stagger.f90.o
+
+CMakeFiles/komodo.dir/src/stagger.f90.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing Fortran source to CMakeFiles/komodo.dir/src/stagger.f90.i"
+	/bin/gfortran $(Fortran_DEFINES) $(Fortran_INCLUDES) $(Fortran_FLAGS) -E /home/imronuke/wsl/github/KOMODO/src/stagger.f90 > CMakeFiles/komodo.dir/src/stagger.f90.i
+
+CMakeFiles/komodo.dir/src/stagger.f90.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling Fortran source to assembly CMakeFiles/komodo.dir/src/stagger.f90.s"
+	/bin/gfortran $(Fortran_DEFINES) $(Fortran_INCLUDES) $(Fortran_FLAGS) -S /home/imronuke/wsl/github/KOMODO/src/stagger.f90 -o CMakeFiles/komodo.dir/src/stagger.f90.s
+
+CMakeFiles/komodo.dir/src/th.f90.o: CMakeFiles/komodo.dir/flags.make
+CMakeFiles/komodo.dir/src/th.f90.o: ../src/th.f90
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/imronuke/wsl/github/KOMODO/bld/CMakeFiles --progress-num=$(CMAKE_PROGRESS_10) "Building Fortran object CMakeFiles/komodo.dir/src/th.f90.o"
+	/bin/gfortran $(Fortran_DEFINES) $(Fortran_INCLUDES) $(Fortran_FLAGS) -c /home/imronuke/wsl/github/KOMODO/src/th.f90 -o CMakeFiles/komodo.dir/src/th.f90.o
+
+CMakeFiles/komodo.dir/src/th.f90.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing Fortran source to CMakeFiles/komodo.dir/src/th.f90.i"
+	/bin/gfortran $(Fortran_DEFINES) $(Fortran_INCLUDES) $(Fortran_FLAGS) -E /home/imronuke/wsl/github/KOMODO/src/th.f90 > CMakeFiles/komodo.dir/src/th.f90.i
+
+CMakeFiles/komodo.dir/src/th.f90.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling Fortran source to assembly CMakeFiles/komodo.dir/src/th.f90.s"
+	/bin/gfortran $(Fortran_DEFINES) $(Fortran_INCLUDES) $(Fortran_FLAGS) -S /home/imronuke/wsl/github/KOMODO/src/th.f90 -o CMakeFiles/komodo.dir/src/th.f90.s
+
 CMakeFiles/komodo.dir/src/time.f90.o: CMakeFiles/komodo.dir/flags.make
 CMakeFiles/komodo.dir/src/time.f90.o: ../src/time.f90
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/imronuke/wsl/github/KOMODO/bld/CMakeFiles --progress-num=$(CMAKE_PROGRESS_9) "Building Fortran object CMakeFiles/komodo.dir/src/time.f90.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/imronuke/wsl/github/KOMODO/bld/CMakeFiles --progress-num=$(CMAKE_PROGRESS_11) "Building Fortran object CMakeFiles/komodo.dir/src/time.f90.o"
 	/bin/gfortran $(Fortran_DEFINES) $(Fortran_INCLUDES) $(Fortran_FLAGS) -c /home/imronuke/wsl/github/KOMODO/src/time.f90 -o CMakeFiles/komodo.dir/src/time.f90.o
 
 CMakeFiles/komodo.dir/src/time.f90.i: cmake_force
@@ -188,7 +214,7 @@ CMakeFiles/komodo.dir/src/time.f90.s: cmake_force
 
 CMakeFiles/komodo.dir/src/util.f90.o: CMakeFiles/komodo.dir/flags.make
 CMakeFiles/komodo.dir/src/util.f90.o: ../src/util.f90
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/imronuke/wsl/github/KOMODO/bld/CMakeFiles --progress-num=$(CMAKE_PROGRESS_10) "Building Fortran object CMakeFiles/komodo.dir/src/util.f90.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/imronuke/wsl/github/KOMODO/bld/CMakeFiles --progress-num=$(CMAKE_PROGRESS_12) "Building Fortran object CMakeFiles/komodo.dir/src/util.f90.o"
 	/bin/gfortran $(Fortran_DEFINES) $(Fortran_INCLUDES) $(Fortran_FLAGS) -c /home/imronuke/wsl/github/KOMODO/src/util.f90 -o CMakeFiles/komodo.dir/src/util.f90.o
 
 CMakeFiles/komodo.dir/src/util.f90.i: cmake_force
@@ -201,7 +227,7 @@ CMakeFiles/komodo.dir/src/util.f90.s: cmake_force
 
 CMakeFiles/komodo.dir/src/xsec.f90.o: CMakeFiles/komodo.dir/flags.make
 CMakeFiles/komodo.dir/src/xsec.f90.o: ../src/xsec.f90
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/imronuke/wsl/github/KOMODO/bld/CMakeFiles --progress-num=$(CMAKE_PROGRESS_11) "Building Fortran object CMakeFiles/komodo.dir/src/xsec.f90.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/imronuke/wsl/github/KOMODO/bld/CMakeFiles --progress-num=$(CMAKE_PROGRESS_13) "Building Fortran object CMakeFiles/komodo.dir/src/xsec.f90.o"
 	/bin/gfortran $(Fortran_DEFINES) $(Fortran_INCLUDES) $(Fortran_FLAGS) -c /home/imronuke/wsl/github/KOMODO/src/xsec.f90 -o CMakeFiles/komodo.dir/src/xsec.f90.o
 
 CMakeFiles/komodo.dir/src/xsec.f90.i: cmake_force
@@ -214,14 +240,16 @@ CMakeFiles/komodo.dir/src/xsec.f90.s: cmake_force
 
 # Object files for target komodo
 komodo_OBJECTS = \
-"CMakeFiles/komodo.dir/src/constant.f90.o" \
+"CMakeFiles/komodo.dir/src/control.f90.o" \
 "CMakeFiles/komodo.dir/src/data.f90.o" \
 "CMakeFiles/komodo.dir/src/fdm.f90.o" \
 "CMakeFiles/komodo.dir/src/komodo.f90.o" \
 "CMakeFiles/komodo.dir/src/linear_system.f90.o" \
 "CMakeFiles/komodo.dir/src/nodal.f90.o" \
-"CMakeFiles/komodo.dir/src/node.f90.o" \
+"CMakeFiles/komodo.dir/src/print.f90.o" \
 "CMakeFiles/komodo.dir/src/read.f90.o" \
+"CMakeFiles/komodo.dir/src/stagger.f90.o" \
+"CMakeFiles/komodo.dir/src/th.f90.o" \
 "CMakeFiles/komodo.dir/src/time.f90.o" \
 "CMakeFiles/komodo.dir/src/util.f90.o" \
 "CMakeFiles/komodo.dir/src/xsec.f90.o"
@@ -229,20 +257,22 @@ komodo_OBJECTS = \
 # External object files for target komodo
 komodo_EXTERNAL_OBJECTS =
 
-komodo: CMakeFiles/komodo.dir/src/constant.f90.o
+komodo: CMakeFiles/komodo.dir/src/control.f90.o
 komodo: CMakeFiles/komodo.dir/src/data.f90.o
 komodo: CMakeFiles/komodo.dir/src/fdm.f90.o
 komodo: CMakeFiles/komodo.dir/src/komodo.f90.o
 komodo: CMakeFiles/komodo.dir/src/linear_system.f90.o
 komodo: CMakeFiles/komodo.dir/src/nodal.f90.o
-komodo: CMakeFiles/komodo.dir/src/node.f90.o
+komodo: CMakeFiles/komodo.dir/src/print.f90.o
 komodo: CMakeFiles/komodo.dir/src/read.f90.o
+komodo: CMakeFiles/komodo.dir/src/stagger.f90.o
+komodo: CMakeFiles/komodo.dir/src/th.f90.o
 komodo: CMakeFiles/komodo.dir/src/time.f90.o
 komodo: CMakeFiles/komodo.dir/src/util.f90.o
 komodo: CMakeFiles/komodo.dir/src/xsec.f90.o
 komodo: CMakeFiles/komodo.dir/build.make
 komodo: CMakeFiles/komodo.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/imronuke/wsl/github/KOMODO/bld/CMakeFiles --progress-num=$(CMAKE_PROGRESS_12) "Linking Fortran executable komodo"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/imronuke/wsl/github/KOMODO/bld/CMakeFiles --progress-num=$(CMAKE_PROGRESS_14) "Linking Fortran executable komodo"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/komodo.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.

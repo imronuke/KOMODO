@@ -1,8 +1,8 @@
 # Remove fortran modules provided by this target.
 FILE(REMOVE
-  "constant.mod"
-  "CONSTANT.mod"
-  "CMakeFiles/komodo.dir/constant.mod.stamp"
+  "control.mod"
+  "CONTROL.mod"
+  "CMakeFiles/komodo.dir/control.mod.stamp"
 
   "data.mod"
   "DATA.mod"
@@ -20,13 +20,21 @@ FILE(REMOVE
   "NODAL.mod"
   "CMakeFiles/komodo.dir/nodal.mod.stamp"
 
-  "node.mod"
-  "NODE.mod"
-  "CMakeFiles/komodo.dir/node.mod.stamp"
+  "print.mod"
+  "PRINT.mod"
+  "CMakeFiles/komodo.dir/print.mod.stamp"
 
   "read.mod"
   "READ.mod"
   "CMakeFiles/komodo.dir/read.mod.stamp"
+
+  "stagger.mod"
+  "STAGGER.mod"
+  "CMakeFiles/komodo.dir/stagger.mod.stamp"
+
+  "th.mod"
+  "TH.mod"
+  "CMakeFiles/komodo.dir/th.mod.stamp"
 
   "time.mod"
   "TIME.mod"

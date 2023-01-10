@@ -4,12 +4,14 @@ module time
 
     implicit none
 
+    private
+
     save
 
     integer, parameter :: dp = real64
     integer, parameter :: i8 = int64
 
-    type :: timer
+    type, public :: timer
     ! integer(int8)  :: start_time
     real(8)  :: start_time
     real(8)  :: stop_time
@@ -18,6 +20,13 @@ module time
     procedure :: on => start_timer
     procedure :: off => stop_timer
     end type
+
+    !Timing
+    type(timer), public :: inp_time
+    type(timer), public :: fdm_time
+    type(timer), public :: nodal_time
+    type(timer), public :: xs_time
+    type(timer), public :: th_time
 
     contains
 

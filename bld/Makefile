@@ -129,29 +129,29 @@ komodo/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/komodo.dir/build.make CMakeFiles/komodo.dir/build
 .PHONY : komodo/fast
 
-src/constant.o: src/constant.f90.o
-.PHONY : src/constant.o
+src/control.o: src/control.f90.o
+.PHONY : src/control.o
 
 # target to build an object file
-src/constant.f90.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/komodo.dir/build.make CMakeFiles/komodo.dir/src/constant.f90.o
-.PHONY : src/constant.f90.o
+src/control.f90.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/komodo.dir/build.make CMakeFiles/komodo.dir/src/control.f90.o
+.PHONY : src/control.f90.o
 
-src/constant.i: src/constant.f90.i
-.PHONY : src/constant.i
+src/control.i: src/control.f90.i
+.PHONY : src/control.i
 
 # target to preprocess a source file
-src/constant.f90.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/komodo.dir/build.make CMakeFiles/komodo.dir/src/constant.f90.i
-.PHONY : src/constant.f90.i
+src/control.f90.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/komodo.dir/build.make CMakeFiles/komodo.dir/src/control.f90.i
+.PHONY : src/control.f90.i
 
-src/constant.s: src/constant.f90.s
-.PHONY : src/constant.s
+src/control.s: src/control.f90.s
+.PHONY : src/control.s
 
 # target to generate assembly for a file
-src/constant.f90.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/komodo.dir/build.make CMakeFiles/komodo.dir/src/constant.f90.s
-.PHONY : src/constant.f90.s
+src/control.f90.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/komodo.dir/build.make CMakeFiles/komodo.dir/src/control.f90.s
+.PHONY : src/control.f90.s
 
 src/data.o: src/data.f90.o
 .PHONY : src/data.o
@@ -273,29 +273,29 @@ src/nodal.f90.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/komodo.dir/build.make CMakeFiles/komodo.dir/src/nodal.f90.s
 .PHONY : src/nodal.f90.s
 
-src/node.o: src/node.f90.o
-.PHONY : src/node.o
+src/print.o: src/print.f90.o
+.PHONY : src/print.o
 
 # target to build an object file
-src/node.f90.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/komodo.dir/build.make CMakeFiles/komodo.dir/src/node.f90.o
-.PHONY : src/node.f90.o
+src/print.f90.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/komodo.dir/build.make CMakeFiles/komodo.dir/src/print.f90.o
+.PHONY : src/print.f90.o
 
-src/node.i: src/node.f90.i
-.PHONY : src/node.i
+src/print.i: src/print.f90.i
+.PHONY : src/print.i
 
 # target to preprocess a source file
-src/node.f90.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/komodo.dir/build.make CMakeFiles/komodo.dir/src/node.f90.i
-.PHONY : src/node.f90.i
+src/print.f90.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/komodo.dir/build.make CMakeFiles/komodo.dir/src/print.f90.i
+.PHONY : src/print.f90.i
 
-src/node.s: src/node.f90.s
-.PHONY : src/node.s
+src/print.s: src/print.f90.s
+.PHONY : src/print.s
 
 # target to generate assembly for a file
-src/node.f90.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/komodo.dir/build.make CMakeFiles/komodo.dir/src/node.f90.s
-.PHONY : src/node.f90.s
+src/print.f90.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/komodo.dir/build.make CMakeFiles/komodo.dir/src/print.f90.s
+.PHONY : src/print.f90.s
 
 src/read.o: src/read.f90.o
 .PHONY : src/read.o
@@ -320,6 +320,54 @@ src/read.s: src/read.f90.s
 src/read.f90.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/komodo.dir/build.make CMakeFiles/komodo.dir/src/read.f90.s
 .PHONY : src/read.f90.s
+
+src/stagger.o: src/stagger.f90.o
+.PHONY : src/stagger.o
+
+# target to build an object file
+src/stagger.f90.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/komodo.dir/build.make CMakeFiles/komodo.dir/src/stagger.f90.o
+.PHONY : src/stagger.f90.o
+
+src/stagger.i: src/stagger.f90.i
+.PHONY : src/stagger.i
+
+# target to preprocess a source file
+src/stagger.f90.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/komodo.dir/build.make CMakeFiles/komodo.dir/src/stagger.f90.i
+.PHONY : src/stagger.f90.i
+
+src/stagger.s: src/stagger.f90.s
+.PHONY : src/stagger.s
+
+# target to generate assembly for a file
+src/stagger.f90.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/komodo.dir/build.make CMakeFiles/komodo.dir/src/stagger.f90.s
+.PHONY : src/stagger.f90.s
+
+src/th.o: src/th.f90.o
+.PHONY : src/th.o
+
+# target to build an object file
+src/th.f90.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/komodo.dir/build.make CMakeFiles/komodo.dir/src/th.f90.o
+.PHONY : src/th.f90.o
+
+src/th.i: src/th.f90.i
+.PHONY : src/th.i
+
+# target to preprocess a source file
+src/th.f90.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/komodo.dir/build.make CMakeFiles/komodo.dir/src/th.f90.i
+.PHONY : src/th.f90.i
+
+src/th.s: src/th.f90.s
+.PHONY : src/th.s
+
+# target to generate assembly for a file
+src/th.f90.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/komodo.dir/build.make CMakeFiles/komodo.dir/src/th.f90.s
+.PHONY : src/th.f90.s
 
 src/time.o: src/time.f90.o
 .PHONY : src/time.o
@@ -402,9 +450,9 @@ help:
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... komodo"
-	@echo "... src/constant.o"
-	@echo "... src/constant.i"
-	@echo "... src/constant.s"
+	@echo "... src/control.o"
+	@echo "... src/control.i"
+	@echo "... src/control.s"
 	@echo "... src/data.o"
 	@echo "... src/data.i"
 	@echo "... src/data.s"
@@ -420,12 +468,18 @@ help:
 	@echo "... src/nodal.o"
 	@echo "... src/nodal.i"
 	@echo "... src/nodal.s"
-	@echo "... src/node.o"
-	@echo "... src/node.i"
-	@echo "... src/node.s"
+	@echo "... src/print.o"
+	@echo "... src/print.i"
+	@echo "... src/print.s"
 	@echo "... src/read.o"
 	@echo "... src/read.i"
 	@echo "... src/read.s"
+	@echo "... src/stagger.o"
+	@echo "... src/stagger.i"
+	@echo "... src/stagger.s"
+	@echo "... src/th.o"
+	@echo "... src/th.i"
+	@echo "... src/th.s"
 	@echo "... src/time.o"
 	@echo "... src/time.i"
 	@echo "... src/time.s"

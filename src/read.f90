@@ -1,8 +1,9 @@
 module read
-    use constant
     use data
     use util
     use fdm
+    use xsec
+    use print
     
     implicit none
     
@@ -50,19 +51,9 @@ module read
     
     logical :: is_nuf_exist = .true.     ! logical variable to check the presence of fissile material
     logical :: is_sigf_exist = .true.    ! logical variable to check the presence of fissile material
-    ! Temporary XSEC
-    integer               :: ng                  ! number of energy group
-    integer               :: nmat                ! number of materials
-    real(dp), allocatable :: sigtr(:,:)          ! Transport macroscopic XSEC
-    real(dp), allocatable :: siga (:,:)          ! Absorption macroscopic XSEC
-    real(dp), allocatable :: nuf  (:,:)          ! nu*fission macroscopic XSEC
-    real(dp), allocatable :: sigf (:,:)          ! fission macroscopic XSEC
-    real(dp), allocatable :: sigs (:,:,:)        ! Scattering macroscopic XSEC
-    real(dp), allocatable :: chi  (:,:)          ! neutron fission spectrum
+
     ! Geometry
-    integer                                :: nxx, nyy, nzz
     integer                                :: np                   ! Number of planars
-    integer, dimension(:,:,:), allocatable :: mat_map              ! node-wise material map
     integer, dimension(:), allocatable     :: zpln                 ! Planar assignment to z direction
     real(dp), dimension(:), allocatable    :: xsize, ysize, zsize  ! Assembly size for each direction
     
@@ -71,8 +62,6 @@ module read
         integer, dimension(:,:), allocatable :: node            ! Material assignment into nodes
     end type
     type(MAT_ASGN), dimension(:), allocatable :: planar         ! planar
-    real(dp), allocatable :: xdel(:), ydel(:), zdel(:)
-    type(core_rect) :: fdm
     
     
     contains
@@ -256,75 +245,58 @@ module read
         
         ! if (boutp == 1) call inp_outp(uoutp)
         
-        ! Miscellaneous things
-        call finalize_input()
-        
         ! ! Card ITER
         ! if (biter == 1) call inp_iter (uiter)
         
         ! ! Card THET
         ! if (bthet == 1) call inp_thet (uthet)
-        
-        ! !!CARD THER
-        ! if (bther == 1 .AND. mode == 'FIXEDSRC') then
-        !     write(ounit,*)'   ERROR: %THER CARD NOT VALID FOR FIXED SOURCE CALCULATION MODE'
-        !     write(*,*)'   ERROR: %THER CARD NOT VALID FOR FIXED SOURCE CALCULATION MODE'
-        !     stop
-        ! else if (bther == 1 .AND. mode == 'ADJOINT') then
-        !     write(ounit,*)'   ERROR: %THER CARD NOT VALID FOR ADJOINT CALCULATION MODE'
-        !     write(*,*)'   ERROR: %THER CARD NOT VALID FOR ADJOINT CALCULATION MODE'
-        !     stop
-        ! else if (bther == 1 .AND. bftem == 1 .AND. (bmtem ==1 .OR. bcden == 1)) then
-        !     call inp_ther (uther)
-        ! else if (bther == 1 .AND. bxtab == 1) then
-        !       call inp_ther (uther)
-        ! else if (bther == 0) then
-        !     CONTINUE
-        ! else
-        !     if (bxtab /= 1) then
-        !       write(ounit,*)'   ERROR: WHEN %THER CARD PRESENT %FTEM AND,' // &
-        !                     'AT LEAST ONE OF THE FOLLOWING CARDS MUST PRESENT'
-        !       write(ounit,*)'   1. %MTEM   2. %CDEN'
-        !       write(*,*)'   ERROR: WHEN %THER CARD PRESENT %FTEM AND,' // &
-        !                     'AT LEAST ONE OF THE FOLLOWING CARDS MUST PRESENT'
-        !       write(*,*)'   1. %MTEM   2. %CDEN'
-        !       stop
-        !     end if
-        ! end if
-        
+
         ! if (bextr == 1) call inp_extr()
         
-        ! !!CARD BCON
-        ! if (bbcon == 1 .AND. bxtab == 0) call inp_bcon (ubcon)
-        ! if (bbcon == 1 .AND. bxtab == 1 .AND. mode == 'RODEJECT') call inp_bcon (ubcon)
+        !CARD THER
+        if (bther == 1 .AND. mode == 'FIXEDSRC') then
+            message = '   ERROR: %THER CARD NOT VALID FOR FIXED SOURCE CALCULATION MODE'
+            call input_error(ounit, msg=message)
+        else if (bther == 1 .AND. mode == 'ADJOINT') then
+            message = '   ERROR: %THER CARD NOT VALID FOR ADJOINT CALCULATION MODE'
+            call input_error(ounit, msg=message)
+        else if (bther == 1 .AND. bftem == 1 .AND. (bmtem ==1 .OR. bcden == 1)) then
+            call inp_ther (uther)
+        else if (bther == 1 .AND. bxtab == 1) then
+              call inp_ther (uther)
+        else if (bther == 0) then
+            CONTINUE
+        else
+            if (bxtab /= 1) then
+              message = '   ERROR: WHEN %THER CARD PRESENT %FTEM AND,' // &
+              'AT LEAST ONE OF THE FOLLOWING CARDS MUST PRESENT' &
+              // new_line('a') // '   1. %MTEM   2. %CDEN'
+              call input_error(ounit, msg=message)
+            end if
+        end if
         
-        ! !!CARD FTEM
-        ! if (bftem == 1 .AND. bxtab == 0) call inp_ftem (uftem)
+        !CARD BCON
+        if (bbcon == 1 .AND. bxtab == 0) call inp_bcon (ubcon)
+        if (bbcon == 1 .AND. bxtab == 1 .AND. mode == 'RODEJECT') call inp_bcon (ubcon)
         
-        ! !!CARD MTEM
-        ! if (bmtem == 1 .AND. bxtab == 0) call inp_mtem (umtem)
+        !CARD FTEM
+        if (bftem == 1 .AND. bxtab == 0) call inp_ftem (uftem)
         
-        ! !!CARD CDEN
-        ! if (bcden == 1 .AND. bxtab == 0) call inp_cden (ucden)
+        !CARD MTEM
+        if (bmtem == 1 .AND. bxtab == 0) call inp_mtem (umtem)
         
+        !CARD CDEN
+        if (bcden == 1 .AND. bxtab == 0) call inp_cden (ucden)
         
-        ! !CARD ADF
-        ! allocate(dc(nnod,ng,6))
-        ! do g = 1, ng
-        !     do n = 1, nnod
-        !         dc(n,g,1:) = 1._dp     !by default, adf = 1
-        !     end do
-        ! end do
-        
-        ! if (badf == 1 .AND. bxtab == 0) then
-        !   call inp_adf (uadf)
-        ! else if (badf == 1 .AND. bxtab == 1) then
-        !   write(ounit,*) '  BOTH %ADF AND %XTAB CARDS CANNOT PRESENT TOGETHER'
-        !   write(*,*) '  BOTH %ADF AND %XTAB CARDS CANNOT PRESENT TOGETHER'
-        !   stop
-        ! else
-        !   CONTINUE
-        ! end if
+        !CARD ADF
+        if (badf == 1 .AND. bxtab == 0) then
+            call inp_adf (uadf)
+        else if (badf == 1 .AND. bxtab == 1) then
+            message = '  BOTH %ADF AND %XTAB CARDS CANNOT PRESENT TOGETHER'
+            call input_error(ounit, msg=message)
+        else
+            continue
+        end if
         
         ! ! Card ESRC
         ! allocate(exsrc(nnod, ng))   ! For transient or rod ejection problem, this used to
@@ -345,9 +317,7 @@ module read
         !     CONTINUE
         ! end if
         
-        
-        
-        ! deallocate(mnum)
+        ! deallocate(mat_map)
         ! do i= 1,np
         !     deallocate(planar(i)%asm)
         !     deallocate(planar(i)%node)
@@ -559,35 +529,44 @@ module read
         1019 format(A2, I5,' ',A200)
     
     end subroutine inp_rewrite
+
     !===============================================================================================!
     ! To provide error message                                                                     !
     !===============================================================================================!
     
-    subroutine input_error (funit, iost, ln, mess, xtab, buf)
+    subroutine input_error (funit, iost, ln, msg, xtab, buf)
     
-        integer, intent(in) :: funit, iost, ln
-        character(LEN=*), intent(in) :: mess
-        integer, OPTIONAL, intent(in) :: xtab, buf
+        integer, intent(in)           :: funit
+        integer, optional, intent(in) :: iost, ln
+        character(LEN=*), intent(in)  :: msg
+        integer, optional, intent(in) :: xtab, buf
+
+        if ((.not. present(iost))) then
+            write(*,*)''//achar(27)//'[31m OOPS! WE FOUND AN ERROR.'//achar(27)//'[0m'
+            write(funit,*) msg
+            write(*,*) msg
+            stop
+        endif
         
         if (iost < 0) then
             write(funit,*)
             write(*,*)
             write(*,*)''//achar(27)//'[31m OOPS! WE FOUND AN ERROR.'//achar(27)//'[0m'
         
-            if (PRESENT(xtab)) then
+            if (present(xtab)) then
                 write(funit, 1014) ln, xtab
             else
                 write(funit, 1006) card_array(findloc(unit_array,buf))
                 write(funit, 1013) ln, file_array(findloc(unit_array,buf))
             end if
-            write(funit,*) mess
-            if (PRESENT(xtab)) then
+            write(funit,*) msg
+            if (present(xtab)) then
                 write(*, 1014) ln, xtab
             else
                 write(*, 1006) card_array(findloc(unit_array,buf))
                 write(*, 1013) ln, file_array(findloc(unit_array,buf))
             end if
-            write(*,*) mess
+            write(*,*) msg
             1013 format(2x, 'THIS LINE NEEDS MORE INPUT DATA. LINE', I4, &
             ' IN FILE : ', A100)
             1014 format(2x, 'ERROR: LINE', I4, &
@@ -600,20 +579,20 @@ module read
             write(*,*)
             write(*,*)''//achar(27)//'[31m OOPS! WE FOUND AN ERROR.'//achar(27)//'[0m'
         
-            if (PRESENT(xtab)) then
+            if (present(xtab)) then
                 write(funit, 1005) ln, xtab
             else
                     write(funit, 1006) card_array(findloc(unit_array,buf))
                     write(funit, 1004) ln, file_array(findloc(unit_array,buf))
             end if
-            write(funit,*) mess
-            if (PRESENT(xtab)) then
+            write(funit,*) msg
+            if (present(xtab)) then
                 write(*, 1005) ln, xtab
             else
                 write(*, 1006) card_array(findloc(unit_array,buf))
                 write(*, 1004) ln, file_array(findloc(unit_array,buf))
             end if
-            write(*,*) mess
+            write(*,*) msg
             1006 format(2X, 'ERROR: THERE IS AN ERROR IN CARD %', A4)
             1004 format(2X, 'PLEASE CHECK LINE NUMBER', I4, ' IN FILE : ', A100)
             1005 format(2X, 'ERROR: PLEASE CHECK LINE NUMBER', I4, &
@@ -621,7 +600,7 @@ module read
             stop
         end if
     
-    end subroutine input_error
+    end subroutine
     
     !===============================================================================================!
     ! To read calculation mode of the given problem                                                 !
@@ -958,7 +937,6 @@ module read
         integer, parameter :: xm = 36
         integer            :: ip, ipr, kp
         integer            :: x_start, x_finish
-        integer            :: xeast, xwest, ynorth, ysouth, zbott, ztop
         
         ! READING number of planar
         read(xbunit, *, IOSTAT=ios) ind, ln, np
@@ -996,7 +974,7 @@ module read
         end do
         
         ! Material assignment into nodes (not part for geom output)
-        allocate (mat_map(nxx, nyy, nzz))
+        allocate(mat_map(nxx, nyy, nzz))
         
         ztot = 0
         do k= 1, nz
@@ -1040,14 +1018,16 @@ module read
         end do
         
         !READING Boundary Conditions
-        read(xbunit, *, IOSTAT=ios) ind, ln, xeast, xwest, ynorth, ysouth, zbott, ztop
+        read(xbunit, *, IOSTAT=ios) ind, ln, east, west, north, south, bottom, top
         message = ' error in READING boundary conditions'
         call input_error(ounit, ios, ln, message, buf=xbunit)
         
-        if (xeast > 2 .OR. xwest > 2 .OR. ynorth > 2 .OR. ysouth > 2 .OR. zbott > 2 .OR. ztop > 2) &
+        if (east > 2 .OR. west > 2 .OR. north > 2 .OR. south > 2 .OR. bottom > 2 .OR. top > 2) &
         call fatal_error(ounit, 'Boundary condition values must be smaller than 3')
-        
-        
+
+        ! Calculate necessary data for rectangular geometry
+        call finalize_rect_geometry()
+
         ! Wrting core geometry output
         if (ogeom) then
             write(ounit,*)' Number of assembly in x, y and z directions respectively :'
@@ -1062,39 +1042,39 @@ module read
             write(ounit,*)
         
             if (nxx < 100) then
-            ip = nxx/xm
-            ipr = MOD(nxx,xm) - 1
-            do k= 1,np
-        
-                do j = 1, nyy
-                    do i = 1, nxx
-                        if (planar(k)%node(i,j) == 0) then
-                            mmap(i,j) = '  '
-                        else
-                            write (mmap(i,j),'(I2)') planar(k)%node(i,j)
-                            mmap(i,j) = trim(adjustl(mmap(i,j)))
-                        end if
+                ip = nxx/xm
+                ipr = MOD(nxx,xm) - 1
+                do k= 1,np
+            
+                    do j = 1, nyy
+                        do i = 1, nxx
+                            if (planar(k)%node(i,j) == 0) then
+                                mmap(i,j) = '  '
+                            else
+                                write (mmap(i,j),'(I2)') planar(k)%node(i,j)
+                                mmap(i,j) = trim(adjustl(mmap(i,j)))
+                            end if
+                        end do
                     end do
+            
+                    write(ounit,1017) k
+                    x_start = 1; x_finish = xm
+                    do kp = 1, ip
+                        write(ounit,'(6X,100I3)') (i, i = x_start, x_finish)
+                        do j= nyy, 1, -1
+                            write(ounit,'(2X,I4,1X,100A3)') j, (mmap(i,j), i=x_start, x_finish)
+                        end do
+                        x_start = x_start + xm
+                        x_finish = x_finish + xm
+                    end do
+            
+                    write(ounit,'(6X,100I3)') (i, i = x_start, x_start+ipr)
+                    if (x_start+ipr > x_start) then
+                        do j= nyy, 1, -1
+                            write(ounit,'(2X,I4,1X,100A3)') j, (mmap(i,j), i=x_start, x_start+ipr)
+                        end do
+                    end if
                 end do
-        
-                write(ounit,1017) k
-                x_start = 1; x_finish = xm
-                do kp = 1, ip
-                    write(ounit,'(6X,100I3)') (i, i = x_start, x_finish)
-                    do j= nyy, 1, -1
-                        write(ounit,'(2X,I4,1X,100A3)') j, (mmap(i,j), i=x_start, x_finish)
-                    end do
-                    x_start = x_start + xm
-                    x_finish = x_finish + xm
-                end do
-        
-                write(ounit,'(6X,100I3)') (i, i = x_start, x_start+ipr)
-                if (x_start+ipr > x_start) then
-                    do j= nyy, 1, -1
-                        write(ounit,'(2X,I4,1X,100A3)') j, (mmap(i,j), i=x_start, x_start+ipr)
-                    end do
-                end if
-            end do
             end if
         
             write(ounit,*)
@@ -1117,49 +1097,49 @@ module read
             write(ounit,*)
             write(ounit,*) '  Boundary conditions'
         
-            if (xwest == ZERO_FLUX) then
+            if (west == ZERO_FLUX) then
                 write(ounit,*)' X-directed West   : ZERO FLUX'
-            else if (xwest == ZERO_INCOMING) then
+            else if (west == ZERO_INCOMING) then
                 write(ounit,*)' X-directed West   : ZERO INCOMING CURRENT'
             else
                 write(ounit,*)' X-directed West   : REFLECTIVE'
             end if
         
-            if (xeast == ZERO_FLUX) then
+            if (east == ZERO_FLUX) then
                 write(ounit,*)' X-directed East   : ZERO FLUX'
-            else if (xeast == ZERO_INCOMING) then
+            else if (east == ZERO_INCOMING) then
                 write(ounit,*)' X-directed East   : ZERO INCOMING CURRENT'
             else
                 write(ounit,*)' X-directed East   : REFLECTIVE'
             end if
         
-            if (ynorth == ZERO_FLUX) then
+            if (north == ZERO_FLUX) then
                 write(ounit,*)' Y-directed North  : ZERO FLUX'
-            else if (ynorth == ZERO_INCOMING) then
+            else if (north == ZERO_INCOMING) then
                 write(ounit,*)' Y-directed North  : ZERO INCOMING CURRENT'
             else
                 write(ounit,*)' Y-directed North  : REFLECTIVE'
             end if
         
-            if (ysouth == ZERO_FLUX) then
+            if (south == ZERO_FLUX) then
                 write(ounit,*)' Y-directed South  : ZERO FLUX'
-            else if (ysouth == ZERO_INCOMING) then
+            else if (south == ZERO_INCOMING) then
                 write(ounit,*)' Y-directed South  : ZERO INCOMING CURRENT'
             else
                 write(ounit,*)' Y-directed South  : REFLECTIVE'
             end if
         
-            if (zbott == ZERO_FLUX) then
+            if (bottom == ZERO_FLUX) then
                 write(ounit,*)' Z-directed Bottom : ZERO FLUX'
-            else if (zbott == ZERO_INCOMING) then
+            else if (bottom == ZERO_INCOMING) then
                 write(ounit,*)' Z-directed Bottom : ZERO INCOMING CURRENT'
             else
                 write(ounit,*)' Z-directed Bottom : REFLECTIVE'
             end if
         
-            if (ztop == ZERO_FLUX) then
+            if (top == ZERO_FLUX) then
                 write(ounit,*)' Z-directed Top    : ZERO FLUX'
-            else if (ztop == ZERO_INCOMING) then
+            else if (top == ZERO_INCOMING) then
                 write(ounit,*)' Z-directed Top    : ZERO INCOMING CURRENT'
             else
                 write(ounit,*)' Z-directed Top    : REFLECTIVE'
@@ -1173,10 +1153,110 @@ module read
         
         write(ounit,*)
         write(ounit,*) ' ...Core geometry is successfully read...'
-        call set_fdm_parameters(fdm, ng, nxx, nyy, nzz, nmat, mat_map, &
-        xeast, xwest, ynorth, ysouth, ztop, zbott, ounit)
     
     end subroutine inp_geom2
+
+    !===============================================================================================!
+    ! Calculate necessary data for rectangular geometry
+    !===============================================================================================!
+
+    subroutine finalize_rect_geometry()
+
+        integer :: i, j, k, n
+        
+        ! -Indexing non zero material for staggered mesh-
+        allocate(ystag(nyy), xstag(nxx))
+
+        !Indexing non zero material for staggered mesh along y direction
+        do j= 1, nyy
+            ystag(j) % smin = nxx
+            do i = 1, nxx
+                if (mat_map(i,j,1) /= 0) then
+                    ystag(j) % smin = i
+                    exit
+                end if
+            end do
+        end do
+        
+        do j= 1, nyy
+            ystag(j) % smax = 0
+            do i = nxx, 1, -1
+                if (mat_map(i,j,1) /= 0) then
+                    ystag(j) % smax = i
+                    exit
+                end if
+            end do
+        end do
+        
+        !Indexing non zero material for staggered mesh along x direction
+        do i= 1, nxx
+            xstag(i) % smin = nyy
+            do j = 1, nyy
+                if (mat_map(i,j,1) /= 0) then
+                    xstag(i) % smin = j
+                    exit
+                end if
+            end do
+        end do
+        
+        do i= 1, nxx
+            xstag(i) % smax = 0
+            do j = nyy, 1, -1
+                if (mat_map(i,j,1) /= 0) then
+                    xstag(i)%smax = j
+                    exit
+                end if
+            end do
+        end do
+        
+        ! Checking zero material between non-zero material
+        do k = 1, nzz
+            do j = 1, nyy
+                do i = ystag(j) % smin, ystag(j) % smax
+                    if (mat_map(i,j,k) == 0) call fatal_error(ounit, &
+                    'Zero material found inside core_rect. Check material assignment')
+                end do
+            end do
+        end do
+        do k = 1, nzz
+            do i = 1, nxx
+                do j = xstag(i) % smin, xstag(i) % smax
+                    if (mat_map(i,j,k) == 0) call fatal_error(ounit, &
+                    'Zero material found inside core_rect. Check material assignment')
+                end do
+            end do
+        end do
+
+        ! Preparing neccesary geometry related variables
+        nnod = 0
+        do k = 1, nzz
+            do j = 1, nyy
+                do i = ystag(j) % smin, ystag(j) % smax
+                     nnod = nnod + 1
+                end do
+            end do
+        end do
+
+        allocate(vdel(nnod))
+        allocate(ix(nnod), iy(nnod), iz(nnod))
+        allocate(xyz(nxx, nyy, nzz))
+        ! Set ix, iy, iz and xyz
+        n = 0
+        xyz = 0
+        do k = 1, nzz
+            do j = 1, nyy
+                do i = ystag(j)%smin, ystag(j)%smax
+                     n = n + 1
+                     ix(n) = i
+                     iy(n) = j
+                     iz(n) = k
+                     xyz(i,j,k) = n
+                     vdel(n)    = xdel(i) * ydel(j) * zdel(k)
+                end do
+            end do
+        end do
+        
+    end subroutine
 
     !===============================================================================================!
     ! To determine nodal kernel 
@@ -1197,11 +1277,9 @@ module read
         
         kern = trim(ADJUSTR(kern))
         if (kern /= ' FDM' .and. kern /= ' PNM' .and. kern /= 'SANM') then
-          write(*,1646) kern
-          write(*,*) ' NODAL KERNEL OPTIONS: FDM, PNM OR SANM'
-          write(ounit,1646) kern
-          write(ounit,*) ' NODAL KERNEL OPTIONS: FDM, PNM OR SANM'
-          stop
+            message = '  COULD NOT RECOGNIZE NODAL KERNEL: ' // kern // new_line('a') // &
+            ' NODAL KERNEL OPTIONS: FDM, PNM OR SANM'
+            call input_error(ounit, msg=message)
         end if
         
         if (kern == ' FDM') then
@@ -1219,75 +1297,1006 @@ module read
         write(ounit,*) '           ------------------------------------'
         
         write(ounit,1648) kern_desc
-        if (scr) then
-          write(*,*)
-          write(*,1648) kern_desc
-        end if
+        write(*,*)
+        write(*,1648) kern_desc
         
-        1646 format (2X, 'ERROR: COULD NOT RECOGNIZE NODAL KERNEL: ', A4)
         1648 format (2X, 'NODAL KERNEL  : ', A30)
         
     end subroutine
+
+    !===============================================================================================!
+    ! To read assembly discontinuity factors (ADF) if any
+    !===============================================================================================!
+
+    subroutine inp_adf (xbunit)
+    
+        integer, intent(in) :: xbunit
+        
+        type :: ADF_type
+            real(dp), dimension(6) :: dc
+        end type
+        type(ADF_type), dimension(nmat,ng) :: mdc
+        type(ADF_type), dimension(nx,ny,nz,ng) :: xdc
+        type(ADF_type), dimension(nxx,nyy,nzz,ng) :: xxdc
+        
+        integer :: g, i, j, k, u
+        integer :: rot, x1, x2, y1, y2, z1, z2
+        integer :: xtot, ytot, ztot
+        integer :: lz, ly, lx
+        integer, dimension(nx+1) :: tx
+        integer, dimension(ny+1) :: ty
+        integer, dimension(nz+1) :: tz
+        integer :: zp
+        character(LEN=6), dimension(nx, ny) :: cadf
+        integer, parameter :: xm = 12
+        integer :: ip, ipr
+        integer :: xs, xf
+        
+        integer :: ln   !Line number
+        integer :: ios  ! IOSTAT status
+        
+        write(ounit,*)
+        write(ounit,*)
+        write(ounit,*) '         >>>>>READING ASSEMBLY DISCONTINUITY FACTOR<<<<<'
+        write(ounit,*) '         -----------------------------------------------'
+        
+        do i = 1, nmat
+            do g = 1, ng
+                read(xbunit, *, IOSTAT=ios) ind, ln, (mdc(i,g)%dc(j), j = 1, 6)
+                message = ' error in reading Assembly Discontinuity Factor (ADF)'
+                call input_error(ounit, ios, ln, message, buf=xbunit)
+            end do
+        end do
+        
+        do g = 1, ng
+            do k = 1, nz
+                do j = 1, ny
+                    do i = 1, nx
+                        if (planar(zpln(k))%asm(i,j) /= 0) xdc(i,j,k,g) = mdc(planar(zpln(k))%asm(i,j),g)
+                    end do
+                end do
+            end do
+        end do
+        
+        !!! ADF ROTATION
+        do
+            read(xbunit, *, IOSTAT=ios) ind, ln, rot
+            message = ' error in reading ADF Rotation'
+            call input_error(ounit, ios, ln, message, buf=xbunit)
+            if (rot < 1) exit
+            if (rot > 3) then
+                write(ounit,*) '  ERROR: MAXIMUM ADF ROTATION IS 3 TIMES'
+                write(ounit,2030) ln, rot
+            end if
+        
+            do
+                read(xbunit, *, IOSTAT=ios) ind, ln, x1, x2, y1, y2, z1, z2
+                message = ' error in READING ADF Rotation'
+                call input_error(ounit, ios, ln, message, buf=xbunit)
+                if (x1 < 1 .OR. x2 < 1 .OR. y1 < 1 .OR. y2 < 1 .OR. z1 < 1 .OR. z2 < 1) exit
+                if (x1 > nx .OR. x2 > nx .OR. y1 > ny .OR. y2 > ny .OR. z1 > nz .OR. z2 > nz) then
+                    write(ounit,*) '  ERROR: WRONG POSITION FOR ADF ROTATION. ' // &
+                                   'OUT OF DIMENSION OF THE CORE'
+                    write(ounit,2032) ln, x1, x2, y1, y2, z1, z2
+                    stop
+                end if
+                if (x2 < x1 .OR. y2 < y1 .OR. z2 < z1) then
+                    write(ounit,*) '  ERROR: WRONG POSITION FOR ADF ROTATION. ' // &
+                                   'INITIAL POSITION IS SMALLER'
+                    write(ounit,2032) ln, x1, x2, y1, y2, z1, z2
+                end if
+        
+                do g = 1, ng
+                    do k = z1, z2
+                        do j = y1, y2
+                            do i = x1, x2
+                                call rotate(rot, xdc(i,j,k,g)%dc(1), xdc(i,j,k,g)%dc(2), &
+                                                 xdc(i,j,k,g)%dc(3), xdc(i,j,k,g)%dc(4))
+                            end do
+                        end do
+                    end do
+                end do
+        
+            end do
+        end do
+        
+        ! ADF PRINT OPTION
+        read(xbunit, *, IOSTAT=ios) ind, ln, zp
+        if (ios == 0 .AND. zp >=1) then
+            write(ounit,*)
+            write(ounit,'(A,I3)') '  ADF VALUES ON PLANAR NUMBER : ', zp
+        
+            ip = nx/xm
+            ipr = MOD(nx,xm) - 1
+            do g = 1, ng
+                write(ounit,*)
+                write(ounit, 1999) g
+                write(ounit,*)
+        
+                write(ounit,*) '  EAST ADF'
+                do j = 1, ny
+                    do i = 1, nx
+                        !!! if ADF > 0, Convert ADF to character
+                        if ((xdc(i,j,zp,g)%dc(1) - 0.) < 1.e-5_DP) then
+                            cadf(i,j) = '      '
+                        else
+                            write (cadf(i,j),'(F6.4)') xdc(i,j,zp,g)%dc(1)
+                            cadf(i,j) = trim(adjustl(cadf(i,j)))
+                        end if
+                    end do
+                end do
+        
+                xs = 1; xf = xm
+                do k = 1, ip
+                    write(ounit,'(4X,100I8)') (i, i = xs, xf)
+                    do j= ny, 1, -1
+                        write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xf)
+                    end do
+                    write(ounit,*)
+                    xs = xs + xm
+                    xf = xf + xm
+                end do
+        
+                write(ounit,'(4X,100I8)') (i, i = xs, xs+ipr)
+                if (xs+ipr > xs) then
+                    do j= ny, 1, -1
+                        write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xs+ipr)
+                    end do
+                end if
+        
+        
+                write(ounit,*) '  WEST ADF'
+                do j = 1, ny
+                    do i = 1, nx
+                        !!! if ADF > 0, Convert ADF to character
+                        if ((xdc(i,j,zp,g)%dc(2) - 0.) < 1.e-5_DP)  then
+                            cadf(i,j) = '      '
+                        else
+                            write (cadf(i,j),'(F6.4)') xdc(i,j,zp,g)%dc(2)
+                            cadf(i,j) = trim(adjustl(cadf(i,j)))
+                        end if
+                    end do
+                end do
+        
+                xs = 1; xf = xm
+                do k = 1, ip
+                    write(ounit,'(4X,100I8)') (i, i = xs, xf)
+                    do j= ny, 1, -1
+                        write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xf)
+                    end do
+                    write(ounit,*)
+                    xs = xs + xm
+                    xf = xf + xm
+                end do
+        
+                write(ounit,'(4X,100I8)') (i, i = xs, xs+ipr)
+                if (xs+ipr > xs) then
+                    do j= ny, 1, -1
+                        write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xs+ipr)
+                    end do
+                end if
+        
+        
+                write(ounit,*) '  NORTH ADF'
+                do j = 1, ny
+                    do i = 1, nx
+                        !!! if ADF > 0, Convert ADF to character
+                        if ((xdc(i,j,zp,g)%dc(3) - 0.) < 1.e-5_DP) then
+                            cadf(i,j) = '      '
+                        else
+                            write (cadf(i,j),'(F6.4)') xdc(i,j,zp,g)%dc(3)
+                            cadf(i,j) = trim(adjustl(cadf(i,j)))
+                        end if
+                    end do
+                end do
+        
+                xs = 1; xf = xm
+                do k = 1, ip
+                    write(ounit,'(4X,100I8)') (i, i = xs, xf)
+                    do j= ny, 1, -1
+                        write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xf)
+                    end do
+                    write(ounit,*)
+                    xs = xs + xm
+                    xf = xf + xm
+                end do
+        
+                write(ounit,'(4X,100I8)') (i, i = xs, xs+ipr)
+                if (xs+ipr > xs) then
+                    do j= ny, 1, -1
+                        write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xs+ipr)
+                    end do
+                end if
+        
+        
+                write(ounit,*) '  SOUTH ADF'
+                do j = 1, ny
+                    do i = 1, nx
+                        !!! if ADF > 0, Convert ADF to character
+                        if ((xdc(i,j,zp,g)%dc(4) - 0.) < 1.e-5_DP) then
+                            cadf(i,j) = '      '
+                        else
+                            write (cadf(i,j),'(F6.4)') xdc(i,j,zp,g)%dc(4)
+                            cadf(i,j) = trim(adjustl(cadf(i,j)))
+                        end if
+                    end do
+                end do
+        
+                xs = 1; xf = xm
+                do k = 1, ip
+                    write(ounit,'(4X,100I8)') (i, i = xs, xf)
+                    do j= ny, 1, -1
+                        write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xf)
+                    end do
+                    write(ounit,*)
+                    xs = xs + xm
+                    xf = xf + xm
+                end do
+        
+                write(ounit,'(4X,100I8)') (i, i = xs, xs+ipr)
+                if (xs+ipr > xs) then
+                    do j= ny, 1, -1
+                        write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xs+ipr)
+                    end do
+                end if
+        
+        
+                write(ounit,*) '  TOP ADF'
+                do j = 1, ny
+                    do i = 1, nx
+                        !!! if ADF > 0, Convert ADF to character
+                        if ((xdc(i,j,zp,g)%dc(5) - 0.) < 1.e-5_DP) then
+                            cadf(i,j) = '      '
+                        else
+                            write (cadf(i,j),'(F6.4)') xdc(i,j,zp,g)%dc(5)
+                            cadf(i,j) = trim(adjustl(cadf(i,j)))
+                        end if
+                    end do
+                end do
+        
+                xs = 1; xf = xm
+                do k = 1, ip
+                    write(ounit,'(4X,100I8)') (i, i = xs, xf)
+                    do j= ny, 1, -1
+                        write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xf)
+                    end do
+                    write(ounit,*)
+                    xs = xs + xm
+                    xf = xf + xm
+                end do
+        
+                write(ounit,'(4X,100I8)') (i, i = xs, xs+ipr)
+                if (xs+ipr > xs) then
+                    do j= ny, 1, -1
+                        write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xs+ipr)
+                    end do
+                end if
+        
+        
+                write(ounit,*) '  BOTTOM ADF'
+                do j = 1, ny
+                    do i = 1, nx
+                        !!! if ADF > 0, Convert ADF to character
+                        if ((xdc(i,j,zp,g)%dc(6) - 0.) < 1.e-5_DP) then
+                            cadf(i,j) = '      '
+                        else
+                            write (cadf(i,j),'(F6.4)') xdc(i,j,zp,g)%dc(6)
+                            cadf(i,j) = trim(adjustl(cadf(i,j)))
+                        end if
+                    end do
+                end do
+        
+                xs = 1; xf = xm
+                do k = 1, ip
+                    write(ounit,'(4X,100I8)') (i, i = xs, xf)
+                    do j= ny, 1, -1
+                        write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xf)
+                    end do
+                    write(ounit,*)
+                    xs = xs + xm
+                    xf = xf + xm
+                end do
+        
+                write(ounit,'(4X,100I8)') (i, i = xs, xs+ipr)
+                if (xs+ipr > xs) then
+                    do j= ny, 1, -1
+                        write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xs+ipr)
+                    end do
+                end if
+                write(ounit,*)
+            end do
+        end if
+        
+        1999 format (4X, 'GROUP : ', I3)
+        
+        write(ounit,*) '  ...Assembly Discontinuity Factors are successfully read...'
+        
+        
+        tx(1) = 1
+        do i = 2, nx+1
+            tx(i) = tx(i-1) + xdiv(i-1)
+        end do
+        ty(1) = 1
+        do j = 2, ny+1
+            ty(j) = ty(j-1) + ydiv(j-1)
+        end do
+        tz(1) = 1
+        do k = 2, nz+1
+            tz(k) = tz(k-1) + zdiv(k-1)
+        end do
+        
+        do g = 1, ng
+            ztot = 0
+            do k= 1, nz
+                do lz= 1, zdiv(k)
+                    ztot = ztot+1
+                    ytot = 0
+                    do j= 1, ny
+                        do ly= 1, ydiv(j)
+                            ytot = ytot+1
+                            xtot = 0
+                            do i= 1, nx
+                                do lx= 1, xdiv(i)
+                                    xtot = xtot+1
+                                    xxdc(xtot,ytot,ztot,g)%dc = 0._DP
+                                    if (mat_map(xtot, ytot, ztot) /= 0) xxdc(xtot,ytot,ztot,g)%dc = 1._DP
+                                    if (xtot == tx(i))     xxdc(xtot,ytot,ztot,g)%dc(2) = xdc(i,j,k,g)%dc(2)
+                                    if (xtot == tx(i+1)-1) xxdc(xtot,ytot,ztot,g)%dc(1) = xdc(i,j,k,g)%dc(1)
+                                    if (ytot == ty(j))     xxdc(xtot,ytot,ztot,g)%dc(4) = xdc(i,j,k,g)%dc(4)
+                                    if (ytot == ty(j+1)-1) xxdc(xtot,ytot,ztot,g)%dc(3) = xdc(i,j,k,g)%dc(3)
+                                    if (ztot == tz(k))     xxdc(xtot,ytot,ztot,g)%dc(5) = xdc(i,j,k,g)%dc(5)
+                                    if (ztot == tz(k+1)-1) xxdc(xtot,ytot,ztot,g)%dc(6) = xdc(i,j,k,g)%dc(6)
+                                end do
+                            end do
+                        end do
+                    end do
+                end do
+            end do
+        end do
+        
+        allocate(dc(nnod, ng, 6))
+        do g = 1, ng
+            do k = 1, nzz
+                do j = 1, nyy
+                    do i = ystag(j)%smin, ystag(j)%smax
+                       do u = 1, 6
+                         dc(xyz(i,j,k),g,u) = xxdc(i,j,k,g)%dc(u)
+                       end do
+                    end do
+                end do
+            end do
+        end do
+        
+        
+        2030 format(3X,'LINE', I4, ' : ', I3)
+        2032 format(3X,'LINE', I4, ' : ', I3, I3, I3, I3, I3, I3)
+    
+    
+    end subroutine
+
+    !===============================================================================================!
+    ! To rotate ADF values (necessary for BWR assemblies)
+    !===============================================================================================!
+
+    subroutine rotate(rot, a1, a2, a3, a4)
+    
+        integer, intent(in) :: rot
+        real(dp), intent(inout) :: a1, a2, a3, a4
+        real(dp) :: x1, x2, x3, x4
+        
+        x1 = a1
+        x2 = a2
+        x3 = a3
+        x4 = a4
+        
+        if (rot == 1) then
+            a1 = x4
+            a2 = x3
+            a3 = x1
+            a4 = x2
+        end if
+        
+        if (rot == 2) then
+            a1 = x2
+            a2 = x1
+            a3 = x4
+            a4 = x3
+        end if
+        
+        if (rot == 3) then
+            a1 = x3
+            a2 = x4
+            a3 = x2
+            a4 = x1
+        end if
+    
+    end subroutine rotate
+
+    !===============================================================================================!
+    ! To read boron concentration for critical boron search
+    !===============================================================================================!
+    
+    subroutine inp_cbcs (xbunit)
+    
+        integer, intent(in) :: xbunit
+        
+        integer :: ln   !Line number
+        integer :: ios  ! IOSTAT status
+        
+        integer :: i, g, h
+        integer :: popt
+        integer, dimension(ng) :: group
+        
+        write(ounit,*)
+        write(ounit,*)
+        write(ounit,*) '           >>>> READING BORON CONCENTRATION FOR BC SEARCH <<<<'
+        write(ounit,*) '           --------------------------------------------------'
+        
+        ! read Boron Concentration
+        read(xbunit, *, IOSTAT=ios) ind, ln, rbcon
+        message = ' error in READING bc guess and bc reference'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        if (bxtab == NO) then  ! if XTAB File does not present
+            allocate(csigtr(nmat,ng))
+            allocate(csiga (nmat,ng))
+            allocate(cnuf  (nmat,ng))
+            allocate(csigf (nmat,ng))
+            allocate(csigs (nmat,ng,ng))
+          
+            ! read CX changes per ppm born change
+            do i = 1, nmat
+                do g= 1, ng
+                    read(xbunit, *, IOSTAT=ios) ind, ln, csigtr(i,g), &
+                    csiga(i,g), cnuf(i,g), csigf(i,g), (csigs(i,g,h), h = 1, ng)
+                    message = ' error in READING macro xs changes per ppm boron changes'
+                    call input_error(ounit, ios, ln, message, buf=xbunit)
+                end do
+            end do
+        end if
+        
+        !! BCON PRINT OPTION
+        read(xbunit, *, IOSTAT=ios) ind, ln, popt
+        if (ios == 0 .AND. popt > 0) then
+        
+            write(ounit,1422) rbcon
+            if (bxtab == 0) then  ! if XTAB File does not present
+                write(ounit,*)
+                write(ounit,*) ' MATERIAL CX CHANGES PER PPM BORON CHANGES : '
+                do i= 1, nmat
+                   write(ounit,1429) i
+                    write(ounit,1431)'GROUP', 'TRANSPORT', 'ABSORPTION', &
+                    'NU*FISS', 'FISSION'
+                    do g= 1, ng
+                        write(ounit,1430) g, csigtr(i,g), csiga(i,g), &
+                        cnuf(i,g), csigf(i,g)
+                        group(g) = g
+                    end do
+                    write(ounit,*)'  --SCATTERING MATRIX--'
+                    write(ounit,'(4X, A5, 20I11)') "G/G'", (group(g), g=1,ng)
+                    do g= 1, ng
+                        write(ounit,1435)g, (csigs(i,g,h), h=1,ng)
+                    end do
+                end do
+            end if
+        end if
+        
+        1422 format(2X, 'BORON CONCENTRATION REFERENCE :', F8.2)
+        1429 format(4X, 'MATERIAL', I3)
+        1431 format(2X, A9, A12, A14, A13, A14)
+        1430 format(2X, I6, E16.5, 3E14.5)
+        1435 format(4X, I3, E17.5, 20E13.5)
+        
+        
+        write(ounit,*)
+        write(ounit,*) ' ...Critical Boron Search card is successfully read...'
+    
+    end subroutine inp_cbcs
     
     !===============================================================================================!
-    ! To finalize input process
+    ! ! To read XS changes due boron concentration changes
     !===============================================================================================!
     
-    subroutine finalize_input ()
+    subroutine inp_bcon (xbunit)
     
-        integer  :: k
-        real(dp), allocatable :: f0(:,:)
-    !     integer  :: n, g, noz
-    !     ! set Number of nodes (nnod)
-    !     nnod = 0
-    !     do k = 1, nzz
-    !         do j = 1, nyy
-    !             do i = ystag(j)%smin, ystag(j)%smax
-    !                 nnod = nnod + 1
-    !             end do
-    !         end do
-    !     end do
-    !     allocate(node(nnod))
-    !     allocate(flux(nnod, ng))
-        call set_nodes(fdm, kern, mat_map, xdel, ydel, zdel, &
-        sigtr, siga, nuf, sigf, sigs, chi)
-        allocate(f0(fdm % nnod, fdm % ng))
-        call outer_iter(fdm, 1.e-5_dp, 1.e-5_dp, f0, max_outer=1000, max_inner=2, &
-        extrp = 5, print_iter = .true.)
-        ! Calculate core height
-        ! core_height = 0._DP
-        ! do k = 1, nzz
-        !     core_height = core_height + zdel(k)
-        ! end do
+        integer, intent(in) :: xbunit
         
-        ! ! Calculate nodes' volume
-        ! allocate(vdel(nnod))
-        ! do i = 1, nnod
-        !     vdel(i) = xdel(ix(i)) * ydel(iy(i)) * zdel(iz(i))
-        ! end do
+        integer :: ln   !Line number
+        integer :: ios  ! IOSTAT status
         
-        ! ! Calculate number of non-zero element in the CMFD Matrix
-        ! noz = 0
-        ! do n = 1, nnod
-        !   i = ix(n); j = iy(n); k = iz(n)         ! Set i, j, k
-        !   if (k /= 1) noz = noz + 1
-        !   if (j /= xstag(i)%smin) noz = noz + 1
-        !   if (i /= ystag(j)%smin) noz = noz + 1
-        !   noz = noz + 1
-        !   if (i /= ystag(j)%smax) noz = noz + 1
-        !   if (j /= xstag(i)%smax) noz = noz + 1
-        !   if (k /= nzz) noz = noz + 1
-        ! end do
+        integer :: i, g, h
+        integer :: popt
+        integer, dimension(ng) :: group
         
-        ! allocate(A(ng))
-        ! do g = 1, ng
-        !     allocate(A(g)%elmn(noz))
-        ! end do
-        ! allocate(ind%col(noz))
-        ! allocate(ind%row(nnod+1))
+        write(ounit,*)
+        write(ounit,*)
+        write(ounit,*) '           >>>>       READING BORON CONCENTRATION        <<<<'
+        write(ounit,*) '           --------------------------------------------------'
         
-        ! ! calaculate default nodal update interval
-        ! upd_interval = ceiling((nxx + nyy + nzz) / 2.5)
+        ! read Boron Concentration
+        read(xbunit, *, IOSTAT=ios) ind, ln, bcon, rbcon
+        message = ' error in READING boron concentration and boron concentration reference'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        if (bxtab == 0) then  ! if xtab file present
+            ! read CX changes per ppm born change
+            allocate(csigtr(nmat,ng))
+            allocate(csiga (nmat,ng))
+            allocate(cnuf  (nmat,ng))
+            allocate(csigf (nmat,ng))
+            allocate(csigs (nmat,ng,ng))
+            do i = 1, nmat
+                do g= 1, ng
+                    read(xbunit, *, IOSTAT=ios) ind, ln, csigtr(i,g), &
+                    csiga(i,g), cnuf(i,g), csigf(i,g), (csigs(i,g,h), h = 1, ng)
+                    message = ' error in READING macro xs changes per ppm boron changes'
+                    call input_error(ounit, ios, ln, message, buf=xbunit)
+                end do
+            end do
+        end if
+        
+        !! BCON PRINT OPTION
+        read(xbunit, *, IOSTAT=ios) ind, ln, popt
+        if (ios == 0 .AND. popt > 0) then
+        
+            write(ounit,1221) bcon
+            write(ounit,1222) rbcon
+        
+            if (bxtab == 0) then  ! if xtab file present
+              write(ounit,*)
+              write(ounit,*) ' MATERIAL CX CHANGES PER PPM BORON CHANGES : '
+                do i= 1, nmat
+                   write(ounit,1229) i
+                    write(ounit,1231)'GROUP', 'TRANSPORT', 'ABSORPTION', &
+                    'NU*FISS', 'FISSION'
+                    do g= 1, ng
+                        write(ounit,1230) g, csigtr(i,g), csiga(i,g), &
+                        cnuf(i,g), csigf(i,g)
+                        group(g) = g
+                    end do
+                    write(ounit,*)'  --SCATTERING MATRIX--'
+                    write(ounit,'(4X, A5, 20I11)') "G/G'", (group(g), g=1,ng)
+                    do g= 1, ng
+                        write(ounit,1235)g, (csigs(i,g,h), h=1,ng)
+                    end do
+                end do
+            end if
+        end if
+        
+        1221 format(2X, 'BORON CONCENTRATION SET       :', F8.2)
+        1222 format(2X, 'BORON CONCENTRATION REFERENCE :', F8.2)
+        1229 format(4X, 'MATERIAL', I3)
+        1231 format(2X, A9, A12, A14, A13, A14)
+        1230 format(2X, I6, E16.5, 3E14.5)
+        1235 format(4X, I3, E17.5, 20E13.5)
+        
+        write(ounit,*)
+        write(ounit,*) ' ...Boron Concentration card is successfully read...'
+    
+    end subroutine inp_bcon
+    
+    !===============================================================================================!
+    ! ! To read XS changes due fuel temperature changes
+    !===============================================================================================!
+    
+    subroutine inp_ftem (xbunit)
+    
+        integer, intent(in) :: xbunit
+        
+        integer :: ln   !Line number
+        integer :: ios  ! IOSTAT status
+        
+        real(dp) :: cftem
+        integer :: i, g, h
+        integer :: popt
+        integer, dimension(ng) :: group
+        
+        write(ounit,*)
+        write(ounit,*)
+        write(ounit,*) '           >>>>      READING FUEL TEMPERATURE      <<<<'
+        write(ounit,*) '           --------------------------------------------'
+        
+        ! read Fuel Temperature
+        read(xbunit, *, IOSTAT=ios) ind, ln, cftem, fuel_temp_ref
+        message = ' error in READING average fuel temperature and fuel temperature reference'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        ! ASSIGN CFTEM to FTEM
+        if (bther == 0) allocate (ftem(nnod))
+        ftem = cftem   !Initial guess for fuel temperature
+        
+        if (bxtab == 0) then  ! if XTAB File does not present
+            ! read CX changes fuel temperature change
+            allocate(fsigtr(nmat,ng), fsiga(nmat,ng), fnuf(nmat,ng), fsigf(nmat,ng), fsigs(nmat,ng,ng))
+            do i = 1, nmat
+                do g= 1, ng
+                    read(xbunit, *, IOSTAT=ios) ind, ln, fsigtr(i,g), &
+                    fsiga(i,g), fnuf(i,g), fsigf(i,g), (fsigs(i,g,h), h = 1, ng)
+                    message = ' error in READING macro xs changes per fuel temperature changes'
+                    call input_error(ounit, ios, ln, message, buf=xbunit)
+                end do
+            end do
+        end if
+        
+        !! FTEM PRINT OPTION
+        read(xbunit, *, IOSTAT=ios) ind, ln, popt
+        if (ios == 0 .AND. popt > 0) then
+        
+            if (bther == 0) then
+                write(ounit,1241) cftem
+            else
+                write(ounit,1256) cftem
+            end if
+            write(ounit,1242) fuel_temp_ref
+        
+            if (bxtab == 0) then  ! if XTAB File does not present
+                write(ounit,*)
+                write(ounit,*) ' MATERIAL CX CHANGES PER FUEL TEMPERATURE CHANGES : '
+                do i= 1, nmat
+                   write(ounit,1249) i
+                    write(ounit,1251)'GROUP', 'TRANSPORT', 'ABSORPTION', &
+                    'NU*FISS', 'FISSION'
+                    do g= 1, ng
+                        write(ounit,1250) g, fsigtr(i,g), fsiga(i,g), &
+                        fnuf(i,g), fsigf(i,g)
+                        group(g) = g
+                    end do
+                    write(ounit,*)'  --SCATTERING MATRIX--'
+                    write(ounit,'(4X, A5, 20I11)') "G/G'", (group(g), g=1,ng)
+                    do g= 1, ng
+                        write(ounit,1255)g, (fsigs(i,g,h), h=1,ng)
+                    end do
+                end do
+            end if
+        end if
+        
+        1241 format(2X, 'AVERAGE FUEL TEMPERATURE   :', F6.2)
+        1242 format(2X, 'FUEL TEMPERATURE REFERENCE :', F6.2)
+        1249 format(4X, 'MATERIAL', I3)
+        1251 format(2X, A9, A12, A14, A13, A14)
+        1250 format(2X, I6, E16.5, 3E14.5)
+        1255 format(4X, I3, E17.5, 20E13.5)
+        1256 format(2X, 'AVERAGE FUEL TEMPERATURE   :', F6.2, '  (NOT USED)')
+        
+        write(ounit,*)
+        write(ounit,*) ' ...Fuel Temperature is card successfully read...'
+    
+    end subroutine inp_ftem
+    
+    !===============================================================================================!
+    ! ! To read XS changes due moderator temperature changes
+    !===============================================================================================!
+    
+    subroutine inp_mtem (xbunit)
+    
+        integer, intent(in) :: xbunit
+        
+        integer :: ln   !Line number
+        integer :: ios  ! IOSTAT status
+        
+        real(dp) :: cmtem
+        integer :: i, g, h
+        integer :: popt
+        integer, dimension(ng) :: group
+        
+        write(ounit,*)
+        write(ounit,*)
+        write(ounit,*) '           >>>>   READING MODERATOR TEMPERATURE    <<<<'
+        write(ounit,*) '           --------------------------------------------'
+        
+        ! read Moderator Temperature
+        read(xbunit, *, IOSTAT=ios) ind, ln, cmtem, mod_temp_ref
+        message = ' error in READING Moderator temperature and Moderator temperature reference'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        ! ASSIGN CMTEM to MTEM
+        if (bther == 0) allocate (mtem(nnod))
+        mtem = cmtem
+        
+        if (bxtab == 0) then  ! if XTAB File does not present
+            ! read CX changes per moderator temperature change
+            allocate(msigtr(nmat,ng), msiga(nmat,ng), mnuf(nmat,ng), msigf(nmat,ng), msigs(nmat,ng,ng))
+            do i = 1, nmat
+                do g= 1, ng
+                    read(xbunit, *, IOSTAT=ios) ind, ln, msigtr(i,g), &
+                    msiga(i,g), mnuf(i,g), msigf(i,g), (msigs(i,g,h), h = 1, ng)
+                    message = ' error in READING macro xs changes per Moderator temperature changes'
+                    call input_error(ounit, ios, ln, message, buf=xbunit)
+                end do
+            end do
+        end if
+        
+        !! MTEM PRINT OPTION
+        read(xbunit, *, IOSTAT=ios) ind, ln, popt
+        if (ios == 0 .AND. popt > 0) then
+        
+            if (bther == 0) then
+                write(ounit,1261) cmtem
+            else
+                write(ounit,1276) cmtem
+            end if
+            write(ounit,1262) mod_temp_ref
+            if (bxtab == 0) then  ! if XTAB File does not present
+                write(ounit,*)
+                write(ounit,*) ' MATERIAL CX CHANGES PER MODERATOR TEMPERATURE CHANGES : '
+                do i= 1, nmat
+                   write(ounit,1269) i
+                    write(ounit,1271)'GROUP', 'TRANSPORT', 'ABSORPTION', &
+                    'NU*FISS', 'FISSION'
+                    do g= 1, ng
+                        write(ounit,1270) g, msigtr(i,g), msiga(i,g), &
+                        mnuf(i,g), msigf(i,g)
+                        group(g) = g
+                    end do
+                    write(ounit,*)'  --SCATTERING MATRIX--'
+                    write(ounit,'(4X, A5, 20I11)') "G/G'", (group(g), g=1,ng)
+                    do g= 1, ng
+                        write(ounit,1275)g, (msigs(i,g,h), h=1,ng)
+                    end do
+                end do
+            end if
+        end if
+        
+        1261 format(2X, 'AVERAGE MODERATOR TEMPERATURE   :', F6.2)
+        1262 format(2X, 'MODERATOR TEMPERATURE REFERENCE :', F6.2)
+        1269 format(4X, 'MATERIAL', I3)
+        1271 format(2X, A9, A12, A14, A13, A14)
+        1270 format(2X, I6, E16.5, 3E14.5)
+        1275 format(4X, I3, E17.5, 20E13.5)
+        1276 format(2X, 'AVERAGE MODERATOR TEMPERATURE   :', F6.2, '  (NOT USED)')
+        
+        write(ounit,*)
+        write(ounit,*) ' ...Moderator Temperature Card is successfully read...'
+    
+    end subroutine inp_mtem
+    
+    !===============================================================================================!
+    ! To read XS changes due coolant density changes
+    !===============================================================================================!
+    
+    subroutine inp_cden (xbunit)
+    
+        integer, intent(in) :: xbunit
+        
+        integer :: ln   !Line number
+        integer :: ios  ! IOSTAT status
+        
+        real(dp) :: ccden
+        integer :: i, g, h
+        integer :: popt
+        integer, dimension(ng) :: group
+        
+        write(ounit,*)
+        write(ounit,*)
+        write(ounit,*) '           >>>>       READING COOLANT DENSITY      <<<<'
+        write(ounit,*) '           --------------------------------------------'
+        
+        ! read Coolant Density
+        read(xbunit, *, IOSTAT=ios) ind, ln, ccden, mod_dens_ref
+        message = ' error in READING Coolant Density and Coolant Density reference'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        !ASSIGN CCDEN TO CDEN
+        if (bther == 0) allocate (cden(nnod))
+        cden = ccden
+        
+        if (bxtab == 0) then  ! if XTAB File does not present
+            ! read CX changes per Coolant Density change
+            allocate(lsigtr(nmat,ng), lsiga(nmat,ng), lnuf(nmat,ng), lsigf(nmat,ng), lsigs(nmat,ng,ng))
+            do i = 1, nmat
+                do g= 1, ng
+                    read(xbunit, *, IOSTAT=ios) ind, ln, lsigtr(i,g), &
+                    lsiga(i,g), lnuf(i,g), lsigf(i,g), (lsigs(i,g,h), h = 1, ng)
+                    message = ' error in READING macro xs changes per Coolant Density changes'
+                    call input_error(ounit, ios, ln, message, buf=xbunit)
+                end do
+            end do
+        end if
+        
+        !! CDEN PRINT OPTION
+        read(xbunit, *, IOSTAT=ios) ind, ln, popt
+        if (ios == 0 .AND. popt > 0) then
+        
+            if (bther == 0) then
+                write(ounit,1361) ccden
+            else
+                write(ounit,1376) ccden
+            end if
+            write(ounit,1362) mod_dens_ref
+            if (bxtab == 0) then  ! if XTAB File does not present
+                write(ounit,*)
+                write(ounit,*) ' MATERIAL CX CHANGES PER COOLANT DENSITY CHANGES : '
+                do i= 1, nmat
+                   write(ounit,1369) i
+                    write(ounit,1371)'GROUP', 'TRANSPORT', 'ABSORPTION', &
+                    'NU*FISS', 'FISSION'
+                    do g= 1, ng
+                        write(ounit,1370) g, lsigtr(i,g), lsiga(i,g), &
+                        lnuf(i,g), lsigf(i,g)
+                        group(g) = g
+                    end do
+                    write(ounit,*)'  --SCATTERING MATRIX--'
+                    write(ounit,'(4X, A5, 20I11)') "G/G'", (group(g), g=1,ng)
+                    do g= 1, ng
+                        write(ounit,1375)g, (lsigs(i,g,h), h=1,ng)
+                    end do
+                end do
+            end if
+        end if
+        
+        
+        1361 format(2X, 'AVERAGE COOLANT DENSITY   :', F8.4)
+        1362 format(2X, 'COOLANT DENSITY REFERENCE :', F8.4)
+        1369 format(4X, 'MATERIAL', I3)
+        1371 format(2X, A9, A12, A14, A13, A14)
+        1370 format(2X, I6, E16.5, 3E14.5)
+        1375 format(4X, I3, E17.5, 20E13.5)
+        1376 format(2X, 'AVERAGE COOLANT DENSITY   :', F8.4, '  (USED AS GUESS)')
+        
+        write(ounit,*)
+        write(ounit,*) ' ...Coolant Density Card is successfully read...'
+    
+    end subroutine inp_cden
+    
+    !===============================================================================================!
+    ! To read thermalhydraulics parameters input
+    !===============================================================================================!
+    
+    subroutine inp_ther (xbunit)
+    
+        integer, intent(in) :: xbunit
+        
+        integer :: ln   !Line number
+        integer :: ios  ! IOSTAT status
+        
+        integer   :: nfpin, ngt        ! Number of fuel pin and guide tubes
+        real(dp)  :: cmflow
+        real(dp)  :: ppitch            ! pin picth (m)
+        integer   :: popt
+        
+        write(ounit,*)
+        write(ounit,*)
+        write(ounit,*) '           >>>>   READING THERMAL-HYDRAULIC DATA   <<<<'
+        write(ounit,*) '           --------------------------------------------'
+        
+        allocate (ftem(nnod), mtem(nnod), cden(nnod))
+        
+        ! read Percent Power
+        read(xbunit, *, IOSTAT=ios) ind, ln, percent_pow
+        message = ' error in reading percent power'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        ! read reactor Power
+        read(xbunit, *, IOSTAT=ios) ind, ln, power
+        message = ' error in reading reactor full thermal power'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        ! read inlet coolant temp. (Kelvin) and  FA flow rate (kg/s)
+        read(xbunit, *, IOSTAT=ios) ind, ln, t_inlet, cmflow
+        message = ' error in reading coolant inlet temp., and Fuel Assembly mass flow rate'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        ! read fuel pin geometry in meter
+        read(xbunit, *, IOSTAT=ios) ind, ln, rf, tg, tc, ppitch
+        message = ' error in READING fuel meat rad., gap thickness, clad thickness and pin pitch'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        ! Check gap and clad thickness
+        if (tg > 0.25 * rf) then
+            write(ounit,*) '  ERROR: GAP THICKNESS IS TO LARGE (> 0.25*rf)'
+            stop
+        end if
+        if (tc > 0.25 * rf) then
+            write(ounit,*) '  ERROR: CLADDING THICKNESS IS TO LARGE (> 0.25*rf)'
+            stop
+        end if
+        
+        ! read Number of fuel pins and guide tubes
+        read(xbunit, *, IOSTAT=ios) ind, ln, nfpin, ngt
+        message = ' error in reading number of fuel pins and guide tubes'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        ! read Fraction of heat deposited in the coolant
+        read(xbunit, *, IOSTAT=ios) ind, ln, cf
+        message = ' error in READING fraction of heat deposited in the coolant'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        if (cf < 0. .or. cf > 1.0) stop "The value of the fraction of heat " &
+        // "deposited in the coolant is incorrect"
+
+        ! calculate necessay data for TH
+        call finalize_th(cmflow, nfpin)
+        
+        !! THER PRINT OPTION
+        read(xbunit, *, IOSTAT=ios) ind, ln, popt
+        if (ios == 0 .AND. popt > 0) then
+            write(ounit,1309) percent_pow
+            write(ounit,1301) power
+            write(ounit,1302) t_inlet
+            write(ounit,1303) cmflow
+            write(ounit,1304) rf
+            write(ounit,1305) tg
+            write(ounit,1306) tc
+            write(ounit,1310) ppitch
+            write(ounit,1307) cf
+        end if
+        
+        write(ounit,*)
+        write(ounit,*) ' ...Thermal-hydraulic Card is successfully read...'
+        
+        1309 format(2X, 'REACTOR PERCENT POWER (%)                : ', F12.5)
+        1301 format(2X, 'REACTOR POWER (Watt)                     : ', ES12.4)
+        1302 format(2X, 'COOLANT INLET TEMPERATURE (Kelvin)       : ', ES12.4)
+        1303 format(2X, 'FUEL ASSEMBLY MASS FLOW RATE (Kg/s)      : ', ES12.4)
+        1304 format(2X, 'FUEL MEAT RADIUS (m)                     : ', ES12.4)
+        1305 format(2X, 'GAP THICKNESS (m)                        : ', ES12.4)
+        1306 format(2X, 'CLAD THICKNESS (m)                       : ', ES12.4)
+        1310 format(2X, 'PIN PITCH(m)                             : ', ES12.4)
+        1307 format(2X, 'FRACTION OF HEAT DEPOSITED IN COOL.      : ', ES12.4)
+        
+        deallocate(xsize, ysize, zsize)
+    
+    end subroutine inp_ther
+
+    !===============================================================================================!
+    ! To calculate necessay data for TH
+    !===============================================================================================!
+    
+    subroutine finalize_th(cmflow, nfpin)
+
+        real(dp), intent(in) :: cmflow
+        integer, intent(in)  :: nfpin
+
+        real(dp)  :: area(nx,ny)
+        real(dp)  :: big_area  ! largest assembly area for ref.
+        real(dp)  :: div
+        integer   :: i, j
+        integer   :: ly, lx, ytot, xtot
+        
+        ! Calculate sub-channel mass flow rate
+        cflow = cmflow / real(nfpin)
+        
+        ! Calculate total coolant mass flow rate and number of fuel pins per node
+        big_area = 0.
+        do j = 1, ny
+            do i = 1, nx
+                area(i,j) = xsize(i)*ysize(j)                   ! assembly area
+                if (area(i,j) > big_area) big_area = area(i,j)  ! big_area => largest assembly area for ref.
+            end do
+        end do
+        
+        allocate(node_nf(nxx, nyy))
+        node_nf = 0.
+        
+        ytot = 0
+        do j= 1, ny
+            do ly= 1, ydiv(j)
+              ytot = ytot+1
+                xtot = 0
+                do i= 1, nx
+                    do lx= 1, xdiv(i)
+                        xtot = xtot+1
+                        if ((xtot >= ystag(ytot)%smin) .AND. (xtot <= ystag(ytot)%smax )) then
+                            div = REAL (ydiv(j) * xdiv(i))            ! Number of nodes in current assembly
+                            node_nf(xtot,ytot) = area(i,j) * real(nfpin) / (big_area * div)   ! Number of fuel pin for this node
+                        end if
+                    end do
+                end do
+            end do
+        end do
+        
+        ! ! Guess fuel and moderator temperature
+        ! allocate(tfm(nnod, nt+1)) ! allocate fuel pin mesh temperature
+        ! tfm = 900.                !Initial guess for radial fuel pin temperature distribution
+        ! if (bxtab == 1) then
+        !   ftem = 900.; cden = 0.711; mtem = 500.
+        ! end if
+        
+        ! allocate(enthalpy(nnod))
+        ! allocate(heat_flux(nnod))
+        
+        ! ! Initial heat-flux rate
+        ! heat_flux = 0.
     
     end subroutine
     
@@ -1325,7 +2334,7 @@ module read
     ! ! read number of source
     ! read(xbunit, *, IOSTAT=ios) ind, ln, nsrc
     ! message = ' error in READING number of extra source'
-    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
+    ! call input_error(ounit, ios, ln, message, buf=xbunit)
     
     ! allocate(spec(ng), spos(nx,ny))
     
@@ -1333,7 +2342,7 @@ module read
     !     ! read source density
     !     read(xbunit, *, IOSTAT=ios) ind, ln, sden
     !     message = ' error in READING source density'
-    !     call inp_error_message(ounit, ios, ln, message, buf=xbunit)
+    !     call input_error(ounit, ios, ln, message, buf=xbunit)
     
     !     if (sden <= 0.0) then
     !         write(ounit,*) '  ERROR: SOURCE DENSITY SHALL BE GREATER THAN ZERO'
@@ -1343,7 +2352,7 @@ module read
     !     ! read source spectrum
     !     read(xbunit, *, IOSTAT=ios) ind, ln, (spec(g), g = 1, ng)
     !     message = ' error in READING source spectrum'
-    !     call inp_error_message(ounit, ios, ln, message, buf=xbunit)
+    !     call input_error(ounit, ios, ln, message, buf=xbunit)
     
     !     ! Is total spectrum = 1._DP?
     !     summ = 0._DP
@@ -1367,7 +2376,7 @@ module read
     !     do
     !         read(xbunit, *, IOSTAT=ios) ind, ln, zpos
     !         message = ' error in READING axial position (zpos) of extra source'
-    !         call inp_error_message(ounit, ios, ln, message, buf=xbunit)
+    !         call input_error(ounit, ios, ln, message, buf=xbunit)
     !         if (zpos < 1) exit
     !         if (zpos > nz) then
     !             write(ounit,* ) '  ERROR: WRONG EXTRA SOURCES POSITION (ZPOS)'
@@ -1378,7 +2387,7 @@ module read
     !         do
     !             read(xbunit, *, IOSTAT=ios) ind, ln, xpos, ypos
     !             message = ' error in READING radial position (xpos and ypos) of extra source'
-    !             call inp_error_message(ounit, ios, ln, message, buf=xbunit)
+    !             call input_error(ounit, ios, ln, message, buf=xbunit)
     !             if (xpos < 1 .OR. ypos < 1) exit
     
     !             if (xpos > nx) then
@@ -1464,7 +2473,7 @@ module read
     ! read(xbunit, *, IOSTAT=ios) ind, ln, n_outer, n_inner, max_fsrc_error, max_flux_error, extrp_interval, upd_interval, &
     ! n_th_iter, n_outer_th
     ! message = ' error in READING iteration control'
-    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
+    ! call input_error(ounit, ios, ln, message, buf=xbunit)
     
     ! write(ounit,*)
     ! write(ounit,*)
@@ -1534,7 +2543,7 @@ module read
     
     ! read(xbunit, *, IOSTAT=ios) ind, ln, small_theta
     ! message = ' error in theta in %THETA card'
-    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
+    ! call input_error(ounit, ios, ln, message, buf=xbunit)
     
     ! if (small_theta < 0.001) then
     !   write(*,*)
@@ -1579,7 +2588,7 @@ module read
     
     ! read(xbunit, *, IOSTAT=ios) ind, ln, print_rad_pow, print_axi_pow, print_flux
     ! message = ' error in READING output print option'
-    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
+    ! call input_error(ounit, ios, ln, message, buf=xbunit)
     
     ! if (print_rad_pow == 0) caprad='NO'
     ! if (print_axi_pow == 0) capaxi='NO'
@@ -1596,422 +2605,6 @@ module read
     
     
     ! end subroutine inp_prnt
-    
-    ! !******************************************************************************!
-    
-    ! subroutine inp_adf (xbunit)
-    
-    ! !
-    ! ! Purpose:
-    ! !    To read ADF values if any
-    
-    ! USE data, ONLY: ng, nmat, nx, ny, nz, nxx, nyy, nzz, &
-    !                  xdiv, ydiv, zdiv, xyz, ystag, dc
-    
-    ! IMPLICIT NONE
-    
-    ! integer, intent(in) :: xbunit
-    
-    ! type :: ADF_type
-    !     real(dp), dimension(6) :: dc
-    ! end type
-    ! type(ADF_type), dimension(nmat,ng) :: mdc
-    ! type(ADF_type), dimension(nx,ny,nz,ng) :: xdc
-    ! type(ADF_type), dimension(nxx,nyy,nzz,ng) :: xxdc
-    
-    ! integer :: g, i, j, k, u
-    ! integer :: rot, x1, x2, y1, y2, z1, z2
-    ! integer :: xtot, ytot, ztot
-    ! integer :: lz, ly, lx
-    ! integer, dimension(nx+1) :: tx
-    ! integer, dimension(ny+1) :: ty
-    ! integer, dimension(nz+1) :: tz
-    ! integer :: zp
-    ! character(LEN=6), dimension(nx, ny) :: cadf
-    ! integer, parameter :: xm = 12
-    ! integer :: ip, ipr
-    ! integer :: xs, xf
-    
-    ! integer :: ln   !Line number
-    ! integer :: ios  ! IOSTAT status
-    
-    ! write(ounit,*)
-    ! write(ounit,*)
-    ! write(ounit,*) '         >>>>>READING ASSEMBLY DISCONTINUITY FACTOR<<<<<'
-    ! write(ounit,*) '         -----------------------------------------------'
-    
-    ! do i = 1, nmat
-    !     do g = 1, ng
-    !         read(xbunit, *, IOSTAT=ios) ind, ln, (mdc(i,g)%dc(j), j = 1, 6)
-    !         message = ' error in READING Assembly Discontinuity Factor (ADF)'
-    !         call inp_error_message(ounit, ios, ln, message, buf=xbunit)
-    !     end do
-    ! end do
-    
-    ! do g = 1, ng
-    !     do k = 1, nz
-    !         do j = 1, ny
-    !             do i = 1, nx
-    !                 if (planar(zpln(k))%asm(i,j) /= 0) xdc(i,j,k,g) = mdc(planar(zpln(k))%asm(i,j),g)
-    !             end do
-    !         end do
-    !     end do
-    ! end do
-    
-    ! !!! ADF ROTATION
-    ! do
-    !     read(xbunit, *, IOSTAT=ios) ind, ln, rot
-    !     message = ' error in READING ADF Rotation'
-    !     call inp_error_message(ounit, ios, ln, message, buf=xbunit)
-    !     if (rot < 1) exit
-    !     if (rot > 3) then
-    !         write(ounit,*) '  ERROR: MAXIMUM ADF ROTATION IS 3 TIMES'
-    !         write(ounit,2030) ln, rot
-    !     end if
-    
-    !     do
-    !         read(xbunit, *, IOSTAT=ios) ind, ln, x1, x2, y1, y2, z1, z2
-    !         message = ' error in READING ADF Rotation'
-    !         call inp_error_message(ounit, ios, ln, message, buf=xbunit)
-    !         if (x1 < 1 .OR. x2 < 1 .OR. y1 < 1 .OR. y2 < 1 .OR. z1 < 1 .OR. z2 < 1) exit
-    !         if (x1 > nx .OR. x2 > nx .OR. y1 > ny .OR. y2 > ny .OR. z1 > nz .OR. z2 > nz) then
-    !             write(ounit,*) '  ERROR: WRONG POSITION FOR ADF ROTATION. ' // &
-    !                            'OUT OF DIMENSION OF THE CORE'
-    !             write(ounit,2032) ln, x1, x2, y1, y2, z1, z2
-    !             stop
-    !         end if
-    !         if (x2 < x1 .OR. y2 < y1 .OR. z2 < z1) then
-    !             write(ounit,*) '  ERROR: WRONG POSITION FOR ADF ROTATION. ' // &
-    !                            'INITIAL POSITION IS SMALLER'
-    !             write(ounit,2032) ln, x1, x2, y1, y2, z1, z2
-    !         end if
-    
-    !         do g = 1, ng
-    !             do k = z1, z2
-    !                 do j = y1, y2
-    !                     do i = x1, x2
-    !                         call rotate(rot, xdc(i,j,k,g)%dc(1), xdc(i,j,k,g)%dc(2), &
-    !                                          xdc(i,j,k,g)%dc(3), xdc(i,j,k,g)%dc(4))
-    !                     end do
-    !                 end do
-    !             end do
-    !         end do
-    
-    !     end do
-    ! end do
-    
-    ! ! ADF PRINT OPTION
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, zp
-    ! if (ios == 0 .AND. zp >=1) then
-    !     write(ounit,*)
-    !     write(ounit,'(A,I3)') '  ADF VALUES ON PLANAR NUMBER : ', zp
-    
-    !     ip = nx/xm
-    !     ipr = MOD(nx,xm) - 1
-    !     do g = 1, ng
-    !         write(ounit,*)
-    !         write(ounit, 1999) g
-    !         write(ounit,*)
-    
-    !         write(ounit,*) '  EAST ADF'
-    !         do j = 1, ny
-    !             do i = 1, nx
-    !                 !!! if ADF > 0, Convert ADF to character
-    !                 if ((xdc(i,j,zp,g)%dc(1) - 0.) < 1.e-5_DP) then
-    !                     cadf(i,j) = '      '
-    !                 else
-    !                     write (cadf(i,j),'(F6.4)') xdc(i,j,zp,g)%dc(1)
-    !                     cadf(i,j) = trim(adjustl(cadf(i,j)))
-    !                 end if
-    !             end do
-    !         end do
-    
-    !         xs = 1; xf = xm
-    !         do k = 1, ip
-    !             write(ounit,'(4X,100I8)') (i, i = xs, xf)
-    !             do j= ny, 1, -1
-    !                 write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xf)
-    !             end do
-    !             write(ounit,*)
-    !             xs = xs + xm
-    !             xf = xf + xm
-    !         end do
-    
-    !         write(ounit,'(4X,100I8)') (i, i = xs, xs+ipr)
-    !         if (xs+ipr > xs) then
-    !             do j= ny, 1, -1
-    !                 write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xs+ipr)
-    !             end do
-    !         end if
-    
-    
-    !         write(ounit,*) '  WEST ADF'
-    !         do j = 1, ny
-    !             do i = 1, nx
-    !                 !!! if ADF > 0, Convert ADF to character
-    !                 if ((xdc(i,j,zp,g)%dc(2) - 0.) < 1.e-5_DP)  then
-    !                     cadf(i,j) = '      '
-    !                 else
-    !                     write (cadf(i,j),'(F6.4)') xdc(i,j,zp,g)%dc(2)
-    !                     cadf(i,j) = trim(adjustl(cadf(i,j)))
-    !                 end if
-    !             end do
-    !         end do
-    
-    !         xs = 1; xf = xm
-    !         do k = 1, ip
-    !             write(ounit,'(4X,100I8)') (i, i = xs, xf)
-    !             do j= ny, 1, -1
-    !                 write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xf)
-    !             end do
-    !             write(ounit,*)
-    !             xs = xs + xm
-    !             xf = xf + xm
-    !         end do
-    
-    !         write(ounit,'(4X,100I8)') (i, i = xs, xs+ipr)
-    !         if (xs+ipr > xs) then
-    !             do j= ny, 1, -1
-    !                 write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xs+ipr)
-    !             end do
-    !         end if
-    
-    
-    !         write(ounit,*) '  NORTH ADF'
-    !         do j = 1, ny
-    !             do i = 1, nx
-    !                 !!! if ADF > 0, Convert ADF to character
-    !                 if ((xdc(i,j,zp,g)%dc(3) - 0.) < 1.e-5_DP) then
-    !                     cadf(i,j) = '      '
-    !                 else
-    !                     write (cadf(i,j),'(F6.4)') xdc(i,j,zp,g)%dc(3)
-    !                     cadf(i,j) = trim(adjustl(cadf(i,j)))
-    !                 end if
-    !             end do
-    !         end do
-    
-    !         xs = 1; xf = xm
-    !         do k = 1, ip
-    !             write(ounit,'(4X,100I8)') (i, i = xs, xf)
-    !             do j= ny, 1, -1
-    !                 write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xf)
-    !             end do
-    !             write(ounit,*)
-    !             xs = xs + xm
-    !             xf = xf + xm
-    !         end do
-    
-    !         write(ounit,'(4X,100I8)') (i, i = xs, xs+ipr)
-    !         if (xs+ipr > xs) then
-    !             do j= ny, 1, -1
-    !                 write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xs+ipr)
-    !             end do
-    !         end if
-    
-    
-    !         write(ounit,*) '  SOUTH ADF'
-    !         do j = 1, ny
-    !             do i = 1, nx
-    !                 !!! if ADF > 0, Convert ADF to character
-    !                 if ((xdc(i,j,zp,g)%dc(4) - 0.) < 1.e-5_DP) then
-    !                     cadf(i,j) = '      '
-    !                 else
-    !                     write (cadf(i,j),'(F6.4)') xdc(i,j,zp,g)%dc(4)
-    !                     cadf(i,j) = trim(adjustl(cadf(i,j)))
-    !                 end if
-    !             end do
-    !         end do
-    
-    !         xs = 1; xf = xm
-    !         do k = 1, ip
-    !             write(ounit,'(4X,100I8)') (i, i = xs, xf)
-    !             do j= ny, 1, -1
-    !                 write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xf)
-    !             end do
-    !             write(ounit,*)
-    !             xs = xs + xm
-    !             xf = xf + xm
-    !         end do
-    
-    !         write(ounit,'(4X,100I8)') (i, i = xs, xs+ipr)
-    !         if (xs+ipr > xs) then
-    !             do j= ny, 1, -1
-    !                 write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xs+ipr)
-    !             end do
-    !         end if
-    
-    
-    !         write(ounit,*) '  TOP ADF'
-    !         do j = 1, ny
-    !             do i = 1, nx
-    !                 !!! if ADF > 0, Convert ADF to character
-    !                 if ((xdc(i,j,zp,g)%dc(5) - 0.) < 1.e-5_DP) then
-    !                     cadf(i,j) = '      '
-    !                 else
-    !                     write (cadf(i,j),'(F6.4)') xdc(i,j,zp,g)%dc(5)
-    !                     cadf(i,j) = trim(adjustl(cadf(i,j)))
-    !                 end if
-    !             end do
-    !         end do
-    
-    !         xs = 1; xf = xm
-    !         do k = 1, ip
-    !             write(ounit,'(4X,100I8)') (i, i = xs, xf)
-    !             do j= ny, 1, -1
-    !                 write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xf)
-    !             end do
-    !             write(ounit,*)
-    !             xs = xs + xm
-    !             xf = xf + xm
-    !         end do
-    
-    !         write(ounit,'(4X,100I8)') (i, i = xs, xs+ipr)
-    !         if (xs+ipr > xs) then
-    !             do j= ny, 1, -1
-    !                 write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xs+ipr)
-    !             end do
-    !         end if
-    
-    
-    !         write(ounit,*) '  BOTTOM ADF'
-    !         do j = 1, ny
-    !             do i = 1, nx
-    !                 !!! if ADF > 0, Convert ADF to character
-    !                 if ((xdc(i,j,zp,g)%dc(6) - 0.) < 1.e-5_DP) then
-    !                     cadf(i,j) = '      '
-    !                 else
-    !                     write (cadf(i,j),'(F6.4)') xdc(i,j,zp,g)%dc(6)
-    !                     cadf(i,j) = trim(adjustl(cadf(i,j)))
-    !                 end if
-    !             end do
-    !         end do
-    
-    !         xs = 1; xf = xm
-    !         do k = 1, ip
-    !             write(ounit,'(4X,100I8)') (i, i = xs, xf)
-    !             do j= ny, 1, -1
-    !                 write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xf)
-    !             end do
-    !             write(ounit,*)
-    !             xs = xs + xm
-    !             xf = xf + xm
-    !         end do
-    
-    !         write(ounit,'(4X,100I8)') (i, i = xs, xs+ipr)
-    !         if (xs+ipr > xs) then
-    !             do j= ny, 1, -1
-    !                 write(ounit,'(2X,I4,100A8)') j, (cadf(i,j), i=xs, xs+ipr)
-    !             end do
-    !         end if
-    !         write(ounit,*)
-    !     end do
-    ! end if
-    
-    ! 1999 format (4X, 'GROUP : ', I3)
-    
-    ! write(ounit,*) '  ...Assembly Discontinuity Factors are successfully read...'
-    
-    
-    ! tx(1) = 1
-    ! do i = 2, nx+1
-    !     tx(i) = tx(i-1) + xdiv(i-1)
-    ! end do
-    ! ty(1) = 1
-    ! do j = 2, ny+1
-    !     ty(j) = ty(j-1) + ydiv(j-1)
-    ! end do
-    ! tz(1) = 1
-    ! do k = 2, nz+1
-    !     tz(k) = tz(k-1) + zdiv(k-1)
-    ! end do
-    
-    ! do g = 1, ng
-    !     ztot = 0
-    !     do k= 1, nz
-    !         do lz= 1, zdiv(k)
-    !             ztot = ztot+1
-    !             ytot = 0
-    !             do j= 1, ny
-    !                 do ly= 1, ydiv(j)
-    !                     ytot = ytot+1
-    !                     xtot = 0
-    !                     do i= 1, nx
-    !                         do lx= 1, xdiv(i)
-    !                             xtot = xtot+1
-    !                             xxdc(xtot,ytot,ztot,g)%dc = 0._DP
-    !                             if (mnum(xtot, ytot, ztot) /= 0) xxdc(xtot,ytot,ztot,g)%dc = 1._DP
-    !                             if (xtot == tx(i))     xxdc(xtot,ytot,ztot,g)%dc(2) = xdc(i,j,k,g)%dc(2)
-    !                             if (xtot == tx(i+1)-1) xxdc(xtot,ytot,ztot,g)%dc(1) = xdc(i,j,k,g)%dc(1)
-    !                             if (ytot == ty(j))     xxdc(xtot,ytot,ztot,g)%dc(4) = xdc(i,j,k,g)%dc(4)
-    !                             if (ytot == ty(j+1)-1) xxdc(xtot,ytot,ztot,g)%dc(3) = xdc(i,j,k,g)%dc(3)
-    !                             if (ztot == tz(k))     xxdc(xtot,ytot,ztot,g)%dc(5) = xdc(i,j,k,g)%dc(5)
-    !                             if (ztot == tz(k+1)-1) xxdc(xtot,ytot,ztot,g)%dc(6) = xdc(i,j,k,g)%dc(6)
-    !                         end do
-    !                     end do
-    !                 end do
-    !             end do
-    !         end do
-    !     end do
-    ! end do
-    
-    ! do g = 1, ng
-    !     do k = 1, nzz
-    !         do j = 1, nyy
-    !             do i = ystag(j)%smin, ystag(j)%smax
-    !                do u = 1, 6
-    !                  dc(xyz(i,j,k),g,u) = xxdc(i,j,k,g)%dc(u)
-    !                end do
-    !             end do
-    !         end do
-    !     end do
-    ! end do
-    
-    
-    ! 2030 format(3X,'LINE', I4, ' : ', I3)
-    ! 2032 format(3X,'LINE', I4, ' : ', I3, I3, I3, I3, I3, I3)
-    
-    
-    ! end subroutine inp_adf
-    
-    ! !******************************************************************************!
-    
-    ! subroutine rotate(rot, a1, a2, a3, a4)
-    
-    ! ! Purpose:
-    ! !           To rotate ADF values (necessary for BWR assemblies)
-    
-    ! integer, intent(in) :: rot
-    ! real(dp), intent(INOUT) :: a1, a2, a3, a4
-    ! real(dp) :: x1, x2, x3, x4
-    
-    
-    ! x1 = a1
-    ! x2 = a2
-    ! x3 = a3
-    ! x4 = a4
-    
-    ! if (rot == 1) then
-    !     a1 = x4
-    !     a2 = x3
-    !     a3 = x1
-    !     a4 = x2
-    ! end if
-    
-    ! if (rot == 2) then
-    !     a1 = x2
-    !     a2 = x1
-    !     a3 = x4
-    !     a4 = x3
-    ! end if
-    
-    ! if (rot == 3) then
-    !     a1 = x3
-    !     a2 = x4
-    !     a3 = x2
-    !     a4 = x1
-    ! end if
-    
-    ! end subroutine rotate
     
     ! !******************************************************************************!
     
@@ -2046,18 +2639,18 @@ module read
     
     ! read(xbunit, *, IOSTAT=ios) ind, ln, nbank, nstep
     ! message = ' error in READING number of control rod bank and max. number of steps'
-    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
+    ! call input_error(ounit, ios, ln, message, buf=xbunit)
     
     ! read(xbunit, *, IOSTAT=ios) ind, ln, zero_pos, step_size
     ! message = ' error in READING zeroth step rod position and step size'
-    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
+    ! call input_error(ounit, ios, ln, message, buf=xbunit)
     
     ! allocate(bpos(nbank))
     
     ! !!! read CONTROL ROD BANK POSITIONS
     ! read(xbunit, *, IOSTAT=ios) ind, ln, (bpos(i), i = 1, nbank)
     ! message = ' error in READING bank position'
-    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
+    ! call input_error(ounit, ios, ln, message, buf=xbunit)
     
     
     ! !!! Check Control Rod Bank POSITION
@@ -2083,7 +2676,7 @@ module read
     ! do j = ny, 1, -1
     !     read(xbunit, *, IOSTAT=ios) ind, ln, (bmap(i,j), i = 1, nx)
     !     message = ' error in READING control rod bank map'
-    !     call inp_error_message(ounit, ios, ln, message, buf=xbunit)
+    !     call input_error(ounit, ios, ln, message, buf=xbunit)
     !     do i = 1, nx
     !         if (bmap(i,j) > nbank) then
     !             write(ounit,*) '  ERROR: BANK NUMBER ON CR BANK MAP IS GREATER THAN NUMBER OF BANK'
@@ -2112,7 +2705,7 @@ module read
     !           read(xbunit, *, IOSTAT=ios) ind, ln, dsigtr(i,g), &
     !           dsiga(i,g), dnuf(i,g), dsigf(i,g), (dsigs(i,g,h), h = 1, ng)
     !           message = ' error in READING macro xs changes due to control rod insertion'
-    !           call inp_error_message(ounit, ios, ln, message, buf=xbunit)
+    !           call input_error(ounit, ios, ln, message, buf=xbunit)
     !       end do
     !   end do
     ! end if
@@ -2235,7 +2828,7 @@ module read
     !     write (cnb,'(I4)') nbank
     !     cnb = trim(adjustl(cnb))
     !     message = ' error in READING Final CR Bank Position, time to move and speed for bank : ' // cnb
-    !     call inp_error_message(ounit, ios, ln, message, buf=xbunit)
+    !     call input_error(ounit, ios, ln, message, buf=xbunit)
     !     if (fbpos(i) > nstep) then
     !       write(ounit, 1889) ln
     !       write(*, 1889) ln
@@ -2254,24 +2847,24 @@ module read
     ! ! read time for CR to be ejected
     ! read(xbunit, *, IOSTAT=ios) ind, ln, total_time, time_step_1, time_mid, time_step_2
     ! message = ' error in time parameters'
-    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
+    ! call input_error(ounit, ios, ln, message, buf=xbunit)
     
     ! if (bxtab == 0) then  ! if XTAB File does not present
     !   ! read beta (delayed neutron fraction)
     !   read(xbunit, *, IOSTAT=ios) ind, ln, (beta(i), i = 1, nf)
     !   message = ' error in READING delayed netron fraction (beta)'
-    !   call inp_error_message(ounit, ios, ln, message, buf=xbunit)
+    !   call input_error(ounit, ios, ln, message, buf=xbunit)
     
     !   ! read precusor decay constant
     !   read(xbunit, *, IOSTAT=ios) ind, ln, (lambda(i), i = 1, nf)
     !   message = ' error in READING precusor decay constant'
-    !   call inp_error_message(ounit, ios, ln, message, buf=xbunit)
+    !   call input_error(ounit, ios, ln, message, buf=xbunit)
     
     !   ! read neutron velocity
     !   allocate(neutron_velo(ng))
     !   read(xbunit, *, IOSTAT=ios) ind, ln, (neutron_velo(g), g = 1, ng)
     !   message = ' error in READING neutron velocity'
-    !   call inp_error_message(ounit, ios, ln, message, buf=xbunit)
+    !   call input_error(ounit, ios, ln, message, buf=xbunit)
     ! end if
     
     
@@ -2350,698 +2943,6 @@ module read
     ! 1300 format(4X, 'WHEN SECOND TIME STEP APPLY?  : ', F6.2)
     
     ! end subroutine inp_ejct
-    
-    ! !******************************************************************************!
-    
-    ! subroutine inp_cbcs (xbunit)
-    
-    ! !
-    ! ! Purpose:
-    ! !    To read boron concentration for critical boron search
-    
-    ! USE data, ONLY: nmat, ng, rbcon, &
-    !                  csigtr, csiga, cnuf, csigf, csigs
-    
-    
-    ! IMPLICIT NONE
-    
-    ! integer, intent(in) :: xbunit
-    
-    ! integer :: ln   !Line number
-    ! integer :: ios  ! IOSTAT status
-    
-    ! integer :: i, g, h
-    ! integer :: popt
-    ! integer, dimension(ng) :: group
-    
-    ! write(ounit,*)
-    ! write(ounit,*)
-    ! write(ounit,*) '           >>>> READING BORON CONCENTRATION FOR BC SEARCH <<<<'
-    ! write(ounit,*) '           --------------------------------------------------'
-    
-    ! ! read Boron Concentration
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, rbcon
-    ! message = ' error in READING bc guess and bc reference'
-    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
-    
-    ! if (bxtab == 0) then  ! if XTAB File does not present
-    !   allocate(csigtr(nmat,ng))
-    !   allocate(csiga (nmat,ng))
-    !   allocate(cnuf  (nmat,ng))
-    !   allocate(csigf (nmat,ng))
-    !   allocate(csigs (nmat,ng,ng))
-    
-    !   ! read CX changes per ppm born change
-    !   do i = 1, nmat
-    !       do g= 1, ng
-    !           read(xbunit, *, IOSTAT=ios) ind, ln, csigtr(i,g), &
-    !           csiga(i,g), cnuf(i,g), csigf(i,g), (csigs(i,g,h), h = 1, ng)
-    !           message = ' error in READING macro xs changes per ppm boron changes'
-    !           call inp_error_message(ounit, ios, ln, message, buf=xbunit)
-    !       end do
-    !   end do
-    ! end if
-    
-    ! !! BCON PRINT OPTION
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, popt
-    ! if (ios == 0 .AND. popt > 0) then
-    
-    !     write(ounit,1422) rbcon
-    !     if (bxtab == 0) then  ! if XTAB File does not present
-    !       write(ounit,*)
-    !       write(ounit,*) ' MATERIAL CX CHANGES PER PPM BORON CHANGES : '
-    !       do i= 1, nmat
-    !          write(ounit,1429) i
-    !           write(ounit,1431)'GROUP', 'TRANSPORT', 'ABSORPTION', &
-    !           'NU*FISS', 'FISSION'
-    !           do g= 1, ng
-    !               write(ounit,1430) g, csigtr(i,g), csiga(i,g), &
-    !               cnuf(i,g), csigf(i,g)
-    !               group(g) = g
-    !           end do
-    !           write(ounit,*)'  --SCATTERING MATRIX--'
-    !           write(ounit,'(4X, A5, 20I11)') "G/G'", (group(g), g=1,ng)
-    !           do g= 1, ng
-    !               write(ounit,1435)g, (csigs(i,g,h), h=1,ng)
-    !           end do
-    !       end do
-    !     end if
-    ! end if
-    
-    ! 1422 format(2X, 'BORON CONCENTRATION REFERENCE :', F8.2)
-    ! 1429 format(4X, 'MATERIAL', I3)
-    ! 1431 format(2X, A9, A12, A14, A13, A14)
-    ! 1430 format(2X, I6, E16.5, 3E14.5)
-    ! 1435 format(4X, I3, E17.5, 20E13.5)
-    
-    
-    ! write(ounit,*)
-    ! write(ounit,*) ' ...Critical Boron Search card is successfully read...'
-    
-    ! end subroutine inp_cbcs
-    
-    ! !******************************************************************************!
-    
-    ! subroutine inp_bcon (xbunit)
-    
-    ! !
-    ! ! Purpose:
-    ! !    To read boron concentration
-    
-    ! USE data, ONLY: nmat, ng, bcon, rbcon, &
-    !                  csigtr, csiga, cnuf, csigf, csigs
-    
-    ! IMPLICIT NONE
-    
-    ! integer, intent(in) :: xbunit
-    
-    ! integer :: ln   !Line number
-    ! integer :: ios  ! IOSTAT status
-    
-    ! integer :: i, g, h
-    ! integer :: popt
-    ! integer, dimension(ng) :: group
-    
-    ! write(ounit,*)
-    ! write(ounit,*)
-    ! write(ounit,*) '           >>>>       READING BORON CONCENTRATION        <<<<'
-    ! write(ounit,*) '           --------------------------------------------------'
-    
-    ! ! read Boron Concentration
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, bcon, rbcon
-    ! message = ' error in READING boron concentration and boron concentration reference'
-    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
-    
-    ! if (bxtab == 0) then  ! if xtab file present
-    !   ! read CX changes per ppm born change
-    !   allocate(csigtr(nmat,ng))
-    !   allocate(csiga (nmat,ng))
-    !   allocate(cnuf  (nmat,ng))
-    !   allocate(csigf (nmat,ng))
-    !   allocate(csigs (nmat,ng,ng))
-    !   do i = 1, nmat
-    !       do g= 1, ng
-    !           read(xbunit, *, IOSTAT=ios) ind, ln, csigtr(i,g), &
-    !           csiga(i,g), cnuf(i,g), csigf(i,g), (csigs(i,g,h), h = 1, ng)
-    !           message = ' error in READING macro xs changes per ppm boron changes'
-    !           call inp_error_message(ounit, ios, ln, message, buf=xbunit)
-    !       end do
-    !   end do
-    ! end if
-    
-    ! !! BCON PRINT OPTION
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, popt
-    ! if (ios == 0 .AND. popt > 0) then
-    
-    !     write(ounit,1221) bcon
-    !     write(ounit,1222) rbcon
-    
-    !     if (bxtab == 0) then  ! if xtab file present
-    !       write(ounit,*)
-    !       write(ounit,*) ' MATERIAL CX CHANGES PER PPM BORON CHANGES : '
-    !       do i= 1, nmat
-    !          write(ounit,1229) i
-    !           write(ounit,1231)'GROUP', 'TRANSPORT', 'ABSORPTION', &
-    !           'NU*FISS', 'FISSION'
-    !           do g= 1, ng
-    !               write(ounit,1230) g, csigtr(i,g), csiga(i,g), &
-    !               cnuf(i,g), csigf(i,g)
-    !               group(g) = g
-    !           end do
-    !           write(ounit,*)'  --SCATTERING MATRIX--'
-    !           write(ounit,'(4X, A5, 20I11)') "G/G'", (group(g), g=1,ng)
-    !           do g= 1, ng
-    !               write(ounit,1235)g, (csigs(i,g,h), h=1,ng)
-    !           end do
-    !       end do
-    !     end if
-    ! end if
-    
-    ! 1221 format(2X, 'BORON CONCENTRATION SET       :', F8.2)
-    ! 1222 format(2X, 'BORON CONCENTRATION REFERENCE :', F8.2)
-    ! 1229 format(4X, 'MATERIAL', I3)
-    ! 1231 format(2X, A9, A12, A14, A13, A14)
-    ! 1230 format(2X, I6, E16.5, 3E14.5)
-    ! 1235 format(4X, I3, E17.5, 20E13.5)
-    
-    
-    
-    ! write(ounit,*)
-    ! write(ounit,*) ' ...Boron Concentration card is successfully read...'
-    
-    ! end subroutine inp_bcon
-    
-    ! !******************************************************************************!
-    
-    ! subroutine inp_ftem (xbunit)
-    
-    ! !
-    ! ! Purpose:
-    ! !    To read fuel temperature
-    
-    ! USE data, ONLY: nmat, ng, nnod, ftem, fuel_temp_ref, &
-    !                  fsigtr, fsiga, fnuf, fsigf, fsigs
-    
-    ! IMPLICIT NONE
-    
-    ! integer, intent(in) :: xbunit
-    
-    ! integer :: ln   !Line number
-    ! integer :: ios  ! IOSTAT status
-    
-    ! real(dp) :: cftem
-    ! integer :: i, g, h
-    ! integer :: popt
-    ! integer, dimension(ng) :: group
-    
-    ! write(ounit,*)
-    ! write(ounit,*)
-    ! write(ounit,*) '           >>>>      READING FUEL TEMPERATURE      <<<<'
-    ! write(ounit,*) '           --------------------------------------------'
-    
-    ! ! read Fuel Temperature
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, cftem, fuel_temp_ref
-    ! message = ' error in READING average fuel temperature and fuel temperature reference'
-    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
-    
-    ! ! ASSIGN CFTEM to FTEM
-    ! if (bther == 0) allocate (ftem(nnod))
-    ! ftem = cftem   !Initial guess for fuel temperature
-    
-    ! if (bxtab == 0) then  ! if XTAB File does not present
-    !   ! read CX changes fuel temperature change
-    !   allocate(fsigtr(nmat,ng), fsiga(nmat,ng), fnuf(nmat,ng), fsigf(nmat,ng), fsigs(nmat,ng,ng))
-    !   do i = 1, nmat
-    !       do g= 1, ng
-    !           read(xbunit, *, IOSTAT=ios) ind, ln, fsigtr(i,g), &
-    !           fsiga(i,g), fnuf(i,g), fsigf(i,g), (fsigs(i,g,h), h = 1, ng)
-    !           message = ' error in READING macro xs changes per fuel temperature changes'
-    !           call inp_error_message(ounit, ios, ln, message, buf=xbunit)
-    !       end do
-    !   end do
-    ! end if
-    
-    ! !! FTEM PRINT OPTION
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, popt
-    ! if (ios == 0 .AND. popt > 0) then
-    
-    !     if (bther == 0) then
-    !         write(ounit,1241) cftem
-    !     else
-    !         write(ounit,1256) cftem
-    !     end if
-    !     write(ounit,1242) fuel_temp_ref
-    
-    !     if (bxtab == 0) then  ! if XTAB File does not present
-    !       write(ounit,*)
-    !       write(ounit,*) ' MATERIAL CX CHANGES PER FUEL TEMPERATURE CHANGES : '
-    !       do i= 1, nmat
-    !          write(ounit,1249) i
-    !           write(ounit,1251)'GROUP', 'TRANSPORT', 'ABSORPTION', &
-    !           'NU*FISS', 'FISSION'
-    !           do g= 1, ng
-    !               write(ounit,1250) g, fsigtr(i,g), fsiga(i,g), &
-    !               fnuf(i,g), fsigf(i,g)
-    !               group(g) = g
-    !           end do
-    !           write(ounit,*)'  --SCATTERING MATRIX--'
-    !           write(ounit,'(4X, A5, 20I11)') "G/G'", (group(g), g=1,ng)
-    !           do g= 1, ng
-    !               write(ounit,1255)g, (fsigs(i,g,h), h=1,ng)
-    !           end do
-    !       end do
-    !     end if
-    ! end if
-    
-    ! 1241 format(2X, 'AVERAGE FUEL TEMPERATURE   :', F6.2)
-    ! 1242 format(2X, 'FUEL TEMPERATURE REFERENCE :', F6.2)
-    ! 1249 format(4X, 'MATERIAL', I3)
-    ! 1251 format(2X, A9, A12, A14, A13, A14)
-    ! 1250 format(2X, I6, E16.5, 3E14.5)
-    ! 1255 format(4X, I3, E17.5, 20E13.5)
-    ! 1256 format(2X, 'AVERAGE FUEL TEMPERATURE   :', F6.2, '  (NOT USED)')
-    
-    
-    
-    ! write(ounit,*)
-    ! write(ounit,*) ' ...Fuel Temperature is card successfully read...'
-    
-    ! end subroutine inp_ftem
-    
-    ! !******************************************************************************!
-    
-    ! subroutine inp_mtem (xbunit)
-    
-    ! !
-    ! ! Purpose:
-    ! !    To read moderator temperature
-    
-    ! USE data, ONLY: nmat, ng, nnod, mtem, mod_temp_ref, &
-    !                  msigtr, msiga, mnuf, msigf, msigs
-    
-    ! IMPLICIT NONE
-    
-    ! integer, intent(in) :: xbunit
-    
-    ! integer :: ln   !Line number
-    ! integer :: ios  ! IOSTAT status
-    
-    ! real(dp) :: cmtem
-    ! integer :: i, g, h
-    ! integer :: popt
-    ! integer, dimension(ng) :: group
-    
-    ! write(ounit,*)
-    ! write(ounit,*)
-    ! write(ounit,*) '           >>>>   READING MODERATOR TEMPERATURE    <<<<'
-    ! write(ounit,*) '           --------------------------------------------'
-    
-    ! ! read Moderator Temperature
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, cmtem, mod_temp_ref
-    ! message = ' error in READING Moderator temperature and Moderator temperature reference'
-    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
-    
-    ! ! ASSIGN CMTEM to MTEM
-    ! if (bther == 0) allocate (mtem(nnod))
-    ! mtem = cmtem
-    
-    ! if (bxtab == 0) then  ! if XTAB File does not present
-    !   ! read CX changes per moderator temperature change
-    !   allocate(msigtr(nmat,ng), msiga(nmat,ng), mnuf(nmat,ng), msigf(nmat,ng), msigs(nmat,ng,ng))
-    !   do i = 1, nmat
-    !       do g= 1, ng
-    !           read(xbunit, *, IOSTAT=ios) ind, ln, msigtr(i,g), &
-    !           msiga(i,g), mnuf(i,g), msigf(i,g), (msigs(i,g,h), h = 1, ng)
-    !           message = ' error in READING macro xs changes per Moderator temperature changes'
-    !           call inp_error_message(ounit, ios, ln, message, buf=xbunit)
-    !       end do
-    !   end do
-    ! end if
-    
-    ! !! MTEM PRINT OPTION
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, popt
-    ! if (ios == 0 .AND. popt > 0) then
-    
-    !     if (bther == 0) then
-    !         write(ounit,1261) cmtem
-    !     else
-    !         write(ounit,1276) cmtem
-    !     end if
-    !     write(ounit,1262) mod_temp_ref
-    !     if (bxtab == 0) then  ! if XTAB File does not present
-    !       write(ounit,*)
-    !       write(ounit,*) ' MATERIAL CX CHANGES PER MODERATOR TEMPERATURE CHANGES : '
-    !       do i= 1, nmat
-    !          write(ounit,1269) i
-    !           write(ounit,1271)'GROUP', 'TRANSPORT', 'ABSORPTION', &
-    !           'NU*FISS', 'FISSION'
-    !           do g= 1, ng
-    !               write(ounit,1270) g, msigtr(i,g), msiga(i,g), &
-    !               mnuf(i,g), msigf(i,g)
-    !               group(g) = g
-    !           end do
-    !           write(ounit,*)'  --SCATTERING MATRIX--'
-    !           write(ounit,'(4X, A5, 20I11)') "G/G'", (group(g), g=1,ng)
-    !           do g= 1, ng
-    !               write(ounit,1275)g, (msigs(i,g,h), h=1,ng)
-    !           end do
-    !       end do
-    !     end if
-    ! end if
-    
-    ! 1261 format(2X, 'AVERAGE MODERATOR TEMPERATURE   :', F6.2)
-    ! 1262 format(2X, 'MODERATOR TEMPERATURE REFERENCE :', F6.2)
-    ! 1269 format(4X, 'MATERIAL', I3)
-    ! 1271 format(2X, A9, A12, A14, A13, A14)
-    ! 1270 format(2X, I6, E16.5, 3E14.5)
-    ! 1275 format(4X, I3, E17.5, 20E13.5)
-    ! 1276 format(2X, 'AVERAGE MODERATOR TEMPERATURE   :', F6.2, '  (NOT USED)')
-    
-    
-    
-    ! write(ounit,*)
-    ! write(ounit,*) ' ...Moderator Temperature Card is successfully read...'
-    
-    
-    ! end subroutine inp_mtem
-    
-    ! !******************************************************************************!
-    
-    ! subroutine inp_cden (xbunit)
-    
-    ! !
-    ! ! Purpose:
-    ! !    To read Coolant Density
-    
-    ! USE data, ONLY: nmat, ng, nnod, cden, mod_dens_ref, &
-    !                  lsigtr, lsiga, lnuf, lsigf, lsigs
-    
-    ! IMPLICIT NONE
-    
-    ! integer, intent(in) :: xbunit
-    
-    ! integer :: ln   !Line number
-    ! integer :: ios  ! IOSTAT status
-    
-    ! real(dp) :: ccden
-    ! integer :: i, g, h
-    ! integer :: popt
-    ! integer, dimension(ng) :: group
-    
-    ! write(ounit,*)
-    ! write(ounit,*)
-    ! write(ounit,*) '           >>>>       READING COOLANT DENSITY      <<<<'
-    ! write(ounit,*) '           --------------------------------------------'
-    
-    ! ! read Coolant Density
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, ccden, mod_dens_ref
-    ! message = ' error in READING Coolant Density and Coolant Density reference'
-    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
-    
-    ! !ASSIGN CCDEN TO CDEN
-    ! if (bther == 0) allocate (cden(nnod))
-    ! cden = ccden
-    
-    ! if (bxtab == 0) then  ! if XTAB File does not present
-    !   ! read CX changes per Coolant Density change
-    !   allocate(lsigtr(nmat,ng), lsiga(nmat,ng), lnuf(nmat,ng), lsigf(nmat,ng), lsigs(nmat,ng,ng))
-    !   do i = 1, nmat
-    !       do g= 1, ng
-    !           read(xbunit, *, IOSTAT=ios) ind, ln, lsigtr(i,g), &
-    !           lsiga(i,g), lnuf(i,g), lsigf(i,g), (lsigs(i,g,h), h = 1, ng)
-    !           message = ' error in READING macro xs changes per Coolant Density changes'
-    !           call inp_error_message(ounit, ios, ln, message, buf=xbunit)
-    !       end do
-    !   end do
-    ! end if
-    
-    ! !! CDEN PRINT OPTION
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, popt
-    ! if (ios == 0 .AND. popt > 0) then
-    
-    !     if (bther == 0) then
-    !         write(ounit,1361) ccden
-    !     else
-    !         write(ounit,1376) ccden
-    !     end if
-    !     write(ounit,1362) mod_dens_ref
-    !     if (bxtab == 0) then  ! if XTAB File does not present
-    !       write(ounit,*)
-    !       write(ounit,*) ' MATERIAL CX CHANGES PER COOLANT DENSITY CHANGES : '
-    !       do i= 1, nmat
-    !          write(ounit,1369) i
-    !           write(ounit,1371)'GROUP', 'TRANSPORT', 'ABSORPTION', &
-    !           'NU*FISS', 'FISSION'
-    !           do g= 1, ng
-    !               write(ounit,1370) g, lsigtr(i,g), lsiga(i,g), &
-    !               lnuf(i,g), lsigf(i,g)
-    !               group(g) = g
-    !           end do
-    !           write(ounit,*)'  --SCATTERING MATRIX--'
-    !           write(ounit,'(4X, A5, 20I11)') "G/G'", (group(g), g=1,ng)
-    !           do g= 1, ng
-    !               write(ounit,1375)g, (lsigs(i,g,h), h=1,ng)
-    !           end do
-    !       end do
-    !     end if
-    ! end if
-    
-    
-    ! 1361 format(2X, 'AVERAGE COOLANT DENSITY   :', F8.4)
-    ! 1362 format(2X, 'COOLANT DENSITY REFERENCE :', F8.4)
-    ! 1369 format(4X, 'MATERIAL', I3)
-    ! 1371 format(2X, A9, A12, A14, A13, A14)
-    ! 1370 format(2X, I6, E16.5, 3E14.5)
-    ! 1375 format(4X, I3, E17.5, 20E13.5)
-    ! 1376 format(2X, 'AVERAGE COOLANT DENSITY   :', F8.4, '  (USED AS GUESS)')
-    
-    
-    
-    ! write(ounit,*)
-    ! write(ounit,*) ' ...Coolant Density Card is successfully read...'
-    
-    
-    ! end subroutine inp_cden
-    
-    ! !******************************************************************************!
-    
-    ! subroutine inp_ther (xbunit)
-    
-    ! !
-    ! ! Purpose:
-    ! !    To read thermalhydraulics parameters input
-    
-    ! USE data, ONLY: pow, tin, nx, ny, nxx, nyy, ystag, &
-    !                  rf, tg, tc, rg, rc, ppitch, cf, dia, cflow, dh, pi, &
-    !                  farea, xdiv, ydiv, ystag, node_nf, nm, nt, rdel, rpos, &
-    !                  nnod, tfm, ppow, enthalpy, heat_flux, ntem, stab, ftem, mtem, cden, &
-    !                  thunit
-    
-    ! IMPLICIT NONE
-    
-    ! integer, intent(in) :: xbunit
-    
-    ! integer :: ln   !Line number
-    ! integer :: ios  ! IOSTAT status
-    
-    ! integer :: i, j
-    ! integer :: nfpin, ngt                              ! Number of fuel pin and guide tubes
-    
-    ! integer :: ly, lx, ytot, xtot
-    ! real(dp) :: cmflow
-    ! real(dp), dimension(nx,ny) :: area
-    ! real(dp) :: barea, div
-    
-    ! real(dp) :: dum
-    
-    ! integer :: popt
-    
-    ! write(ounit,*)
-    ! write(ounit,*)
-    ! write(ounit,*) '           >>>>   READING THERMAL-HYDRAULIC DATA   <<<<'
-    ! write(ounit,*) '           --------------------------------------------'
-    
-    ! allocate (ftem(nnod), mtem(nnod), cden(nnod))
-    
-    ! ! read Percent Power
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, ppow
-    ! message = ' error in READING percent power'
-    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
-    
-    ! ! read reactor Power
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, pow
-    ! message = ' error in READING reactor full thermal power'
-    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
-    
-    ! ! read inlet coolant temp. (Kelvin) and  FA flow rate (kg/s)
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, tin, cmflow
-    ! message = ' error in READING coolant inlet temp. and Fuel Assembly mass flow rate'
-    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
-    
-    ! ! read fuel pin geometry in meter
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, rf, tg, tc, ppitch
-    ! message = ' error in READING fuel meat rad., gap thickness, clad thickness and pin pitch'
-    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
-    
-    ! ! Check gap and clad thickness
-    ! if (tg > 0.25 * rf) then
-    !     write(ounit,*) '  ERROR: GAP THICKNESS IS TO LARGE (> 0.25*rf)'
-    !     stop
-    ! end if
-    ! if (tc > 0.25 * rf) then
-    !     write(ounit,*) '  ERROR: CLADDING THICKNESS IS TO LARGE (> 0.25*rf)'
-    !     stop
-    ! end if
-    
-    ! ! read Number of fuel pins and guide tubes
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, nfpin, ngt
-    ! message = ' error in READING number of fuel pins and guide tubes'
-    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
-    
-    ! ! read Fraction of heat deposited in the coolant
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, cf
-    ! message = ' error in READING fraction of heat deposited in the coolant'
-    ! call inp_error_message(ounit, ios, ln, message, buf=xbunit)
-    
-    ! if (cf < 0. .or. cf > 1.0) stop "The value of the fraction of heat " &
-    ! // "deposited in the coolant is incorrect"
-    
-    ! ! Calculate outer radius of gap and cladding
-    ! rg = rf + tg
-    ! rc = rg + tc
-    
-    ! ! Calculate fuel pin diameter
-    ! dia = 2. * rc
-    
-    ! ! Calculate hydraulic diameter
-    ! dh = dia * ((4./pi) * (ppitch/dia)**2 - 1.)
-    
-    ! ! Calculate sub-channel area
-    ! farea = ppitch**2 - 0.25*pi*dia**2
-    
-    ! ! Calculate sub-channel mass flow rate
-    ! cflow = cmflow / real(nfpin)
-    
-    ! ! Calculate total coolant mass flow rate and number of fuel pins per node
-    ! barea = 0.
-    ! do j = 1, ny
-    !     do i = 1, nx
-    !         area(i,j) = xsize(i)*ysize(j)             ! assembly area
-    !         if (area(i,j) > barea) barea = area(i,j)  ! barea => largest assembly area for ref.
-    !     end do
-    ! end do
-    
-    ! allocate(node_nf(nxx, nyy))
-    ! node_nf = 0.
-    
-    ! ytot = 0
-    ! do j= 1, ny
-    !     do ly= 1, ydiv(j)
-    !       ytot = ytot+1
-    !         xtot = 0
-    !         do i= 1, nx
-    !             do lx= 1, xdiv(i)
-    !                 xtot = xtot+1
-    !                 if ((xtot >= ystag(ytot)%smin) .AND. (xtot <= ystag(ytot)%smax )) then
-    !                     div = REAL (ydiv(j) * xdiv(i))            ! Number of nodes in current assembly
-    !                     node_nf(xtot,ytot) = area(i,j) * real(nfpin) / (barea * div)   ! Number of fuel pin for this node
-    !                 end if
-    !             end do
-    !         end do
-    !     end do
-    ! end do
-    
-    ! ! Calculate fuel pin mesh delta and position
-    ! dum = rf / real(nm)
-    
-    ! allocate(rdel(nt), rpos(nt))
-    ! do i = 1, nm
-    !     rdel(i) = dum
-    ! end do
-    
-    ! ! Fuel pin mesh size
-    ! rdel(nm+1) = tg
-    ! rdel(nm+2) = tc
-    
-    ! ! Fuel pin mesh position
-    ! rpos(1) = 0.5 * rdel(1)
-    ! do i = 2, nt
-    !     rpos(i) = rpos(i-1) + 0.5 * (rdel(i-1) + rdel(i))
-    ! end do
-    
-    ! ! Guess fuel and moderator temperature
-    ! allocate(tfm(nnod, nt+1)) ! allocate fuel pin mesh temperature
-    ! tfm = 900.                !Initial guess for radial fuel pin temperature distribution
-    ! if (bxtab == 1) then
-    !   ftem = 900.; cden = 0.711; mtem = 500.
-    ! end if
-    
-    ! allocate(enthalpy(nnod))
-    ! allocate(heat_flux(nnod))
-    
-    ! ! Initial heat-flux rate
-    ! heat_flux = 0.
-    
-    ! ! open steam table file
-    ! open (UNIT=thunit, FILE='st155bar', STATUS='OLD', ACTION='read', IOSTAT = ios)
-    ! if (ios == 0) then  !if steam table present in the current directory
-    !   ! Save steam table data to stab
-    !   do i = 1, ntem
-    !      read(thunit,*) stab(i,1), stab(i,2), stab(i,3), &
-    !                     stab(i,4), stab(i,5), stab(i,6)
-    !   end do
-    !   close(UNIT=thunit)
-    ! else  ! if steam table not present, use steam table data at 15.5 MPa
-    !   stab(1,1)=543.15; stab(1,2)=0.78106745; stab(1,3)=1182595.0;
-    !   stab(1,4)=0.820773; stab(1,5)=0.128988; stab(1,6)=0.60720
-    !   stab(2,1)=553.15; stab(2,2)=0.76428125; stab(2,3)=1232620.0;
-    !   stab(2,4)=0.829727; stab(2,5)=0.126380; stab(2,6)=0.59285
-    !   stab(3,1)=563.15; stab(3,2)=0.74619716; stab(3,3)=1284170.0;
-    !   stab(3,4)=0.846662; stab(3,5)=0.124118; stab(3,6)=0.57710
-    !   stab(4,1)=573.15; stab(4,2)=0.72650785; stab(4,3)=1337630.0;
-    !   stab(4,4)=0.863597; stab(4,5)=0.121856; stab(4,6)=0.55970
-    !   stab(5,1)=583.15; stab(5,2)=0.70475081; stab(5,3)=1393570.0;
-    !   stab(5,4)=0.915035; stab(5,5)=0.120105; stab(5,6)=0.54045
-    !   stab(6,1)=593.15; stab(6,2)=0.68018488; stab(6,3)=1452895.0;
-    !   stab(6,4)=0.966472; stab(6,5)=0.118354; stab(6,6)=0.51880
-    !   stab(7,1)=603.15; stab(7,2)=0.65150307; stab(7,3)=1517175.0;
-    !   stab(7,4)=1.166745; stab(7,5)=0.143630; stab(7,6)=0.49420
-    !   stab(8,1)=613.15; stab(8,2)=0.61590149; stab(8,3)=1589770.0;
-    !   stab(8,4)=1.515852; stab(8,5)=0.195931; stab(8,6)=0.46550
-    !   stab(9,1)=617.91; stab(9,2)=0.59896404; stab(9,3)=1624307.1;
-    !   stab(9,4)=1.681940; stab(9,5)=0.220813; stab(9,6)=0.45185
-    ! end if
-    
-    ! !! THER PRINT OPTION
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, popt
-    ! if (ios == 0 .AND. popt > 0) then
-    !     write(ounit,1309) ppow
-    !     write(ounit,1301) pow
-    !     write(ounit,1302) tin
-    !     write(ounit,1303) cmflow
-    !     write(ounit,1304) rf
-    !     write(ounit,1305) tg
-    !     write(ounit,1306) tc
-    !     write(ounit,1310) ppitch
-    !     write(ounit,1307) cf
-    ! end if
-    
-    ! write(ounit,*)
-    ! write(ounit,*) ' ...Thermal-hydraulic Card is successfully read...'
-    
-    ! 1309 format(2X, 'REACTOR PERCENT POWER (%)                : ', F12.5)
-    ! 1301 format(2X, 'REACTOR POWER (Watt)                     : ', ES12.4)
-    ! 1302 format(2X, 'COOLANT INLET TEMPERATURE (Kelvin)       : ', ES12.4)
-    ! 1303 format(2X, 'FUEL ASSEMBLY MASS FLOW RATE (Kg/s)      : ', ES12.4)
-    ! 1304 format(2X, 'FUEL MEAT RADIUS (m)                     : ', ES12.4)
-    ! 1305 format(2X, 'GAP THICKNESS (m)                        : ', ES12.4)
-    ! 1306 format(2X, 'CLAD THICKNESS (m)                       : ', ES12.4)
-    ! 1310 format(2X, 'PIN PITCH(m)                             : ', ES12.4)
-    ! 1307 format(2X, 'FRACTION OF HEAT DEPOSITED IN COOL.      : ', ES12.4)
-    
-    ! deallocate(xsize, ysize, zsize)
-    
-    ! end subroutine inp_ther
     
     ! !******************************************************************************!
     
@@ -3168,146 +3069,6 @@ module read
     
     ! !******************************************************************************!
     
-    ! subroutine AsmPow(fn)
-    
-    ! !
-    ! ! Purpose:
-    ! !    To print axially averaged assembly-wise power distribution
-    ! !
-    
-    ! USE data, ONLY: nx, ny, nxx, nyy, nzz, zdel, &
-    !                 xdel, ydel, ystag, nnod, ix, iy, iz, &
-    !                 xdiv, ydiv
-    
-    ! IMPLICIT NONE
-    
-    ! real(dp), dimension(:), intent(in) :: fn
-    
-    ! real(dp), dimension(nxx, nyy, nzz) :: fx
-    ! integer :: i, j, k, n
-    ! integer :: ly, lx, ys, xs, yf, xf
-    ! real(dp) :: summ, vsumm
-    ! real(dp), dimension(nxx, nyy) :: fnode
-    ! real(dp), dimension(nx, ny) :: fasm
-    ! real(dp) :: totp
-    ! integer :: nfuel
-    ! real(dp) :: fmax
-    ! integer :: xmax, ymax
-    ! character(LEN=6), dimension(nx, ny) :: cpow
-    
-    ! integer, parameter :: xm = 12
-    ! integer :: ip, ipr
-    
-    ! fx = 0._DP
-    ! do n = 1, nnod
-    !     fx(ix(n), iy(n), iz(n)) = fn(n)
-    ! end do
-    
-    ! !Calculate axially averaged node-wise distribution
-    ! fnode = 0._DP
-    ! do j = 1, nyy
-    !     do i = ystag(j)%smin, ystag(j)%smax
-    !         summ = 0._DP
-    !         vsumm = 0._DP
-    !         do k = 1, nzz
-    !             summ = summ + fx(i,j,k)*zdel(k)
-    !             vsumm = vsumm + zdel(k)
-    !         end do
-    !         fnode(i,j)= summ/vsumm
-    !     end do
-    ! end do
-    
-    ! !Calculate assembly power
-    ! nfuel = 0
-    ! totp  = 0._DP
-    ! ys = 1
-    ! yf = 0
-    ! do j= 1, ny
-    !     yf = yf + ydiv(j)
-    !     xf = 0
-    !     xs = 1
-    !     do i= 1, nx
-    !         xf = xf + xdiv(i)
-    !         summ = 0._DP
-    !         vsumm = 0._DP
-    !         do ly= ys, yf
-    !             do lx= xs, xf
-    !                 summ = summ + fnode(lx,ly)*xdel(lx)*ydel(ly)
-    !                 vsumm = vsumm + xdel(lx)*ydel(ly)
-    !             end do
-    !         end do
-    !         fasm(i,j) = summ / vsumm
-    !         xs = xs + xdiv(i)
-    !         if (fasm(i,j) > 0._DP) nfuel = nfuel + 1
-    !         if (fasm(i,j) > 0._DP) totp  = totp + fasm(i,j)
-    !     end do
-    !     ys = ys + ydiv(j)
-    ! end do
-    
-    
-    ! ! Normalize assembly power to 1._DP
-    ! xmax = 1; ymax = 1
-    ! fmax = 0._DP
-    ! do j = 1, ny
-    !     do i = 1, nx
-    !         if (totp > 0.) fasm(i,j) = real(nfuel) / totp * fasm(i,j)
-    !         if (fasm(i,j) > fmax) then     ! Get max position
-    !             xmax = i
-    !             ymax = j
-    !             fmax = fasm(i,j)
-    !         end if
-    !         ! Convert power to character (if power == 0 convert to blank spaces)
-    !         if ((fasm(i,j) - 0.) < 1.e-5_DP) then
-    !             cpow(i,j) = '     '
-    !         else
-    !             write (cpow(i,j),'(F6.3)') fasm(i,j)
-    !             cpow(i,j) = trim(cpow(i,j))
-    !         end if
-    !     end do
-    ! end do
-    
-    
-    ! ! Print assembly power distribution
-    ! write(ounit,*)
-    ! write(ounit,*)
-    ! write(ounit,*) '    Radial Power Distribution'
-    ! write(ounit,*) '  =============================='
-    
-    ! ip = nx/xm
-    ! ipr = MOD(nx,xm) - 1
-    ! xs = 1; xf = xm
-    ! do k = 1, ip
-    !     write(ounit,'(4X,100I8)') (i, i = xs, xf)
-    !     do j= ny, 1, -1
-    !         write(ounit,'(2X,I4,100A8)') j, (cpow(i,j), i=xs, xf)
-    !     end do
-    !     write(ounit,*)
-    !     xs = xs + xm
-    !     xf = xf + xm
-    ! end do
-    
-    
-    ! write(ounit,'(4X,100I8)') (i, i = xs, xs+ipr)
-    ! if (xs+ipr > xs) then
-    !     do j= ny, 1, -1
-    !         write(ounit,'(2X,I4,100A8)') j, (cpow(i,j), i=xs, xs+ipr)
-    !     end do
-    ! end if
-    
-    
-    
-    ! write(ounit,*)
-    
-    ! write(ounit,*) '  MAX POS.       Maximum Value'
-    ! write(ounit,1101) ymax, xmax, fasm(xmax, ymax)
-    
-    ! 1101 format(2X, '(' , I3, ',', I3,')', F15.3)
-    
-    
-    ! end subroutine AsmPow
-    
-    ! !******************************************************************************!
-    
     ! subroutine  AxiPow(fn)
     
     ! !
@@ -3416,7 +3177,7 @@ module read
     
     ! IMPLICIT NONE
     
-    ! real(dp), OPTIONAL, intent(in) :: norm
+    ! real(dp), optional, intent(in) :: norm
     
     ! real(dp), dimension(nxx, nyy, nzz, ng) :: fx
     ! integer :: g, i, j, k, n
@@ -3489,7 +3250,7 @@ module read
     ! end do
     
     ! ! Normalize Flux to norm
-    ! if (PRESENT(norm) .and. bther /= 1) then
+    ! if (present(norm) .and. bther /= 1) then
     !     do g = 1, ng
     !         do j = 1, ny
     !             do i = 1, nx
@@ -3637,7 +3398,7 @@ module read
     
     ! read(xbunit, *, IOSTAT=iost) ind, ln, ng, nmat  !read numbef of group and material
     ! message = ' error in material number'
-    ! call inp_error_message(ounit, iost, ln, message)
+    ! call input_error(ounit, iost, ln, message)
     
     ! allocate(chi(nmat,ng))
     ! allocate(xtab(nmat), noty(nmat), m(nmat))
@@ -3651,7 +3412,7 @@ module read
     !     xtab(i)%fname = iline(1:comm-1)       !Get xtab file name
     !     read(iline(comm:100),*) xtab(i)%cnum  ! Get composition number (convert to integer)
     !     message = ' error in READING XTAB files'
-    !     call inp_error_message(ounit, iost, ln, message)
+    !     call input_error(ounit, iost, ln, message)
     ! end do
     
     ! ! Starting to read XTAB File, remove comments and write to buffer file
@@ -3673,12 +3434,12 @@ module read
     !         read(tunit, *,IOSTAT=iost) ind, ln, m(j)%tadf, m(j)%trod     ! read input control
     !         message = ' ERROR IN XTAB FILE ' // trim(adjustl(xtab(j)%fname)) &
     !         // ': CANNOT read CONTROL parameterS'
-    !         call inp_error_message(ounit, iost, ln, message, XTAB=j)
+    !         call input_error(ounit, iost, ln, message, XTAB=j)
     
     !         read(tunit, *, IOSTAT=iost) ind, ln, m(j)%nd, m(j)%nb, m(j)%nf, m(j)%nm    ! read number of branch
     !         message = ' ERROR IN XTAB FILE '// trim(adjustl(xtab(j)%fname))&
     !          // ': CANNOT read BRANCH DIMENSION'
-    !         call inp_error_message(ounit, iost, ln, message)
+    !         call input_error(ounit, iost, ln, message)
     
     !         ! Check branch dimension
     !         if (m(j)%nd < 1 .OR. m(j)%nb < 1 .OR. m(j)%nf < 1 .OR. m(j)%nm < 1) then
@@ -3749,22 +3510,22 @@ module read
     !         !read fission spectrum
     !         read(tunit, *, IOSTAT=iost) ind, ln, (chi(j,g), g = 1, ng)
     !         message = ' ERROR IN XTAB FILE: CANNOT read FISSION SPECTRUM'
-    !         call inp_error_message(ounit, iost, ln, message, XTAB=j)
+    !         call input_error(ounit, iost, ln, message, XTAB=j)
     !         !read neutron Inverse velocity
     !         read(tunit, *, IOSTAT=iost) ind, ln, (m(j)%velo(g), g = 1, ng)
     !         message = ' ERROR IN XTAB FILE: CANNOT read Inverse Velocity'
-    !         call inp_error_message(ounit, iost, ln, message, XTAB=j)
+    !         call input_error(ounit, iost, ln, message, XTAB=j)
     !         do g = 1, ng
     !           m(j)%velo(g) = 1._DP/m(j)%velo(g)  !COnvert to velocity
     !         end do
     !         ! read decay constant
     !         read(tunit, *, IOSTAT=iost) ind, ln, (m(j)%lamb(t), t = 1, nf)
     !         message = ' ERROR IN XTAB FILE: CANNOT read DECAY CONSTANT'
-    !         call inp_error_message(ounit, iost, ln, message, XTAB=j)
+    !         call input_error(ounit, iost, ln, message, XTAB=j)
     !         ! read beta
     !         read(tunit, *, IOSTAT=iost) ind, ln, (m(j)%iBeta(t), t = 1, nf)
     !         message = ' ERROR IN XTAB FILE: CANNOT read DELAYED NEUTRON FRACTION'
-    !         call inp_error_message(ounit, iost, ln, message, XTAB=j)
+    !         call input_error(ounit, iost, ln, message, XTAB=j)
     
     !         ! if read, indicate that it has been read
     !         noty(j) = .FALSE.
@@ -3835,7 +3596,7 @@ module read
     
     ! integer, intent(in) :: tunit, dim, matnum
     ! character(LEN=*), intent(in) :: messPar, fname
-    ! real(dp), dimension(:), allocatable, intent(INOUT) :: par
+    ! real(dp), dimension(:), allocatable, intent(inout) :: par
     
     ! integer :: k
     ! integer :: ln, iost
@@ -3845,7 +3606,7 @@ module read
     !   read(tunit, *, IOSTAT=iost) ind, ln, par(1:dim)
     !   message = ' ERROR IN XTAB FILE '// trim(adjustl(fname))&
     !    // ': CANNOT read BRANCH parameterS ' // messPar
-    !   call inp_error_message(ounit, iost, ln, message, XTAB=matnum)
+    !   call input_error(ounit, iost, ln, message, XTAB=matnum)
     !   do k = 2, dim
     !     if (par(k-1) > par(k)) then
     !       write(ounit,*) "  ERROR IN XTAB FILE  ", fname
@@ -3864,81 +3625,81 @@ module read
     
     ! !******************************************************************************!
     
-    ! subroutine readXS (tunit, mnum, rod, xsec)
+    ! subroutine readXS (tunit, mat_map, rod, xsec)
     ! !Purpose: To read xsec in XTAB file
     
     ! USE data, ONLY: m, ng, XBRANCH
     ! IMPLICIT NONE
     
-    ! integer, intent(in) :: tunit, mnum, rod  ! file unit number, material number, and rod indicator
-    ! type(XBRANCH), dimension(:,:,:,:), intent(INOUT) :: xsec  !Set INOUT, see: http://www.cs.rpi.edu/~szymansk/OOF90/bugs.html#2
+    ! integer, intent(in) :: tunit, mat_map, rod  ! file unit number, material number, and rod indicator
+    ! type(XBRANCH), dimension(:,:,:,:), intent(inout) :: xsec  !Set inout, see: http://www.cs.rpi.edu/~szymansk/OOF90/bugs.html#2
     ! integer :: iost, ln
     ! integer :: g, h, s, t, u, v, k
     
     ! !read sigtr
     ! do g = 1, ng
-    !   do v = 1, m(mnum)%nm
-    !     do u = 1, m(mnum)%nf
-    !       do t = 1, m(mnum)%nb
+    !   do v = 1, m(mat_map)%nm
+    !     do u = 1, m(mat_map)%nf
+    !       do t = 1, m(mat_map)%nb
     !         read(tunit, *, IOSTAT=iost) ind, ln, &
-    !         (xsec(s,t,u,v)%sigtr(g), s = 1, m(mnum)%nd)
+    !         (xsec(s,t,u,v)%sigtr(g), s = 1, m(mat_map)%nd)
     !         if (rod == 0) then
     !           message = ' ERROR IN XTAB FILE: CANNOT read TRANSPORT XSEC'
     !         else
     !           message = ' ERROR IN XTAB FILE: CANNOT read RODDED TRANSPORT XSEC'
     !         end if
-    !         call inp_error_message(ounit, iost, ln, message, XTAB=mnum)
+    !         call input_error(ounit, iost, ln, message, XTAB=mat_map)
     !       end do
     !     end do
     !   end do
     ! end do
     ! !read siga
     ! do g = 1, ng
-    !   do v = 1, m(mnum)%nm
-    !     do u = 1, m(mnum)%nf
-    !       do t = 1, m(mnum)%nb
+    !   do v = 1, m(mat_map)%nm
+    !     do u = 1, m(mat_map)%nf
+    !       do t = 1, m(mat_map)%nb
     !         read(tunit, *, IOSTAT=iost) ind, ln, &
-    !         (xsec(s,t,u,v)%siga(g), s = 1, m(mnum)%nd)
+    !         (xsec(s,t,u,v)%siga(g), s = 1, m(mat_map)%nd)
     !         if (rod == 0) then
     !           message = ' ERROR IN XTAB FILE: CANNOT read ABSORPTION XSEC'
     !         else
     !           message = ' ERROR IN XTAB FILE: CANNOT read RODDED ABSORPTION XSEC'
     !         end if
-    !         call inp_error_message(ounit, iost, ln, message, XTAB=mnum)
+    !         call input_error(ounit, iost, ln, message, XTAB=mat_map)
     !       end do
     !     end do
     !   end do
     ! end do
     ! !read nu*sigf
     ! do g = 1, ng
-    !   do v = 1, m(mnum)%nm
-    !     do u = 1, m(mnum)%nf
-    !       do t = 1, m(mnum)%nb
+    !   do v = 1, m(mat_map)%nm
+    !     do u = 1, m(mat_map)%nf
+    !       do t = 1, m(mat_map)%nb
     !         read(tunit, *, IOSTAT=iost) ind, ln, &
-    !         (xsec(s,t,u,v)%nuf(g), s = 1, m(mnum)%nd)
+    !         (xsec(s,t,u,v)%nuf(g), s = 1, m(mat_map)%nd)
     !         if (rod == 0) then
     !           message = ' ERROR IN XTAB FILE: CANNOT read NU*SIGF XSEC'
     !         else
     !           message = ' ERROR IN XTAB FILE: CANNOT read RODDED NU*SIGF XSEC'
     !         end if
-    !         call inp_error_message(ounit, iost, ln, message, XTAB=mnum)
+    !         call input_error(ounit, iost, ln, message, XTAB=mat_map)
     !       end do
     !     end do
     !   end do
     ! end do
     ! !read kappa*sigf
     ! do g = 1, ng
-    !   do v = 1, m(mnum)%nm
-    !     do u = 1, m(mnum)%nf
-    !       do t = 1, m(mnum)%nb
+    !   do v = 1, m(mat_map)%nm
+    !     do u = 1, m(mat_map)%nf
+    !       do t = 1, m(mat_map)%nb
     !         read(tunit, *, IOSTAT=iost) ind, ln, &
-    !         (xsec(s,t,u,v)%sigf(g), s = 1, m(mnum)%nd)
+    !         (xsec(s,t,u,v)%sigf(g), s = 1, m(mat_map)%nd)
     !         if (rod == 0) then
     !           message = ' ERROR IN XTAB FILE: CANNOT read KAPPA*SIGF XSEC'
     !         else
     !           message = ' ERROR IN XTAB FILE: CANNOT read RODDED KAPPA*SIGF XSEC'
     !         end if
-    !         call inp_error_message(ounit, iost, ln, message, XTAB=mnum)
+    !         call input_error(ounit, iost, ln, message, XTAB=mat_map)
     !       end do
     !     end do
     !   end do
@@ -3946,32 +3707,32 @@ module read
     ! !read sigs
     ! do g = 1, ng
     !   do h = 1, ng
-    !     do v = 1, m(mnum)%nm
-    !       do u = 1, m(mnum)%nf
-    !         do t = 1, m(mnum)%nb
+    !     do v = 1, m(mat_map)%nm
+    !       do u = 1, m(mat_map)%nf
+    !         do t = 1, m(mat_map)%nb
     !           read(tunit, *, IOSTAT=iost) ind, ln, &
-    !           (xsec(s,t,u,v)%sigs(g,h), s = 1, m(mnum)%nd)
+    !           (xsec(s,t,u,v)%sigs(g,h), s = 1, m(mat_map)%nd)
     !           if (rod == 0) then
     !             message = ' ERROR IN XTAB FILE: CANNOT read SCATTERING XSEC'
     !           else
     !             message = ' ERROR IN XTAB FILE: CANNOT read RODDED SCATTERING XSEC'
     !           end if
-    !           call inp_error_message(ounit, iost, ln, message, XTAB=mnum)
+    !           call input_error(ounit, iost, ln, message, XTAB=mat_map)
     !         end do
     !       end do
     !     end do
     !   end do
     ! end do
     ! !read dc
-    ! if (m(mnum)%tadf  == 1) then  ! if dc present
+    ! if (m(mat_map)%tadf  == 1) then  ! if dc present
     !   do g = 1, ng
-    !     do v = 1, m(mnum)%nm
-    !       do u = 1, m(mnum)%nf
-    !         do t = 1, m(mnum)%nb
+    !     do v = 1, m(mat_map)%nm
+    !       do u = 1, m(mat_map)%nf
+    !         do t = 1, m(mat_map)%nb
     !           read(tunit, *, IOSTAT=iost) ind, ln, &
-    !           (xsec(s,t,u,v)%dc(g,1), s = 1, m(mnum)%nd)
+    !           (xsec(s,t,u,v)%dc(g,1), s = 1, m(mat_map)%nd)
     !           do k = 1, 6
-    !             do s = 1, m(mnum)%nd
+    !             do s = 1, m(mat_map)%nd
     !               xsec(s,t,u,v)%dc(g,k) = xsec(s,t,u,v)%dc(g,1)
     !             end do
     !           end do
@@ -3980,25 +3741,25 @@ module read
     !           else
     !             message = ' ERROR IN XTAB FILE: CANNOT read RODDED ADFs'
     !           end if
-    !           call inp_error_message(ounit, iost, ln, message, XTAB=mnum)
+    !           call input_error(ounit, iost, ln, message, XTAB=mat_map)
     !         end do
     !       end do
     !     end do
-    !   end do
-    ! else if (m(mnum)%tadf  == 2) then
+    !   end domat_map
+    ! else if (m(mat_map)%tadf  == 2) then
     !   do g = 1, ng
     !     do k = 1, 6
-    !       do v = 1, m(mnum)%nm
-    !         do u = 1, m(mnum)%nf
-    !           do t = 1, m(mnum)%nb
+    !       do v = 1, m(mat_map)%nm
+    !         do u = 1, m(mat_map)%nf
+    !           do t = 1, m(mat_map)%nb
     !             read(tunit, *, IOSTAT=iost) ind, ln, &
-    !             (xsec(s,t,u,v)%dc(g,k), s = 1, m(mnum)%nd)
+    !             (xsec(s,t,u,v)%dc(g,k), s = 1, m(mat_map)%nd)
     !             if (rod == 0) then
     !               message = ' ERROR IN XTAB FILE: CANNOT read ADFs'
     !             else
     !               message = ' ERROR IN XTAB FILE: CANNOT read RODDED TRANSPORT ADFs'
     !             end if
-    !             call inp_error_message(ounit, iost, ln, message, XTAB=mnum)
+    !             call input_error(ounit, iost, ln, message, XTAB=mat_map)
     !           end do
     !         end do
     !       end do
@@ -4033,7 +3794,7 @@ module read
     ! end do
     
     ! 1131 format(2X, 'ERROR: end OF FILE REACHED FOR XTAB FILE IN MATERIAL NUMBER ', I3)
-    ! 1132 format(2X, 'KOMOdo IS STOPPING')
+    ! 1132 format(2X, 'KOMODO IS STOPPING')
     
     ! end subroutine skipread
 

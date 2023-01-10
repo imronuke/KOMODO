@@ -189,6 +189,9 @@ GIT_EXECUTABLE:FILEPATH=/bin/git
 //Use OpenACC GPU          
 GPU:BOOL=OFF
 
+//USE PROFILING MODE       
+PROFILE:BOOL=OFF
+
 //Value Computed by CMake
 komodo_BINARY_DIR:STATIC=/home/imronuke/wsl/github/KOMODO/bld
 

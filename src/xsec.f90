@@ -23,7 +23,7 @@ module xsec
     end type
 
     type, extends(xs_base), public :: xs_rect
-        real(dp), allocatable :: dc(:,:,:)
+        real(dp), pointer :: dc(:,:,:)
     end type
     
     ! Change of XS per change of other parameters
@@ -58,24 +58,14 @@ module xsec
     ! Allocate MG XSEC (node-wise)                                                                  !
     !===============================================================================================!
 
-    subroutine alloc_xsec(xs, nnod, ng, n_surf)
+    subroutine alloc_xsec(xs, nnod, ng)
 
         class(xs_base), intent(inout)       :: xs
         integer, intent(in)                :: ng, nnod
-        integer, intent(in), optional      :: n_surf
 
         allocate(xs % sigtr(nnod, ng), xs % siga(nnod, ng), xs % nuf(nnod, ng))
         allocate(xs % sigf(nnod, ng), xs % sigs(nnod, ng, ng), xs % chi(nnod, ng))
         allocate(xs % D(nnod, ng), xs % sigr(nnod, ng))
-
-        select type (xs)
-        type is (xs_rect)
-            if (present(n_surf)) then
-                allocate(xs % dc(nnod, ng, n_surf))
-            else
-                stop "ERROR: number of surgface is necessary in alloc_xsec routine"
-            endif
-        end select
 
     end subroutine
 
@@ -89,17 +79,19 @@ module xsec
         integer, intent(in)            :: nnod
         integer, intent(in)            :: ix(:), iy(:), iz(:)
         integer, intent(in)            :: mat_map(:,:,:)
+        ! Below are material-wise XSEC
         real(dp), intent(in)           :: sigtr(:,:)          ! Transport macroscopic XSEC
         real(dp), intent(in)           :: siga (:,:)          ! Absorption macroscopic XSEC
         real(dp), intent(in)           :: nuf  (:,:)          ! nu*fission macroscopic XSEC
         real(dp), intent(in)           :: sigf (:,:)          ! fission macroscopic XSEC
         real(dp), intent(in)           :: sigs (:,:,:)        ! Scattering macroscopic XSEC
         real(dp), intent(in)           :: chi(:,:)            ! MG fission spectrum
-        real(dp), intent(in), optional :: dc(:,:,:)           ! ADF
+        
+        real(dp), intent(in), optional, target :: dc(:,:,:)   ! ADF
 
         integer   :: n, i, j, k, nn
 
-        ! Allocate node wise xs
+        ! Set node wise xs
         do n = 1, nnod
             i = ix(n); j = iy(n); k = iz(n)
             nn = mat_map(i, j, k)
@@ -114,12 +106,12 @@ module xsec
             select type (xs)
             type is (xs_rect)
                 if (present(dc)) then
-                    xs % dc(n, :, :) = dc(nn, :, :)
+                    xs % dc => dc
                 else
-                    xs % dc(n, :, :) = 1.
+                    stop 'error in set_xsec routine: ADF is required'
                 endif
             end select
-            
+
         end do
         
         call upd_diff_sigr(xs)

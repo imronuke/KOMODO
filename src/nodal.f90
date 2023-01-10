@@ -11,7 +11,7 @@ module nodal
     ! ------------------------------
 
     use iso_fortran_env, only: real64
-    use node
+    use stagger
     use xsec
     use util
 
@@ -39,7 +39,6 @@ module nodal
         logical              :: only_axial
         integer              :: nnod, ng
         integer              :: nxx, nyy, nzz
-        integer, allocatable :: xyz(:,:,:)
 
         real(dp), allocatable   :: a1n(:), a2n(:), a3n(:), a4n(:)  ! Flux expansion coefficients for current node
         real(dp), allocatable   :: a1p(:), a2p(:), a3p(:), a4p(:)  ! Flux expansion coefficients for following node
@@ -51,7 +50,7 @@ module nodal
         real(dp), allocatable :: Sx(:,:), Sy(:,:), Sz(:,:)                ! zeroth order source in x, y, and z directions
         real(dp), allocatable :: Ln1(:), Lp1(:)                           ! First Transverse leakages moments
         
-        type(node_rect), pointer :: node(:)
+        integer, pointer         :: xyz(:,:,:)
         real(dp), pointer        :: exsrc(:,:)
         real(dp), pointer        :: flux(:,:)
         real(dp), pointer        :: Ke
@@ -59,41 +58,39 @@ module nodal
         real(dp), pointer        :: xdel(:)       ! Delta x in cm
         real(dp), pointer        :: ydel(:)       ! Delta y in cm
         real(dp), pointer        :: zdel(:)       ! Delta z in cm
-        type(staggered), pointer :: xstag(:)    ! Staggered mesh data
-        type(staggered), pointer :: ystag(:)    ! Staggered mesh data
+        type(staggered), pointer :: xstag(:)      ! Staggered mesh data
+        type(staggered), pointer :: ystag(:)      ! Staggered mesh data
+        real(dp), pointer        :: df(:,:,:)     ! FDM coupling coeff
+        real(dp), pointer        :: dn(:,:,:)     ! Nodal coupling coeff
+        integer, pointer         :: ix(:) 
+        integer, pointer         :: iy(:) 
+        integer, pointer         :: iz(:) 
     end type
 
-    public :: setup_nodal, alloc_data, dealloc_data, nodal_update_sanm, nodal_update_pnm
+    public :: set_nodal_data, set_nodal_pointer
+    public :: alloc_data
+    public :: nodal_update_sanm, nodal_update_pnm
 
     contains
 
     !===============================================================================================!
-    ! Allocate expansion coefficients and zeroth-moment source
-    ! Aliasing external data
+    ! Assign data necessary for higher order nodal coupling coeff (D hat)
     !===============================================================================================!
 
-    subroutine setup_nodal(d, ng, nnod, nxx, nyy, nzz, nod, Keff, xs, flux, exsrc, &
-        xdel, ydel, zdel, fid_inp, east, west, north, south, top, bottom, xstag, ystag, xyz, &
-        calc_mode, only_axial)
+    subroutine set_nodal_data(d, ng, nnod, nxx, nyy, nzz, east, west, north, south, top, bottom, &
+        calc_mode, fid_inp, only_axial)
         
         class(nodal_type), intent(inout)       :: d
         integer, intent(in)                    :: ng, nnod
         integer, intent(in)                    :: nxx, nyy, nzz
-        type(node_rect), intent(inout), target :: nod(:)
-        real(dp), intent(in), target           :: Keff
-        type(xs_rect), intent(inout), target   :: xs
-        real(dp), intent(in), target           :: flux(:,:)
-        real(dp), intent(in), target           :: exsrc(:,:)
-        real(dp), intent(in), target           :: xdel(:), ydel(:), zdel(:)
         integer, intent(in)                    :: fid_inp
         integer, intent(in)                    :: east, west
         integer, intent(in)                    :: north, south
         integer, intent(in)                    :: top, bottom
-        type(staggered), intent(in), target    :: xstag(:), ystag(:)
-        integer, intent(in)                    :: xyz(:,:,:)
         character(*), intent(in)               :: calc_mode    
         logical, intent(in)                    :: only_axial
 
+        ! set data
         d % nnod       = nnod
         d % ng         = ng
         d % nxx        = nxx
@@ -101,24 +98,7 @@ module nodal
         d % nzz        = nzz
         d % calc_mode  = trim(adjustl(calc_mode))
         d % only_axial = only_axial
-
-        allocate(d % xyz(nxx, nyy, nzz))
-        d % xyz = xyz
-
-        d % node  => nod
-        d % exsrc => exsrc
-        d % flux  => flux
-        d % Ke    => Keff
-        d % xs    => xs
-        d % xdel  => xdel
-        d % ydel  => ydel
-        d % zdel  => zdel
-        d % xstag => xstag
-        d % ystag => ystag
-
-        allocate(d % a1n(ng), d % a2n(ng), d % a3n(ng), d % a4n(ng))
-        allocate(d % a1p(ng), d % a2p(ng), d % a3p(ng), d % a4p(ng))
-        allocate(d % Sx(nnod,ng), d % Sy(nnod,ng), d % Sz(nnod,ng))
+        fid            = fid_inp 
 
        ! set BCs
         xeast  = east
@@ -128,7 +108,61 @@ module nodal
         zbott  = bottom
         ztop   = top
 
-        fid = fid_inp
+        ! Allocate necessary variables
+        allocate(d % a1n(ng), d % a2n(ng), d % a3n(ng), d % a4n(ng))
+        allocate(d % a1p(ng), d % a2p(ng), d % a3p(ng), d % a4p(ng))
+        allocate(d % Sx(nnod,ng), d % Sy(nnod,ng), d % Sz(nnod,ng))
+
+    end subroutine
+
+    !===============================================================================================!
+     ! Aliasing pointer data necessary for higher order nodal coupling coeff (D hat)
+    !===============================================================================================!
+
+    subroutine set_nodal_pointer(d, Keff, xs, flux, exsrc, xdel, ydel, zdel, xstag, ystag, &
+        ix, iy, iz, xyz, df, dn)
+        
+        class(nodal_type), intent(inout)       :: d
+        real(dp), intent(in), target           :: Keff
+        type(xs_rect), intent(inout), target   :: xs
+        real(dp), intent(in), target           :: flux(:,:)
+        real(dp), intent(in), target           :: exsrc(:,:)
+        real(dp), intent(in), target           :: xdel(:), ydel(:), zdel(:)
+        type(staggered), intent(in), target    :: xstag(:), ystag(:)
+        integer, intent(in), target            :: ix(:)
+        integer, intent(in), target            :: iy(:)
+        integer, intent(in), target            :: iz(:)
+        integer, intent(in), target            :: xyz(:,:,:)
+        real(dp), intent(in), target           :: df(:,:,:), dn(:,:,:)
+
+        d % Ke    => Keff
+        d % xs    => xs
+
+        d % flux  => flux
+        if (size(d % flux, dim=1) .ne. d % nnod) stop 'Flux first-dimension size does not match in nodal module'
+        if (size(d % flux, dim=2) .ne. d % ng)   stop 'Flux second-dimension size does not match in nodal module'
+
+        d % exsrc => exsrc
+        if (size(d % exsrc, dim=1) .ne. d % nnod) stop 'exsrc first-dimension size does not match in nodal module'
+        if (size(d % exsrc, dim=2) .ne. d % ng)   stop 'exsrc second-dimension size does not match in nodal module'
+
+        d % xdel  => xdel
+        d % ydel  => ydel
+        d % zdel  => zdel
+        if (size(d % xdel) .ne. d % nxx) stop 'ix size does not match in nodal module'
+        if (size(d % ydel) .ne. d % nyy) stop 'iy size does not match in nodal module'
+        if (size(d % zdel) .ne. d % nzz) stop 'iz size does not match in nodal module'
+
+        d % xstag => xstag
+        d % ystag => ystag
+
+        d % ix => ix
+        d % iy => iy
+        d % iz => iz
+        d % xyz => xyz
+
+        d % df  => df
+        d % dn  => dn
 
     end subroutine
 
@@ -153,22 +187,6 @@ module nodal
     end subroutine
 
     !===============================================================================================!
-    ! Dellocate necessary data for nodal coef update
-    !===============================================================================================!
-
-    subroutine dealloc_data(d)
-        
-        class(nodal_type), intent(inout) :: d
-        
-        deallocate(d % Ln1, d % Lp1)
-        deallocate(d % Bcn, d % Bcp)
-        deallocate(d % An, d % Bn, d % En, d % Fn, d % Gn, d % Hn)
-        deallocate(d % Ap, d % Bp, d % Ep, d % Fp, d % Gp, d % Hp)
-        deallocate(d % Lm2)
-
-    end subroutine
-
-    !===============================================================================================!
     ! to update nodal coupling coefficients (D hat) for entire core using
     ! Polynomial Nodal Method (PNM)
     !===============================================================================================!
@@ -182,8 +200,8 @@ module nodal
 
         d % An = 1. / 15.; d % Bn = 1. / 35.; d % En = 2. / 7.
         d % Fn = 2. / 5.; d % Gn = 10.; d % Hn = 6.
-        d % An = d % Ap; d % Bn = d % Bp; d % En = d % Ep
-        d % Fn = d % Fp; d % Gn = d % Gp; d % Hn = d % Hp
+        d % Ap = d % An; d % Bp = d % Bn; d % Ep = d % En
+        d % Fp = d % Fn; d % Gp = d % Gn; d % Hp = d % Hn
     
         call get_source(d)
     
@@ -197,16 +215,12 @@ module nodal
                 do i = d % ystag(j) % smin, d % ystag(j) % smax-1
                     n = d % xyz(i,j,k); p = d % xyz(i+1,j,k)
                     d % Bcn = d % Bcp
-                    d % An = d % Ap; d % Bn = d % Bp; d % En = d % Ep
-                    d % Fn = d % Fp; d % Gn = d % Gp; d % Hn = d % Hp
                     d % Bcp = get_buckling(d, 1, p)
                     call get_coefs(d, 1, n, p)
                     call nodal_coup_upd(d, 1, d % a1n, d % a2n, d % a3n, d % a4n, n, p)
                 end do
                 n = d % xyz(d % ystag(j) % smax, j, k)
                 d % Bcn = d % Bcp
-                d % An = d % Ap; d % Bn = d % Bp; d % En = d % Ep
-                d % Fn = d % Fp; d % Gn = d % Gp; d % Hn = d % Hp
                 call get_coefs_last(d, xeast, 1, n)
                 call nodal_coup_upd(d, 1, d % a1n, d % a2n, d % a3n, d % a4n, n = n)
             end do
@@ -222,16 +236,12 @@ module nodal
                 do j = d % xstag(i) % smin, d % xstag(i) % smax-1
                     n = d % xyz(i,j,k); p = d % xyz(i,j+1,k)
                     d % Bcn = d % Bcp
-                    d % An = d % Ap; d % Bn = d % Bp; d % En = d % Ep
-                    d % Fn = d % Fp; d % Gn = d % Gp; d % Hn = d % Hp
                     d % Bcp = get_buckling(d, 2, p)
                     call get_coefs(d, 2, n, p)
                     call nodal_coup_upd(d, 2, d % a1n, d % a2n, d % a3n, d % a4n, n, p)
                 end do
                 n = d % xyz(i, d % xstag(i) % smax, k)
                 d % Bcn = d % Bcp
-                d % An = d % Ap; d % Bn = d % Bp; d % En = d % Ep
-                d % Fn = d % Fp; d % Gn = d % Gp; d % Hn = d % Hp
                 call get_coefs_last(d, ynorth, 2, n)
                 call nodal_coup_upd(d, 2, d % a1n, d % a2n, d % a3n, d % a4n, n = n)
             end do
@@ -247,16 +257,12 @@ module nodal
                 do k = 1, d % nzz-1
                     n = d % xyz(i, j, k); p = d % xyz(i, j, k+1)
                     d % Bcn = d % Bcp
-                    d % An = d % Ap; d % Bn = d % Bp; d % En = d % Ep
-                    d % Fn = d % Fp; d % Gn = d % Gp; d % Hn = d % Hp
                     d % Bcp = get_buckling(d, 3, p)
                     call get_coefs(d, 3, n, p)
                     call nodal_coup_upd(d, 3, d % a1n, d % a2n, d % a3n, d % a4n, n, p)
                 end do
                 n = d % xyz(i, j, d % nzz)
                 d % Bcn = d % Bcp
-                d % An = d % Ap; d % Bn = d % Bp; d % En = d % Ep
-                d % Fn = d % Fp; d % Gn = d % Gp; d % Hn = d % Hp
                 call get_coefs_last(d, ztop, 3, n)
                 call nodal_coup_upd(d, 3, d % a1n, d % a2n, d % a3n, d % a4n, n = n)
             end do
@@ -374,35 +380,38 @@ module nodal
     
         integer    :: g, s
         real(dp)   :: dh, jp
-        type(surface_type), pointer :: sf, sfp
+        integer  :: i, j, k
     
         if (u == 1) then
             if (present(n)) then
-                dh = d % xdel(n)
+                i = d % ix(n)
             else
-                dh = d % xdel(p)
+                i = d % ix(p)
             end if
+            dh = d % xdel(i)
             s = 1
         else if (u == 2) then
             if (present(n)) then
-                dh = d % ydel(n)
+                j = d % iy(n)
             else
-                dh = d % ydel(p)
+                j = d % iy(p)
             end if
+            dh = d % ydel(j)
             s = 3
         else
             if (present(n)) then
-              dh = d % zdel(n)
+                k = d % iz(n)
             else
-              dh = d % zdel(p)
+                k = d % iz(p)
             end if
+            dh = d % zdel(k)
             s = 5
         end if
     
         if (present(n) .and. present(p)) then
 
-            sf => d % node(n) % sf(s)     ! n means current node
-            sfp => d % node(p) % sf(s+1)  ! p means next node
+            ! n means current node
+            ! p means next node
 
             do g = 1, d % ng
 
@@ -410,36 +419,32 @@ module nodal
                 * (a1(g) + 3. * a2(g) + d % Hn(g) * a3(g) + d % Gn(g) * a4(g))
         
                 ! Update nodal coupling
-                sf % dh(g) = (sf % dt(g) * (d % flux(n,g) - d % flux(p,g)) - jp) &
+                d % dn(n,g,s) = (d % df(n,g,s) * (d % flux(n,g) - d % flux(p,g)) - jp) &
                 / (d % flux(n,g) + d % flux(p,g))
                 
-                sfp % dh(g) = sf % dh(g)
+                d % dn(p,g,s+1) = d % dn(n,g,s)
 
             end do
 
         else if (present(p)) then
-
-            sfp => d % node(p) % sf(s+1)  ! p means next node
 
             do g = 1, d % ng
                 jp = -2. * d % xs % D(p,g) / dh &
                 * (a1(g) - 3. * a2(g) + d % Hp(g) * a3(g) - d % Gp(g) * a4(g))
         
                 ! Update nodal coupling
-                sfp % dh(g) = -(jp / d % flux(p,g) + sfp % dt(g))
+                d % dn(p,g,s+1) = -(jp / d % flux(p,g) + d % df(p,g,s+1))
 
             end do
 
         else
-
-            sf => d % node(n) % sf(s)
 
             do g = 1, d % ng
                 jp = -2. * d % xs % D(n,g) / dh &
                 * (a1(g) + 3. * a2(g) + d % Hn(g) * a3(g) + d % Gn(g) * a4(g))
         
                 ! Update nodal coupling
-                sf % dh(g) = -(jp / d % flux(n,g) - sf % dt(g))
+                d % dn(n,g,s) = -(jp / d % flux(n,g) - d % df(n,g,s))
         
             end do
 
@@ -628,13 +633,13 @@ module nodal
     
         ! define node size in direction u
         if (u == 1) then
-            dn = d % xdel(p)
+            dn = d % xdel(d % ix(p))
             sf = 2
         else if (u == 2) then
-            dn = d % ydel(p)
+            dn = d % ydel(d % iy(p))
             sf = 4
         else
-            dn = d % zdel(p)
+            dn = d % zdel(d % iz(p))
             sf = 6
         end if
     
@@ -704,16 +709,20 @@ module nodal
         real(dp)   :: An, Fn, Hn, Gn, L1, a2, a4
         real(dp)   :: Pn                       !dif. coef/dx
         integer    :: g, h, sf
+        integer    :: i, j, k
     
         ! define node size in direction u
         if (u == 1) then
-            dn = d % xdel(n)
+            i = d % ix(n)
+            dn = d % xdel(i)
             sf = 1
         else if (u == 2) then
-            dn = d % ydel(n)
+            j = d % iy(n)
+            dn = d % ydel(j)
             sf = 3
         else
-            dn = d % zdel(n)
+            k = d % iz(n)
+            dn = d % zdel(k)
             sf = 5
         end if
   
@@ -784,13 +793,13 @@ module nodal
     
         ! define node size in direction u
         if (u == 1) then
-            hn = d % xdel(n); hp = d % xdel(p)
+            hn = d % xdel(d % ix(n)); hp = d % xdel(d % ix(p))
             sf = 1
         else if (u == 2) then
-            hn = d % ydel(n); hp = d % ydel(p)
+            hn = d % ydel(d % iy(n)); hp = d % ydel(d % iy(p))
             sf = 3
         else
-            hn = d % zdel(n); hp = d % zdel(p)
+            hn = d % zdel(d % iz(n)); hp = d % zdel(d % iz(p))
             sf = 5
         end if
   
@@ -846,6 +855,10 @@ module nodal
         real(dp) :: S
         real(dp) :: Bf(d % ng)
         integer  :: g, h
+        integer  :: i, j, k
+        
+        ! Set i, j, k
+        i = d % ix(n); j = d % iy(n); k = d % iz(n)
     
         !Setup GxG matrix and G vector to obtain a2(g)
         Bf = 0.
@@ -853,19 +866,19 @@ module nodal
             !update zeroth source
             if (d % calc_mode == 'transient') then
                 if (u == 1) then
-                    S = 0.25 * d % xdel(n)**2 / d % xs % D(n,g) * d % Sx(n,g)
+                    S = 0.25 * d % xdel(i)**2 / d % xs % D(n,g) * d % Sx(n,g)
                 else if (u == 2) then
-                    S = 0.25 * d % ydel(n)**2 / d % xs % D(n,g) * d % Sy(n,g)
+                    S = 0.25 * d % ydel(j)**2 / d % xs % D(n,g) * d % Sy(n,g)
                 else
-                    S = 0.25 * d % zdel(n)**2 / d % xs % D(n,g) * d % Sz(n,g)
+                    S = 0.25 * d % zdel(k)**2 / d % xs % D(n,g) * d % Sz(n,g)
                 end if
             else
                 if (u == 1) then
-                    S = 0.25 * d % xdel(n)**2 / d % xs % D(n,g) * (d % Sx(n,g) - d % exsrc(n,g))
+                    S = 0.25 * d % xdel(i)**2 / d % xs % D(n,g) * (d % Sx(n,g) - d % exsrc(n,g))
                 else if (u == 2) then
-                    S = 0.25 * d % ydel(n)**2 / d % xs % D(n,g) * (d % Sy(n,g) - d % exsrc(n,g))
+                    S = 0.25 * d % ydel(j)**2 / d % xs % D(n,g) * (d % Sy(n,g) - d % exsrc(n,g))
                 else
-                    S = 0.25 * d % zdel(n)**2 / d % xs % D(n,g) * (d % Sz(n,g) - d % exsrc(n,g))
+                    S = 0.25 * d % zdel(k)**2 / d % xs % D(n,g) * (d % Sz(n,g) - d % exsrc(n,g))
                 end if
             end if
     
@@ -905,13 +918,17 @@ module nodal
         real(dp) :: dn, alpha, alpha2
         real(dp) :: m1s, m0c, m2c
         integer  :: gg
+        integer  :: i, j, k
 
         if (u == 1) then
-            dn = d % xdel(n)
+            i = d % ix(n)
+            dn = d % xdel(i)
         else if (u == 2) then
-            dn = d % ydel(n)
+            j = d % iy(n)
+            dn = d % ydel(j)
         else
-            dn = d % zdel(n)
+            k = d % iz(n)
+            dn = d % zdel(k)
         end if
 
         do gg = 1, d % ng
@@ -944,17 +961,22 @@ module nodal
         real(dp)                                 :: B(d % ng, d % ng)   ! Buckling B2
     
         real(dp) :: dum, dn
-        integer :: g, h
+        integer  :: g, h
         real(dp) :: Ke
+        integer  :: i, j, k
     
         Ke = d % Ke
         
+        ! define node size in direction u
         if (u == 1) then
-            dn = d % xdel(n)
+            i = d % ix(n)
+            dn = d % xdel(i)
         else if (u == 2) then
-            dn = d % ydel(n)
+            j = d % iy(n)
+            dn = d % ydel(j)
         else
-            dn = d % zdel(n)
+            k = d % iz(n)
+            dn = d % zdel(k)
         end if
     
         if (d % calc_mode == 'static') then
@@ -1027,105 +1049,106 @@ module nodal
         real(dp), intent(out)                    :: L2(d % nnod, d % ng)
         real(dp), intent(out)                    :: L3(d % nnod, d % ng)
 
-        type(node_rect), pointer :: s
         real(dp) :: jp, jm
         integer  :: p, m
         integer  :: n, g
+        integer  :: i, j, k
 
         do g = 1, d % ng
             do n = 1, d % nnod
                 
-                s => d % node(n)
+                ! set i, j, k
+                i = d % ix(n); j = d % iy(n); k = d % iz(n)
         
                 ! x-direction zeroth transverse leakage
+                if (i /= d % ystag(j) % smax) p = d % xyz(i+1,j,k)
+                if (i /= d % ystag(j) % smin) m = d % xyz(i-1,j,k)
+
                 ! west
-                if (.not. associated(s % east)) then
+                if (i == d % ystag(j) % smax) then
                     if (xeast == reflective) then
                         jp = 0.0
                     else
-                        jp =    s % sf(1) % dt(g) * d % flux(n, g) - &
-                                s % sf(1) % dh(g) * d % flux(n, g)
-                    endif
+                        jp = d % df(n,g,1) * d % flux(n,g) - d % dn(n,g,1) * d % flux(n,g)
+                    end if
                 else
-                    p = s % east % n
-                    jp =   -s % sf(1) % dt(g) * (d % flux(p, g) - d % flux(n, g)) - &
-                            s % sf(1) % dh(g) * (d % flux(p, g) + d % flux(n, g))
+                    jp = - d % df(n,g,1) * (d % flux(p,g) - d % flux(n,g)) &
+                         - d % dn(n,g,1) * (d % flux(p,g) + d % flux(n,g))
                 end if
+
                 ! east
-                if (.not. associated(s % west)) then
+                if (i == d % ystag(j) % smin) then
                     if (xwest == reflective) then
                         jm = 0.0
                     else
-                        jm =   -s % sf(2) % dt(g) * d % flux(n, g) - &
-                                s % sf(2) % dh(g) * d % flux(n, g)
-                    endif
+                        jm = - d % df(n,g,2) * d % flux(n,g) - d % dn(n,g,2) * d % flux(n,g)
+                    end if
                 else
-                    m = s % west % n
-                    jm =   -s % sf(2) % dt(g) * (d % flux(n, g) - d % flux(m, g)) - &
-                            s % sf(2) % dh(g) * (d % flux(n, g) + d % flux(m, g))
+                    jm = - d % df(n,g,2) * (d % flux(n,g) - d % flux(m,g)) &
+                         - d % dn(n,g,2) * (d % flux(n,g) + d % flux(m,g))
                 end if
         
-                L1(n, g) = (jp - jm)  / d % xdel(n)
+                L1(n, g) = (jp - jm)  / d % xdel(i)
         
                 ! y-direction zeroth transverse leakage
+                if (j /= d % xstag(i) % smax) p = d % xyz(i,j+1,k)
+                if (j /= d % xstag(i) % smin) m = d % xyz(i,j-1,k)
+
                 ! north
-                if (.not. associated(s % north)) then
+                if (j == d % xstag(i) % smax) then
                     if (ynorth == reflective) then
                         jp = 0.0
                     else
-                        jp =    s % sf(3) % dt(g) * d % flux(n, g) - &
-                                s % sf(3) % dh(g) * d % flux(n, g)
-                    endif
+                        jp = d % df(n,g,3) * d % flux(n,g) - d % dn(n,g,3) * d % flux(n,g)
+                    end if
                 else
-                    p = s % north % n
-                    jp =   -s % sf(3) % dt(g) * (d % flux(p, g) - d % flux(n, g)) - &
-                            s % sf(3) % dh(g) * (d % flux(p, g) + d % flux(n, g))
+                    jp = - d % df(n,g,3) * (d % flux(p,g) - d % flux(n,g)) &
+                         - d % dn(n,g,3) * (d % flux(p,g) + d % flux(n,g))
                 end if
+
                 ! south
-                if (.not. associated(s % south)) then
+                if (j == d % xstag(i) % smin) then
                     if (ysouth == reflective) then
                         jm = 0.0
                     else
-                        jm =   -s % sf(4) % dt(g) * d % flux(n, g) - &
-                                s % sf(4) % dh(g) * d % flux(n, g)
-                    endif
+                        jm = - d % df(n,g,4) * d % flux(n,g) - d % dn(n,g,4) * d % flux(n,g)
+                    end if
                 else
-                    m = s % south % n
-                    jm =   -s % sf(4) % dt(g) * (d % flux(n, g) - d % flux(m, g)) - &
-                            s % sf(4) % dh(g) * (d % flux(n, g) + d % flux(m, g))
+                    jm = - d % df(n,g,4) * (d % flux(n,g) - d % flux(m,g)) &
+                         - d % dn(n,g,4) * (d % flux(n,g) + d % flux(m,g))
                 end if
         
-                L2(n, g) = (jp - jm)  / d % ydel(n)
+                L2(n, g) = (jp - jm)  / d % ydel(j)
         
                 ! z-direction zeroth transverse leakage
+                if (k /= d % nzz) p = d % xyz(i,j,k+1)
+                if (k /= 1      ) m = d % xyz(i,j,k-1)
+
                 ! top
-                if (.not. associated(s % top)) then
+                if (k == d % nzz) then
                     if (ztop == reflective) then
                         jp = 0.0
                     else
-                        jp =    s % sf(5) % dt(g) * d % flux(n, g) - &
-                                s % sf(5) % dh(g) * d % flux(n, g)
-                    endif
+                        jp = d % df(n,g,5) * d % flux(n,g) - d % dn(n,g,5) * d % flux(n,g)
+                    end if
                 else
-                    p = s % top % n
-                    jp =   -s % sf(5) % dt(g) * (d % flux(p, g) - d % flux(n, g)) - &
-                            s % sf(5) % dh(g) * (d % flux(p, g) + d % flux(n, g))
+                    jp = - d % df(n,g,5) * (d % flux(p,g) - d % flux(n,g)) &
+                         - d % dn(n,g,5) * (d % flux(p,g) + d % flux(n,g))
                 end if
+
                 ! bottom
-                if (.not. associated(s % bottom)) then
+                if (k == 1) then
                     if (zbott == reflective) then
                         jm = 0.0
                     else
-                        jm =   -s % sf(6) % dt(g) * d % flux(n, g) - &
-                                s % sf(6) % dh(g) * d % flux(n, g)
-                    endif
+                        jm = - d % df(n,g,6) * d % flux(n,g) - d % dn(n,g,6) * d % flux(n,g)
+                    end if
                 else
-                    m = s % bottom % n
-                    jm =   -s % sf(6) % dt(g) * (d % flux(n, g) - d % flux(m, g)) - &
-                            s % sf(6) % dh(g) * (d % flux(n, g) + d % flux(m, g))
+                    jm = - d % df(n,g,6) * (d % flux(n,g) - d % flux(m,g)) &
+                         - d % dn(n,g,6) * (d % flux(n,g) + d % flux(m,g))
                 end if
         
-                L3(n, g) = (jp - jm) / d % zdel(n)
+                L3(n, g) = (jp - jm)  / d % zdel(k)
         
             end do
         end do
@@ -1142,144 +1165,145 @@ module nodal
         integer, intent(in) :: u, n, g
         real(dp), intent(out) :: Lmom1
 
-        type(node_rect), pointer :: s
-        real(dp)                 :: tm, tp
-        real(dp)                 :: p1m, p2m, p1p, p2p, hp
-        integer                  :: p, m
+        real(dp) :: tm, tp
+        real(dp) :: p1m, p2m, p1p, p2p, hp
+        integer  :: p, m
+        integer  :: i, j, k
 
-        s => d % node(n)
+        ! Set i, j, k
+        i = d % ix(n); j = d % iy(n); k = d % iz(n)
 
         if (u == 1) then
-            ! x-direction first moment transverse leakage
-            if (.not. associated(s % east)) then
-                m = s % west % n
+
+            ! Set paramaters for X-Direction Transverse leakage
+            if (i /= d % ystag(j) % smax) p = d % xyz(i+1,j,k)
+            if (i /= d % ystag(j) % smin) m = d % xyz(i-1,j,k)
+            
+            if (i == d % ystag(j) % smax) then
                 if (xeast == reflective) then
-                    tm = d % xdel(m) / d % xdel(n)
+                    tm = d % xdel(i-1) / d % xdel(i)
                     tp = 1.
                     p1m = tm + 1.
                     p1p = tp + 1.; p2p = 2. * tp + 1.
                     hp = 2. * p1m * p1p * (tm + tp + 1.)
                     Lmom1 = (p1p * p2p * (d % Sx(n,g) - d % Sx(m,g))) / hp
                 else
-                    tm = d % xdel(m) / d % xdel(n)
+                    tm = d % xdel(i-1) / d % xdel(i)
                     p1m = tm + 1.
                     Lmom1 = (d % Sx(n,g) - d % Sx(m,g)) / p1m
                 end if
-            elseif (.not. associated(s % west)) then
-                p = s % east % n
+            elseif (i == d % ystag(j) % smin) then
                 if (xwest == reflective) then
                     tm = 1.
-                    tp = d % xdel(p) / d % xdel(n)
+                    tp = d % xdel(i+1) / d % xdel(i)
                     p1m = tm + 1.; p2m = 2. * tm + 1.
                     p1p = tp + 1.
                     hp = 2. * p1m * p1p * (tm + tp + 1.)
                     Lmom1 = (p1m * p2m * (d % Sx(p,g) - d % Sx(n,g))) / hp
                 else
-                    tp = d % xdel(p) / d % xdel(n)
+                    tp = d % xdel(i+1) / d % xdel(i)
                     p1p = tp + 1.
                     Lmom1 = (d % Sx(p,g) - d % Sx(n,g)) / p1p
                 end if
             else
-                m = s % west % n
-                p = s % east % n
-                tm = d % xdel(m) / d % xdel(n)
-                tp = d % xdel(p) / d % xdel(n)
+                tm = d % xdel(i-1) / d % xdel(i)
+                tp = d % xdel(i+1) / d % xdel(i)
                 p1m = tm + 1.; p2m = 2. * tm + 1.
                 p1p = tp + 1.; p2p = 2. * tp + 1.
                 hp = 2.* p1m * p1p * (tm + tp + 1.)
                 Lmom1 = (p1m * p2m * (d % Sx(p,g) - d % Sx(n,g)) &
                       +  p1p * p2p * (d % Sx(n,g) - d % Sx(m,g))) / hp
-            endif
+            end if
 
-            Lmom1 = 0.25 * d % xdel(n)**2 / d % xs % D(n,g) * Lmom1
+            Lmom1 = 0.25 * d % xdel(i)**2 / d % xs % D(n,g) * Lmom1
 
         elseif (u == 2) then
-            ! y-direction first moment transverse leakage
-            if (.not. associated(s % north)) then
-                m = s % south % n
+
+            ! Set paramaters for Y-Direction Transverse leakage
+            if (j /= d % xstag(i) % smax) p = d % xyz(i,j+1,k)
+            if (j /= d % xstag(i) % smin) m = d % xyz(i,j-1,k)
+
+            if (j == d % xstag(i) % smax) then
                 if (ynorth == reflective) then
-                    tm = d % ydel(m) / d % ydel(n)
+                    tm = d % ydel(j-1) / d % ydel(j)
                     tp = 1.
                     p1m = tm + 1.
                     p1p = tp + 1.; p2p = 2. * tp + 1.
                     hp = 2. * p1m * p1p * (tm + tp + 1.)
                     Lmom1 = (p1p * p2p * (d % Sy(n,g) - d % Sy(m,g))) / hp
                 else
-                    tm = d % ydel(m) / d % ydel(n)
+                    tm = d % ydel(j-1) / d % ydel(j)
                     p1m = tm + 1.
                     Lmom1 = (d % Sy(n,g) - d % Sy(m,g)) / p1m
                 end if
-            elseif (.not. associated(s % south)) then
-                p = s % north % n
+            elseif (j == d % xstag(i) % smin) then
                 if (ysouth == reflective) then
                     tm = 1.
-                    tp = d % ydel(p) / d % ydel(n)
+                    tp = d % ydel(j+1) / d % ydel(j)
                     p1m = tm + 1.; p2m = 2. * tm + 1.
                     p1p = tp + 1.
                     hp = 2. * p1m * p1p * (tm + tp + 1.)
                     Lmom1 = (p1m * p2m * (d % Sy(p,g) - d % Sy(n,g))) / hp
                 else
-                    tp = d % ydel(p) / d % ydel(n)
+                    tp = d % ydel(j+1) / d % ydel(j)
                     p1p = tp + 1.
                     Lmom1 = (d % Sy(p,g) - d % Sy(n,g)) / p1p
                 end if
             else
-                m = s % south % n
-                p = s % north % n
-                tm = d % ydel(m) / d % ydel(n)
-                tp = d % ydel(p) / d % ydel(n)
+                tm = d % ydel(j-1) / d % ydel(j)
+                tp = d % ydel(j+1) / d % ydel(j)
                 p1m = tm + 1.; p2m = 2. * tm + 1.
                 p1p = tp + 1.; p2p = 2. * tp + 1.
                 hp = 2.* p1m * p1p * (tm + tp + 1.)
                 Lmom1 = (p1m * p2m * (d % Sy(p,g) - d % Sy(n,g)) &
                       +  p1p * p2p * (d % Sy(n,g) - d % Sy(m,g))) / hp
-            endif
+            end if
 
-            Lmom1 = 0.25 * d % ydel(n)**2 / d % xs % D(n,g) * Lmom1
+            Lmom1 = 0.25 * d % ydel(j)**2 / d % xs % D(n,g) * Lmom1
 
         else
-            ! z-direction first moment transverse leakage
-            if (.not. associated(s % top)) then
-                m = s % bottom % n
+
+            ! Set paramaters for Z-Direction Transverse leakage
+            if (k /= d % nzz) p = d % xyz(i,j,k+1)
+            if (k /= 1      ) m = d % xyz(i,j,k-1)
+
+            if (k == d % nzz) then
                 if (ztop == reflective) then
-                    tm = d % zdel(m) / d % zdel(n)
+                    tm = d % zdel(k-1) / d % zdel(k)
                     tp = 1.
                     p1m = tm + 1.
                     p1p = tp + 1.; p2p = 2. * tp + 1.
                     hp = 2. * p1m * p1p * (tm + tp + 1.)
                     Lmom1 = (p1p * p2p * (d % Sz(n,g) - d % Sz(m,g))) / hp
                 else
-                    tm = d % zdel(m) / d % zdel(n)
+                    tm = d % zdel(k-1) / d % zdel(k)
                     p1m = tm + 1.
                     Lmom1 = (d % Sz(n,g) - d % Sz(m,g)) / p1m
                 end if
-            elseif (.not. associated(s % bottom)) then
-                p = s % top % n
+            elseif (k == 1) then
                 if (zbott == reflective) then
                     tm = 1.
-                    tp = d % zdel(p) / d % zdel(n)
+                    tp = d % zdel(k+1) / d % zdel(k)
                     p1m = tm + 1.; p2m = 2. * tm + 1.
                     p1p = tp + 1.
                     hp = 2. * p1m * p1p * (tm + tp + 1.)
                     Lmom1 = (p1m * p2m * (d % Sz(p,g) - d % Sz(n,g))) / hp
                 else
-                    tp = d % zdel(p) / d % zdel(n)
+                    tp = d % zdel(k+1) / d % zdel(k)
                     p1p = tp + 1.
                     Lmom1 = (d % Sz(p,g) - d % Sz(n,g)) / p1p
                 end if
             else
-                m = s % bottom % n
-                p = s % top % n
-                tm = d % zdel(m) / d % zdel(n)
-                tp = d % zdel(p) / d % zdel(n)
+                tm = d % zdel(k-1) / d % zdel(k)
+                tp = d % zdel(k+1) / d % zdel(k)
                 p1m = tm + 1.; p2m = 2. * tm + 1.
                 p1p = tp + 1.; p2p = 2. * tp + 1.
                 hp = 2.* p1m * p1p * (tm + tp + 1.)
                 Lmom1 = (p1m * p2m * (d % Sz(p,g) - d % Sz(n,g)) &
                       +  p1p * p2p * (d % Sz(n,g) - d % Sz(m,g))) / hp
-            endif
+            end if
 
-            Lmom1 = 0.25 * d % zdel(n)**2 / d % xs % D(n,g) * Lmom1
+            Lmom1 = 0.25 * d % zdel(k)**2 / d % xs % D(n,g) * Lmom1
 
         end if
 
@@ -1295,19 +1319,23 @@ module nodal
         integer, intent(in) :: u, n, g
         real(dp), intent(out) :: Lmom2
 
-        type(node_rect), pointer :: s
         real(dp)                 :: tm, tp
         real(dp)                 :: p1m, p1p, hp
         integer                  :: p, m
+        integer                  :: i, j, k
 
-        s => d % node(n)
+        ! Set i, j, k
+        i = d % ix(n); j = d % iy(n); k = d % iz(n)
 
         if (u == 1) then
-            ! x-direction second moment transverse leakage
-            if (.not. associated(s % east)) then
-                m = s % west % n
+
+            ! Set paramaters for X-Direction Transverse leakage
+            if (i /= d % ystag(j) % smax) p = d % xyz(i+1,j,k)
+            if (i /= d % ystag(j) % smin) m = d % xyz(i-1,j,k)
+
+            if (i == d % ystag(j) % smax) then
                 if (xeast == reflective) then
-                    tm = d % xdel(m) / d % xdel(n)
+                    tm = d % xdel(i-1) / d % xdel(i)
                     tp = 1.
                     p1m = tm + 1.
                     p1p = tp + 1.
@@ -1316,11 +1344,10 @@ module nodal
                 else
                     Lmom2 = 0.
                 end if
-            elseif (.not. associated(s % west)) then
-                p = s % east % n
+            elseif (i == d % ystag(j) % smin) then
                 if (xwest == reflective) then
                     tm = 1.
-                    tp = d % xdel(p) / d % xdel(p)
+                    tp = d % xdel(i+1) / d % xdel(i)
                     p1m = tm + 1.
                     p1p = tp + 1.
                     hp = 2. * p1m * p1p* (tm + tp + 1.)
@@ -1329,25 +1356,26 @@ module nodal
                     Lmom2 = 0.
                 end if
             else
-                m = s % west % n
-                p = s % east % n
-                tm = d % xdel(m) / d % xdel(n)
-                tp = d % xdel(p) / d % xdel(n)
+                tm = d % xdel(i-1) / d % xdel(i)
+                tp = d % xdel(i+1) / d % xdel(i)
                 p1m = tm + 1.
                 p1p = tp + 1.
                 hp = 2. * p1m * p1p * (tm + tp + 1.)
                 Lmom2 = (p1m * (d % Sx(p,g) - d % Sx(n,g)) + &
                          p1p * (d % Sx(m,g) - d % Sx(n,g))) / hp
-            endif
+            end if
 
-            Lmom2 = 0.25 * d % xdel(n)**2 / d % xs % D(n,g) * Lmom2
+            Lmom2 = 0.25 * d % xdel(i)**2 / d % xs % D(n,g) * Lmom2
 
         elseif (u == 2) then
-            ! y-direction second moment transverse leakage
-            if (.not. associated(s % north)) then
-                m = s % south % n
+
+            ! Set paramaters for Y-Direction Transverse leakage
+            if (j /= d % xstag(i) % smax) p = d % xyz(i,j+1,k)
+            if (j /= d % xstag(i) % smin) m = d % xyz(i,j-1,k)
+
+            if (j == d % xstag(i) % smax) then
                 if (ynorth == reflective) then
-                    tm = d % ydel(m) / d % ydel(n)
+                    tm = d % ydel(j-1) / d % ydel(j)
                     tp = 1.
                     p1m = tm + 1.
                     p1p = tp + 1.
@@ -1356,11 +1384,10 @@ module nodal
                 else
                     Lmom2 = 0.
                 end if
-            elseif (.not. associated(s % south)) then
-                p = s % north % n
+            elseif (j == d % xstag(i) % smin) then
                 if (ysouth == reflective) then
                     tm = 1.
-                    tp = d % ydel(p) / d % ydel(p)
+                    tp = d % ydel(j+1) / d % ydel(j)
                     p1m = tm + 1.
                     p1p = tp + 1.
                     hp = 2. * p1m * p1p* (tm + tp + 1.)
@@ -1369,25 +1396,26 @@ module nodal
                     Lmom2 = 0.
                 end if
             else
-                m = s % south % n
-                p = s % north % n
-                tm = d % ydel(m) / d % ydel(n)
-                tp = d % ydel(p) / d % ydel(n)
+                tm = d % ydel(j-1) / d % ydel(j)
+                tp = d % ydel(j+1) / d % ydel(j)
                 p1m = tm + 1.
                 p1p = tp + 1.
                 hp = 2. * p1m * p1p * (tm + tp + 1.)
                 Lmom2 = (p1m * (d % Sy(p,g) - d % Sy(n,g)) + &
                          p1p * (d % Sy(m,g) - d % Sy(n,g))) / hp
-            endif
+            end if
 
-            Lmom2 = 0.25 * d % ydel(n)**2 / d % xs % D(n,g) * Lmom2
+            Lmom2 = 0.25 * d % ydel(j)**2 / d % xs % D(n,g) * Lmom2
 
         else
-            ! z-direction second moment transverse leakage
-            if (.not. associated(s % top)) then
-                m = s % bottom % n
+
+            ! Set paramaters for Z-Direction Transverse leakage
+            if (k /= d % nzz) p = d % xyz(i,j,k+1)
+            if (k /= 1      ) m = d % xyz(i,j,k-1)
+
+            if (k == d % nzz) then
                 if (ztop == reflective) then
-                    tm = d % zdel(m) / d % zdel(n)
+                    tm = d % zdel(k-1) / d % zdel(k)
                     tp = 1.
                     p1m = tm + 1.
                     p1p = tp + 1.
@@ -1396,11 +1424,10 @@ module nodal
                 else
                     Lmom2 = 0.
                 end if
-            elseif (.not. associated(s % bottom)) then
-                p = s % top % n
+            elseif (k == 1) then
                 if (zbott == reflective) then
                     tm = 1.
-                    tp = d % zdel(p) / d % zdel(p)
+                    tp = d % zdel(k+1) / d % zdel(k)
                     p1m = tm + 1.
                     p1p = tp + 1.
                     hp = 2. * p1m * p1p* (tm + tp + 1.)
@@ -1409,18 +1436,16 @@ module nodal
                     Lmom2 = 0.
                 end if
             else
-                m = s % bottom % n
-                p = s % top % n
-                tm = d % zdel(m) / d % zdel(n)
-                tp = d % zdel(p) / d % zdel(n)
+                tm = d % zdel(k-1) / d % zdel(k)
+                tp = d % zdel(k+1) / d % zdel(k)
                 p1m = tm + 1.
                 p1p = tp + 1.
                 hp = 2. * p1m * p1p * (tm + tp + 1.)
                 Lmom2 = (p1m * (d % Sz(p,g) - d % Sz(n,g)) + &
                          p1p * (d % Sz(m,g) - d % Sz(n,g))) / hp
-            endif
+            end if
 
-            Lmom2 = 0.25 * d % zdel(n)**2 / d % xs % D(n,g) * Lmom2
+            Lmom2 = 0.25 * d % zdel(k)**2 / d % xs % D(n,g) * Lmom2
 
         end if
 

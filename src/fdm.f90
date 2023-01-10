@@ -1,8 +1,9 @@
 module fdm
 
     use iso_fortran_env, only: real64
+    use time
     use xsec
-    use node
+    use stagger
     use linear_system
     use util
     use nodal
@@ -16,7 +17,6 @@ module fdm
     integer, parameter :: dp = real64
 
     integer, parameter  :: n_rect_surf = 6           ! order is => east, west, north, top, bottom
-    real(dp), parameter :: big = 1.e30
 
     integer, parameter  :: zero_flux = 0
     integer, parameter  :: zero_incoming = 1
@@ -30,63 +30,168 @@ module fdm
 
     ! core data type
     type :: core_base
-        character(4)                 :: kernel        ! Nodal kernel used
-        integer                      :: nnod          ! Number of nodes
-        real(dp), allocatable        :: vdel(:)       ! Delta nodes' volume in cm3
+        character(4)        :: kernel        ! Nodal kernel used
+        integer             :: nnod          ! Number of nodes
+        real(dp), pointer   :: vdel(:)       ! Delta nodes' volume in cm3
     
-        integer                      :: ng            ! number of neutron energy groups
+        integer             :: ng            ! number of neutron energy groups
+
+        integer             :: nmat          ! number of materials
     
-        real(dp)                     :: Keff = 1.0    ! Multiplication factor
-        real(dp)                     :: int_fsrc      ! intgerated fission source
+        real(dp)            :: Keff = 1.0    ! Multiplication factor
 
-        real(dp), allocatable         :: fsrc(:)             ! fission source
-        real(dp), pointer             :: flux(:,:)           ! flux
-        real(dp), allocatable         :: scat_src(:,:)       ! scattering source
-        real(dp), allocatable         :: ext_src(:,:)        ! external source
+        real(dp), pointer   :: fsrc(:)       ! fission source
+        real(dp), pointer   :: flux(:,:)     ! flux
+        real(dp), pointer   :: exsrc(:,:)  ! external source
     
-        type(xs_rect)                  :: xs          ! node-wise xs
-        type(node_rect), allocatable   :: node(:)     ! Node data
-        type(matrix)                   :: m           ! FDM matrix for linear system solver
-        type(nodal_type), allocatable  :: d
+        type(xs_rect)       :: xs ! node-wise xs
+        type(matrix)        :: m  ! FDM matrix for linear system solver
 
-        logical                        :: first = .true.
-
+        logical             :: is_first = .true.
     end type
 
+    ! Rectangilar core data type
     type, extends(core_base), public :: core_rect
-        real(dp), allocatable :: xdel(:)        ! Delta x in cm
-        real(dp), allocatable :: ydel(:)        ! Delta y in cm
-        real(dp), allocatable :: zdel(:)        ! Delta z in cm
+        real(dp), pointer :: xdel(:)        ! Delta x in cm
+        real(dp), pointer :: ydel(:)        ! Delta y in cm
+        real(dp), pointer :: zdel(:)        ! Delta z in cm
     
-        integer  :: nxx                          ! Number of nodes in x direction
-        integer  :: nyy                          ! Number of nodes in y direction
-        integer  :: nzz                          ! Number of nodes z direction
+        integer  :: nxx                     ! Number of nodes in x direction
+        integer  :: nyy                     ! Number of nodes in y direction
+        integer  :: nzz                     ! Number of nodes z direction
 
-        type(staggered), allocatable   :: xstag(:)    ! Staggered mesh data
-        type(staggered), allocatable   :: ystag(:)    ! Staggered mesh data
+        integer, pointer :: ix(:)           ! index in x direction for given node index
+        integer, pointer :: iy(:)           ! index in y direction for given node index
+        integer, pointer :: iz(:)           ! index in z direction for given node index
+        integer, pointer :: xyz(:,:,:)      ! node index for given index in x, y, and z directions
+
+        integer, pointer :: mat_map(:,:,:)  ! material map
+        
+        ! coupling coeff (order => east, west, north, south, top, bottom)
+        real(dp), allocatable      :: df(:,:,:)   ! D tilde : FDM nodal coupling coefficients
+        real(dp), allocatable      :: dn(:,:,:)   ! D hat   : Corrected (higher order) nodal coupling coefficients
+
+        type(staggered), pointer   :: xstag(:)    ! Staggered mesh data
+        type(staggered), pointer   :: ystag(:)    ! Staggered mesh data
+
+        type(nodal_type), allocatable :: d        ! nodal update module
+
     end type
 
-    public :: set_fdm_parameters, set_nodes, outer_iter
+    public :: set_rect_data, set_rect_pointer, outer_iter
 
     contains
+
+    !===============================================================================================!
+    ! Set FDM data for rectangular geometry
+    !===============================================================================================!
+
+    subroutine set_rect_data(c, kernel, ng, nnod, nxx, nyy, nzz, &
+        nmat, east, west, north, south, bottom, top, output_fid)
+
+        class(core_rect)              :: c
+        character(*), intent(in)      :: kernel
+        integer, intent(in)           :: nnod                                     ! total number of nodes
+        integer, intent(in)           :: ng                                       ! number of group
+        integer, intent(in)           :: nxx, nyy, nzz                            ! number of nodes in x, y, and z directions
+        integer, intent(in)           :: nmat                                     ! number of material
+        integer, intent(in), optional :: east, west, north, south, bottom, top    ! BCs
+        integer, intent(in), optional :: output_fid                               ! output file unit number
+
+        !set output file unit number
+        if(present(output_fid)) fid = output_fid
+
+        !set nodal kernel
+        c % kernel = kernel
+        
+        ! set number of energy group
+        c % ng = ng
+
+        ! set number of nodes in x, y, and z directions
+        c % nnod = nnod
+        c % nxx  = nxx
+        c % nyy  = nyy
+        c % nzz  = nzz
+
+        c % nmat = nmat
+
+        ! set BCs
+        if (present(east))   xeast  = east
+        if (present(west))   xwest  = west
+        if (present(north))  ynorth = north
+        if (present(south))  ysouth = south
+        if (present(bottom)) zbott  = bottom
+        if (present(top))    ztop   = top
+        
+    end subroutine
+
+    !===============================================================================================!
+    ! Set FDM pointers for rectangular geometry
+    !===============================================================================================!
+
+    subroutine set_rect_pointer(c, flux, fsrc, exsrc, mat_map, xdel, ydel, zdel, vdel, &
+        xstag, ystag, ix, iy, iz, xyz)
+
+        class(core_rect)       :: c
+        real(dp), intent(inout), target        :: flux(:,:)
+        real(dp), intent(in), target           :: fsrc(:), exsrc(:,:)
+        integer, intent(in), target            :: mat_map(:,:,:)      ! 3D Material map
+        real(dp), intent(in), target           :: xdel(:), ydel(:), zdel(:), vdel(:)
+        integer, intent(in), target            :: ix(:), iy(:), iz(:), xyz(:,:,:)
+        type(staggered), intent(in), target    :: xstag(:), ystag(:)
+
+        flux = 1.0  ! Init flux
+        c % flux => flux
+        if (size(c % flux, dim=1) .ne. c % nnod) stop 'Flux first-dimension size does not match'
+        if (size(c % flux, dim=2) .ne. c % ng)   stop 'Flux second-dimension size does not match'
+
+        c % fsrc => fsrc
+        if (size(c % fsrc) .ne. c % nnod) stop 'Fission source size does not match'
+
+        c % exsrc => exsrc
+        if (size(c % exsrc, dim=1) .ne. c % nnod) stop 'exsrc first-dimension size does not match'
+        if (size(c % exsrc, dim=2) .ne. c % ng)   stop 'exsrc second-dimension size does not match'
+
+        c % mat_map => mat_map
+        if (size(c % mat_map, dim=1) .ne. c % nxx) stop 'mat_map first-dimension size does not match'
+        if (size(c % mat_map, dim=2) .ne. c % nyy) stop 'mat_map second-dimension size does not match'
+        if (size(c % mat_map, dim=3) .ne. c % nzz) stop 'mat_map third-dimension size does not match'
+
+        c % xdel => xdel
+        c % ydel => ydel
+        c % zdel => zdel
+        c % vdel => vdel
+        c % ix => ix
+        c % iy => iy
+        c % iz => iz
+        
+        c % xyz => xyz
+        if (size(c % xyz, dim=1) .ne. c % nxx) stop 'xyz first-dimension size does not match'
+        if (size(c % xyz, dim=2) .ne. c % nyy) stop 'xyz second-dimension size does not match'
+        if (size(c % xyz, dim=3) .ne. c % nzz) stop 'xyz third-dimension size does not match'
+        
+        c % xstag => xstag
+        c % ystag => ystag
+
+    end subroutine
 
     !===============================================================================================!
     ! to perfom outer iteration                                                                     !
     !===============================================================================================!
 
-    subroutine outer_iter(c, max_flux_err, max_fiss_err, flux, &
+    subroutine outer_iter(c, max_flux_err, max_fiss_err, &
         max_outer, max_inner, extrp, nod_intv_inp, print_iter)
 
         class(core_rect)                   :: c
         real(dp), intent(in)               :: max_flux_err, max_fiss_err
-        real(dp), intent(inout), target    :: flux(:,:)
         integer, intent(in)                :: max_outer, max_inner
         logical, intent(in)                :: print_iter
         integer, intent(in)                :: extrp          ! extrapolation interval
         integer, intent(in), optional      :: nod_intv_inp    ! nodal coupling coefficients update interval
 
         integer  :: i, g
-        real(dp) :: fc, Keo                                  ! old integrated fission sources and keff
+        real(dp) :: fc, fco                                  ! new and old integrated fission SOURCES
+        real(dp) :: Keo
         real(dp) :: flux_prev(c % nnod, c % ng)
         real(dp) :: fsrc_prev(c % nnod)
         real(dp) :: bs(c % nnod)
@@ -94,65 +199,76 @@ module fdm
         real(dp) :: e1, e2
         real(dp) :: errn(c % nnod), erro(c % nnod)            ! current and past error vectors
         integer  :: nod_intv
+        logical  :: converge
+
+        call fdm_time % on
+
+        if (c % is_first) then
+            call setup_rectangular(c)
+            c % is_first = .false.
+        end if
 
         if (present(nod_intv_inp)) then
             nod_intv = nod_intv_inp
         else
             nod_intv = ceiling((c % nxx + c % nyy + c % nzz) / 2.5)
         end if
-
-        if (c % first) then
-            flux = 1.0
-            c % flux => flux
-            c % d % flux => flux
-            c % first = .false.
-        end if
     
         ! Initialize fission source
-        call get_fission_src(c, flux)
-        c % int_fsrc = integrate(c, c % fsrc)
+        call get_fission_src(c)
+        fc = integrate(c, c % fsrc)
 
         ! Init error vector
         errn = 1._DP
         e1 = integrate(c, errn)
+
+        call fdm_time % off
     
         !Start outer iteration
+        converge = .false.
         do i = 1, max_outer
-            fc         = c % int_fsrc     ! Save old integrated fission source
+
+            call fdm_time % on
+            fco        = fc               ! Save old integrated fission source
             Keo        = c % Keff         ! Save old keff
-            flux_prev  = flux             ! Save old flux
+            flux_prev  = c % flux         ! Save old flux
             fsrc_prev  = c % fsrc         ! Save old fission source
             erro       = errn             ! Save old fission source error/difference
             
             ! Inner iteration
             do g = 1, c % ng
-                call get_total_src(c, g, flux, bs)
-                call linear_solver(c % m % mtx(g), c % m % ind, max_inner, bs, flux(:,g))
+                call get_total_src(c, g, bs)
+                call linear_solver(c % m % mtx(g), c % m % ind, max_inner, bs, c % flux(:,g))
             end do
 
-            call get_fission_src(c, flux)                      !Update fission source
+            call get_fission_src(c)                      !Update fission source
             errn = c % fsrc - fsrc_prev
             e2 = norm2(errn)
             if (MOD(i, extrp) == 0) call fsrc_extrp(e1, e2, erro, errn, c % fsrc, print_iter) ! Fission source extrapolation
             e1 = e2
-            c % int_fsrc = integrate(c, c % fsrc)
-            c % Keff = Keo * c % int_fsrc / fc             ! Update Keff
-            call get_difference(flux, flux_prev, c % fsrc, fsrc_prev, flux_diff, fsrc_diff)
+            fc = integrate(c, c % fsrc)
+            c % Keff = Keo * fc / fco             ! Update Keff
+            call get_difference(c % flux, flux_prev, c % fsrc, fsrc_prev, flux_diff, fsrc_diff)
             if (print_iter) then
                 write(fid,'(I5,F13.6,2ES15.5)') i, c % Keff, fsrc_diff, flux_diff
                 write(*,'(I5,F13.6,2ES15.5)')   i, c % Keff, fsrc_diff, flux_diff
             end if
-            if ((max_flux_err > flux_diff) .AND. (max_fiss_err > fsrc_diff)) exit
+            if ((max_flux_err > flux_diff) .AND. (max_fiss_err > fsrc_diff)) then
+                converge = .true.
+                exit
+            end if
+            call fdm_time % off
+
             if (mod(i, nod_intv) == 0) call nodal_update(c, .true.)  ! Nodal coefficients update
         end do
     
-        if (i-1 == max_outer) THEN
+        if (.not. converge) THEN
           write(*,*)
           write(*,*) '  MAXIMUM NUMBER OF OUTER ITERATION IS REACHED IN FORWARD CALCULATION.'
           write(*,*) '  CHECK PROBLEM SPECIFICATION OR CHANGE ITERATION CONTROL (%ITER).'
           write(*,*) '  PERHAPS BY MAKING FISSION SOURCE INTERPOLATION MORE FREQUENT'
           write(*,*) '  KOMODO IS STOPING...'
-          STOP
+          stop
         end if
     
     end subroutine
@@ -165,8 +281,10 @@ module fdm
       
         class(core_rect), intent(in)  :: c
         logical, intent(in)           :: print_iter
+
+        call nodal_time % on
       
-        !Update nodal coupling coefficients
+        ! Update nodal coupling coefficients
         if (c % kernel == ' FDM') then
             return
         elseif (c % kernel == 'SANM') then
@@ -175,13 +293,15 @@ module fdm
             call nodal_update_pnm(c % d)
         end if
 
-        !Update CMFD matrix
+        ! Update CMFD matrix
         call setup_matrix(c, upd_fdm_coupling=.false.)
 
         if (print_iter) then
           write(fid,*) '    .....NODAL COUPLING UPDATED..... '
           write(*,*) '    .....NODAL COUPLING UPDATED..... '
         end if
+
+        call nodal_time % off
       
       end subroutine
 
@@ -224,34 +344,34 @@ module fdm
     ! calculate total source                                                     !
     !===============================================================================================!
 
-    pure subroutine get_total_src(c, g, flux, total_src)
+    pure subroutine get_total_src(c, g, total_src)
 
         class(core_rect), intent(inout)  :: c
         integer, intent(in)         :: g
-        real(dp), intent(in)        :: flux(:,:)
         real(dp), intent(out)       :: total_src(:)
 
         integer                  :: n, h
+        real(dp)                 :: scat_src(c % nnod, c % ng)
         real(dp)                 :: tmp_sum(c % nnod, c % ng)
 
         tmp_sum = 0.0
         do h = 1, g-1
             do concurrent (n = 1:c % nnod)
-                tmp_sum(n,h) = c % xs % sigs(n, h, g) * flux(n, h)
+                tmp_sum(n,h) = c % xs % sigs(n, h, g) * c % flux(n, h)
             end do
         end do
 
         do h = g+1, c % ng
             do concurrent (n = 1:c % nnod)
-                tmp_sum(n,h) = c % xs % sigs(n, h, g) * flux(n, h)
+                tmp_sum(n,h) = c % xs % sigs(n, h, g) * c % flux(n, h)
             end do
         end do
 
-        c % scat_src(:,g) = sum(tmp_sum, dim=2) 
+        scat_src(:,g) = sum(tmp_sum, dim=2) 
 
         do concurrent (n = 1:c % nnod)
             total_src(n) = c % xs % chi(n, g) * c % fsrc(n) / c % Keff &
-            + c % scat_src(n, g) + c % ext_src(n, g)
+            + scat_src(n, g) + c % exsrc(n, g)
         end do
     
     end subroutine
@@ -260,20 +380,42 @@ module fdm
     ! calculate fission source
     !===============================================================================================!
 
-    pure subroutine get_fission_src(c, flux)
+    pure subroutine get_fission_src(c)
 
         class(core_rect), intent(inout) :: c
 
         integer                 :: g, n
-        real(dp), intent(in)    :: flux(:,:)
         real(dp)                :: tmp_sum(c % nnod, c % ng)
 
         tmp_sum = 0.0
         do g = 1, c % ng
             do concurrent (n = 1:c % nnod)
-                tmp_sum(n,g) = flux(n, g) * c % xs % nuf(n, g)
+                tmp_sum(n,g) = c % flux(n, g) * c % xs % nuf(n, g)
             end do
         end do
+        
+        c % fsrc = sum(tmp_sum, dim=2)
+    
+    end subroutine
+
+    !===============================================================================================!
+    ! calculate fission source (adjoint)
+    !===============================================================================================!
+
+    pure subroutine get_fission_adjoint(c)
+
+        class(core_rect), intent(inout) :: c
+
+        integer                 :: g, n
+        real(dp)                :: tmp_sum(c % nnod, c % ng)
+
+        tmp_sum = 0.0
+        do g = 1, c % ng
+            do concurrent (n = 1:c % nnod)
+                tmp_sum(n,g) = c % flux(n, g) * c % xs % chi(n, g)
+            end do
+        end do
+        
         c % fsrc = sum(tmp_sum, dim=2)
     
     end subroutine
@@ -323,145 +465,12 @@ module fdm
     end function
 
     !===============================================================================================!
-    ! calculate FDM nodal coupling coefficients                                                     !
-    !===============================================================================================!
-
-    pure subroutine fdm_coupling_coef(c)
-
-        class(core_rect), intent(inout) :: c
-
-        integer  :: g
-        real(dp) :: DN, D
-        real(dp) :: xd, yd, zd
-        real(dp) :: xdn, ydn, zdn
-        integer  :: n, np
-
-        do g = 1, c % ng
-            do n = 1, c % nnod
-    
-                D  = c % xs % D(n, g)
-                xd = c % xdel(n)
-                yd = c % ydel(n)
-                zd = c % zdel(n)
-    
-                ! Set FDM coupling coefficients in x direction
-                if (.not. associated(c % node(n) % east)) then
-                    if (xeast == zero_flux) then
-                        c % node(n) % sf(1) % dt(g) = 2. * big * D / (2. * D + big * xd)
-                    elseif (xeast == zero_incoming) then
-                        c % node(n) % sf(1) % dt(g) =  D / (2. * D + 0.5 * xd)
-                    else
-                        c % node(n) % sf(1) % dt(g) =  0.
-                    end if
-                else
-                    np  = c % node(n) % east % n
-                    DN  = c % xs % D(np, g)
-                    xdn = c % xdel(np)
-                    c % node(n) % sf(1) % dt(g) =  2. * D * DN / (D * xdn +  DN * xd)
-                endif
-    
-                if (.not. associated(c % node(n) % west)) then
-                    if (xwest == zero_flux) then
-                        c % node(n) % sf(2) % dt(g) = 2. * big * D / (2. * D + big * xd)
-                    elseif (xwest == zero_incoming) then
-                        c % node(n) % sf(2) % dt(g) =  D / (2. * D + 0.5 * xd)
-                    else
-                        c % node(n) % sf(2) % dt(g) =  0.
-                    end if
-                else
-                    np  = c % node(n) % west % n
-                    DN  = c % xs % D(np, g)
-                    xdn = c % xdel(np)
-                    c % node(n) % sf(2) % dt(g) =  2. * D * DN / (D * xdn +  DN * xd)
-                endif
-    
-                ! Set FDM coupling coefficients in y direction
-                if (.not. associated(c % node(n) % north)) then
-                    if (ynorth == zero_flux) then
-                        c % node(n) % sf(3) % dt(g) = 2. * big * D / (2. * D + big * yd)
-                    elseif (ynorth == zero_incoming) then
-                        c % node(n) % sf(3) % dt(g) =  D / (2. * D + 0.5 * yd)
-                    else
-                        c % node(n) % sf(3) % dt(g) =  0.
-                    end if
-                else
-                    np  = c % node(n) % north % n
-                    DN  = c % xs % D(np, g)
-                    ydn = c % ydel(np)
-                    c % node(n) % sf(3) % dt(g) =  2. * D * DN / (D * ydn +  DN * yd)
-                endif
-    
-                if (.not. associated(c % node(n) % south)) then
-                    if (ysouth == 0) then
-                        c % node(n) % sf(4) % dt(g) = 2. * big * D / (2. * D + big * yd)
-                    elseif (ysouth == 1) then
-                        c % node(n) % sf(4) % dt(g) =  D / (2. * D + 0.5 * yd)
-                    else
-                        c % node(n) % sf(4) % dt(g) =  0.
-                    end if
-                else
-                    np  = c % node(n) % south % n
-                    DN  = c % xs % D(np, g)
-                    ydn = c % ydel(np)
-                    c % node(n) % sf(4) % dt(g) =  2. * D * DN / (D * ydn +  DN * yd)
-                endif
-    
-                ! Set FDM coupling coefficients in z direction
-                if (.not. associated(c % node(n) % top)) then
-                    if (ztop == 0) then
-                        c % node(n) % sf(5) % dt(g) = 2. * big * D / (2. * D + big * zd)
-                    elseif (ztop == 1) then
-                        c % node(n) % sf(5) % dt(g) =  D / (2. * D + 0.5 * zd)
-                    else
-                        c % node(n) % sf(5) % dt(g) =  0.
-                    end if
-                else
-                    np  = c % node(n) % top % n
-                    DN  = c % xs % D(np, g)
-                    zdn = c % zdel(np)
-                    c % node(n) % sf(5) % dt(g) =  2. * D * DN / (D * zdn +  DN * zd)
-                endif
-        
-                if (.not. associated(c % node(n) % bottom)) then
-                    if (zbott == 0) then
-                        c % node(n) % sf(6) % dt(g) = 2. * big * D / (2. * D + big * zd)
-                    elseif (zbott == 1) then
-                        c % node(n) % sf(6) % dt(g) =  D / (2. * D + 0.5 * zd)
-                    else
-                        c % node(n) % sf(6) % dt(g) =  0.
-                    end if
-                else
-                    np  = c % node(n) % bottom % n
-                    DN  = c % xs % D(np, g)
-                    zdn = c % zdel(np)
-                    c % node(n) % sf(6) % dt(g) =  2. * D * DN / (D * zdn +  DN * zd)
-                endif
-            end do
-        end do
-    
-    end subroutine
-
-    !===============================================================================================!
     ! Set node data and setup the matrix for linear solver                                          !
     !===============================================================================================!
 
-    subroutine set_nodes(c, kernel, mat_map, xdel, ydel, zdel, &
-        sigtr, siga, nuf, sigf, sigs, chi)
+    subroutine setup_rectangular(c)
 
-        class(core_rect), target       :: c
-        character(*), intent(in)       :: kernel
-        integer, intent(in)            :: mat_map(:,:,:)
-        real(dp), intent(in)           :: xdel(:), ydel(:), zdel(:)
-        real(dp), intent(in)           :: sigtr(:,:)          ! Transport macroscopic XSEC
-        real(dp), intent(in)           :: siga (:,:)          ! Absorption macroscopic XSEC
-        real(dp), intent(in)           :: nuf  (:,:)          ! nu*fission macroscopic XSEC
-        real(dp), intent(in)           :: sigf (:,:)          ! fission macroscopic XSEC
-        real(dp), intent(in)           :: sigs (:,:,:)        ! Scattering macroscopic XSEC
-        real(dp), intent(in)           :: chi (:,:)           ! fission spectrum
-
-        integer :: i, j, k, n, ss
-        integer :: ix(c % nnod), iy(c % nnod), iz(c % nnod)
-        integer :: xyz(c % nxx, c % nyy, c % nzz)
+        class(core_rect)  :: c
 
         integer :: nnod
         integer :: nxx, nyy, nzz
@@ -473,87 +482,25 @@ module fdm
         nzz  = c % nzz
         ng   = c % ng
 
-        c % kernel = kernel
+        ! check number material
+        if (maxval(c % mat_map) > c % nmat) call fatal_error(fid, 'Material number ' &
+        // n2c(maxval(c % mat_map)) // ' is greater than number of material')
 
-        ! Set ix, iy, iz and xyz
-        n = 0
-        xyz = 0
-        do k = 1, nzz
-            do j = 1, nyy
-                do i = c % ystag(j) % smin, c % ystag(j) % smax
-                     n = n + 1
-                     ix(n) = i
-                     iy(n) = j
-                     iz(n) = k
-                     xyz(i,j,k) = n
-                end do
-            end do
-        end do
-
-        allocate(c % node(nnod))
-        allocate(c % fsrc(c % nnod))
-
-        ! set delta mesh
-        allocate(c % vdel(nnod))
-        allocate(c % xdel(nnod))
-        allocate(c % ydel(nnod))
-        allocate(c % zdel(nnod))
-        n = 0
-        do k = 1, nzz
-            do j = 1, nyy
-                do i = c % ystag(j) % smin, c % ystag(j) % smax
-                    n = n + 1
-                    c % xdel(n)     = xdel(i)
-                    c % ydel(n)     = ydel(j)
-                    c % zdel(n)     = zdel(k)
-                    c % vdel(n)     = xdel(i) * ydel(j) * zdel(k)
-                    c % node(n) % n = n
-                end do
-            end do
-        end do
-
-        ! allocate data
-        allocate(c % scat_src(nnod, ng))
-        allocate(c % ext_src(nnod, ng))
-        c % ext_src = 0.0
-        do ss = 1, n_rect_surf
-            do n = 1, nnod
-                allocate(c % node(n) % sf(ss) % dt(ng))
-            end do
-        end do
-        
-        ! to do: for FDM not necessary to allocate this
-        do n = 1, nnod
-            do ss = 1, n_rect_surf
-                allocate(c % node(n) % sf(ss) % dh(ng))
-                c % node(n) % sf(ss) % dt = 0.0
-            end do
-        end do
-
-        ! set linked list
-        do n = 1, nnod
-            i = ix(n); j = iy(n); k = iz(n)
-
-            if (i .ne. c % ystag(j) % smax) c % node(n) % east   => c % node(xyz(i+1, j, k))
-            if (i .ne. c % ystag(j) % smin) c % node(n) % west   => c % node(xyz(i-1, j, k))
-            if (j .ne. c % xstag(i) % smax) c % node(n) % north  => c % node(xyz(i, j+1, k))
-            if (j .ne. c % xstag(i) % smin) c % node(n) % south  => c % node(xyz(i, j-1, k))
-            if (k .ne. nzz)                 c % node(n) % top    => c % node(xyz(i, j, k+1))
-            if (k .ne. 1)                   c % node(n) % bottom => c % node(xyz(i, j, k-1))
-        end do
-
-        ! Allocate xs
-        call alloc_xsec(c % xs, nnod, ng, n_rect_surf)
-        call set_xsec(c % xs, nnod, ix, iy, iz, mat_map, sigtr, siga, nuf, sigf, sigs, chi)
+        allocate(c % df(nnod, ng, 6), c % dn(nnod, ng, 6))
+        c % dn = 0.0      ! Init higher-order coupling coef
 
         ! Setup matrix
-        call set_fdm_matrix(c, ix, iy, iz)
+        call set_fdm_matrix(c)
 
         if (c % kernel .ne. ' FDM') then
             allocate(c % d)
-            call setup_nodal(c % d, c % ng, c % nnod, c % nxx, c % nyy, c % nzz, c % node, c % Keff, &
-            c % xs, c % flux, c % ext_src, c % xdel, c % ydel, c % zdel, fid, xeast, xwest, &
-            ynorth, ysouth, ztop, zbott, c % xstag, c % ystag, xyz, 'static', .false.)
+            
+            call set_nodal_data(c % d, c % ng, c % nnod, c % nxx, c % nyy, c % nzz, &
+            xeast, xwest, ynorth, ysouth, ztop, zbott, 'static', fid, .false.)
+
+            call set_nodal_pointer(c % d, c % Keff, c % xs, c % flux, c % exsrc, &
+            c % xdel, c % ydel, c % zdel, c % xstag, c % ystag, c % ix, c % iy, c % iz, &
+            c % xyz, c % df, c % dn)
             
             call alloc_data(c % d)
         end if
@@ -564,28 +511,30 @@ module fdm
     ! Set FDM Matrix                                                                           !
     !===============================================================================================!
 
-    subroutine set_fdm_matrix(c, ix, iy, iz)
+    subroutine set_fdm_matrix(c)
 
         class(core_rect)          :: c
-        integer, intent(in)  :: ix(:), iy(:), iz(:)
 
-        integer  :: n
+        integer  :: n, i, j, k
         integer  :: n_non_zero
 
         ! Count non zero elements
         n_non_zero = 0
         do n = 1, c % nnod
-            if (associated(c % node(n) % bottom)) n_non_zero = n_non_zero + 1
-            if (associated(c % node(n) % south)) n_non_zero = n_non_zero + 1
-            if (associated(c % node(n) % west)) n_non_zero = n_non_zero + 1
+
+            i = c % ix(n); j = c % iy(n); k = c % iz(n)         ! Set i, j, k
+
+            if (k /= 1)                   n_non_zero = n_non_zero + 1
+            if (j /= c % xstag(i) % smin) n_non_zero = n_non_zero + 1
+            if (i /= c % ystag(j) % smin) n_non_zero = n_non_zero + 1
             n_non_zero = n_non_zero + 1
-            if (associated(c % node(n) % east)) n_non_zero = n_non_zero + 1
-            if (associated(c % node(n) % north)) n_non_zero = n_non_zero + 1
-            if (associated(c % node(n) % top)) n_non_zero = n_non_zero + 1
+            if (i /= c % ystag(j) % smax) n_non_zero = n_non_zero + 1
+            if (j /= c % xstag(i) % smax) n_non_zero = n_non_zero + 1
+            if (k /= c % nzz)             n_non_zero = n_non_zero + 1
         end do
 
         call allocate_matrix(c % m, c % ng, c % nnod, n_non_zero)
-        call set_fdm_index(c, ix, iy, iz)
+        call set_fdm_index(c)
         call setup_matrix(c, upd_fdm_coupling=.true.)
 
     end subroutine
@@ -594,10 +543,9 @@ module fdm
     ! Set FDM Matrix Index (indexed in CSR)                                                         !
     !===============================================================================================!
 
-    subroutine set_fdm_index(c, ix, iy, iz)
+    subroutine set_fdm_index(c)
 
         class(core_rect)         :: c
-        integer, intent(in) :: ix(:), iy(:), iz(:)
 
         integer  :: nodp(c % nxx, c % nyy)  !radial node position
         integer  :: n, np, idx
@@ -628,46 +576,47 @@ module fdm
         do n = 1, nnod
 
             ! Set i, j, k
-            i = ix(n); j = iy(n); k = iz(n)
+            i = c % ix(n); j = c % iy(n); k = c % iz(n)
     
             c % m % ind % row(n) = idx
       
             ! Lower diagonal matrix element for z-direction
-            if (associated(c % node(n) % bottom)) then
+            if (k /= 1) then
                 c % m % ind % col(idx) = n - np
-                idx                 = idx + 1
+                idx                    = idx + 1
             end if
       
             ! Lower diagonal matrix element for y-direction
-            if (associated(c % node(n) % south)) then
+            if (j /= c % xstag(i) % smin) then
                 c % m % ind % col(idx) = n - (nodp(i,j) - nodp(i,j-1))
-                idx                 = idx + 1
+                idx                    = idx + 1
             end if
       
             ! Lower diagonal matrix element for x-direction
-            if (associated(c % node(n) % west)) then
+            if (i /= c % ystag(j) % smin) then
                 c % m % ind % col(idx) = n - 1
-                idx                 = idx + 1
+                idx                    = idx + 1
             end if
       
             ! Diagonal matrix elementss
             c % m % ind % col(idx) = n
-            idx                 = idx + 1
+            c % m % ind % diag(n)  = idx
+            idx                    = idx + 1
       
              ! Upper diagonal matrix element for x-direction
-            if (associated(c % node(n) % east)) then
+            if (i /= c % ystag(j) % smax) then
                 c % m % ind % col(idx) = n + 1
-                idx                 = idx + 1
+                idx                    = idx + 1
             end if
       
             ! Upper diagonal matrix element for y-direction
-            if (associated(c % node(n) % north)) then
+            if (j /= c % xstag(i) % smax) then
                 c % m % ind % col(idx) = n + (nodp(i,j+1) - nodp(i,j))
                 idx                    = idx + 1
             end if
       
             ! Upper diagonal matrix element for z-direction
-            if (associated(c % node(n) % top)) then
+            if (k /= nzz) then
                 c % m % ind % col(idx) = n + np
                 idx                    = idx + 1
             end if
@@ -675,7 +624,7 @@ module fdm
         end do
 
         c % m % ind % row(nnod+1) = idx
-        
+
     end subroutine
 
     !===============================================================================================!
@@ -688,10 +637,9 @@ module fdm
         logical, intent(in)   :: upd_fdm_coupling
 
         integer                     :: n, g, idx
-        real(dp)                    :: xd, yd, zd
-        type(surface_type), pointer :: su(:)
 
         integer :: nnod, ng
+        integer :: i, j, k
 
         nnod = c % nnod
         ng   = c % ng
@@ -704,54 +652,51 @@ module fdm
             idx = 0
             do n = 1, nnod
 
-                xd = c % xdel(n)
-                yd = c % ydel(n)
-                zd = c % zdel(n)
-
-                su => c % node(n) % sf
+                ! Set i, j, k
+                i = c % ix(n); j = c % iy(n); k = c % iz(n)
       
                 ! Lower diagonal matrix element for z-direction
-                if (associated(c % node(n) % bottom)) then
+                if (k /= 1) then
                     idx = idx + 1
-                    c % m % mtx(g) % elmn(idx) = -(su(6) % dt(g) - su(6) % dh(g)) / zd
+                    c % m % mtx(g) % elmn(idx) = -(c % df(n, g, 6) - c % dn(n, g, 6)) / c % zdel(k)
                 end if
         
                 ! Lower diagonal matrix element for y-direction
-                if (associated(c % node(n) % south)) then
+                if (j /= c % xstag(i) % smin) then
                     idx = idx + 1
-                    c % m % mtx(g) % elmn(idx) = -(su(4) % dt(g) - su(4) % dh(g)) / yd
+                    c % m % mtx(g) % elmn(idx) = -(c % df(n, g, 4) - c % dn(n, g, 4)) / c % ydel(j)
                 end if
         
                 ! Lower diagonal matrix element for x-direction
-                if (associated(c % node(n) % west)) then
+                if (i /= c % ystag(j) % smin) then
                     idx = idx + 1
-                    c % m % mtx(g) % elmn(idx) = -(su(2) % dt(g) - su(2) % dh(g)) / xd
+                    c % m % mtx(g) % elmn(idx) = -(c % df(n, g, 2) - c % dn(n, g, 2)) / c % xdel(i)
                 end if
         
                 ! Diagonal matrix elementss
                 idx = idx + 1
                 c % m % mtx(g) % elmn(idx) = &
-                (su(1) % dt(g) + su(2) % dt(g) - su(1) % dh(g) + su(2) % dh(g)) / xd + &
-                (su(3) % dt(g) + su(4) % dt(g) - su(3) % dh(g) + su(4) % dh(g)) / yd + &
-                (su(5) % dt(g) + su(6) % dt(g) - su(5) % dh(g) + su(6) % dh(g)) / zd + &
+                (c % df(n, g, 1) + c % df(n, g, 2) - c % dn(n, g, 1) + c % dn(n, g, 2)) / c % xdel(i) + &
+                (c % df(n, g, 3) + c % df(n, g, 4) - c % dn(n, g, 3) + c % dn(n, g, 4)) / c % ydel(j) + &
+                (c % df(n, g, 5) + c % df(n, g, 6) - c % dn(n, g, 5) + c % dn(n, g, 6)) / c % zdel(k) + &
                 c % xs % sigr(n, g)
         
                  ! Upper diagonal matrix element for x-direction
-                if (associated(c % node(n) % east)) then
+                if (i /= c % ystag(j) % smax) then
                     idx = idx + 1
-                    c % m % mtx(g) % elmn(idx) = -(su(1) % dt(g) + su(1) % dh(g)) / xd
+                    c % m % mtx(g) % elmn(idx) = -(c % df(n, g, 1) + c % dn(n, g, 1)) / c % xdel(i)
                 end if
         
                 ! Upper diagonal matrix element for y-direction
-                if (associated(c % node(n) % north)) then
+                if (j /= c % xstag(i) % smax) then
                     idx = idx + 1
-                    c % m % mtx(g) % elmn(idx) = -(su(3) % dt(g) + su(3) % dh(g)) / yd
+                    c % m % mtx(g) % elmn(idx) = -(c % df(n, g, 3) + c % dn(n, g, 3)) / c % ydel(j)
                 end if
         
                 ! Upper diagonal matrix element for z-direction
-                if (associated(c % node(n) % top)) then
+                if (k /= c % nzz) then
                     idx = idx + 1
-                    c % m % mtx(g) % elmn(idx) = -(su(5) % dt(g) + su(5) % dh(g)) / zd
+                    c % m % mtx(g) % elmn(idx) = -(c % df(n, g, 5) + c % dn(n, g, 5)) / c % zdel(k)
                 end if
       
             end do
@@ -760,120 +705,121 @@ module fdm
     end subroutine
 
     !===============================================================================================!
-    ! Set FDM parameters                                                                           !
+    ! calculate FDM nodal coupling coefficients                                                     !
     !===============================================================================================!
 
-    subroutine set_fdm_parameters(c, inp_ng, inp_nxx, inp_nyy, inp_nzz, &
-        nmat, mat_map, east, west, north, south, bottom, top, output_fid)
+    pure subroutine fdm_coupling_coef(c)
 
-        class(core_rect)                   :: c
-        integer, intent(in)           :: inp_ng                                   ! number of group
-        integer, intent(in)           :: inp_nxx, inp_nyy, inp_nzz                ! number of nodes in x, y, and z directions
-        integer, intent(in)           :: nmat                                     ! number of material
-        integer, intent(in)           :: mat_map(:,:,:)                           ! 3D Material map
-        integer, intent(in), optional :: east, west, north, south, bottom, top    ! BCs
-        integer, intent(in), optional :: output_fid                               ! output file unit number
+        class(core_rect), intent(inout) :: c
 
-        integer :: i, j, k, n
+        real(dp), parameter :: big = 1.e30
+        integer  :: g
+        real(dp) :: DN, D
+        real(dp) :: xd, yd, zd
+        real(dp) :: xdn, ydn, zdn
+        integer  :: i, j, k
+        integer  :: n
 
-        !set output file unit number
-        if(present(output_fid)) fid = output_fid
+        do g = 1, c % ng
+            do n = 1, c % nnod
 
-        ! set number of energy group
-        c % ng = inp_ng
-
-        ! set number of nodes in x, y, and z directions
-        c % nxx  = inp_nxx
-        c % nyy  = inp_nyy
-        c % nzz  = inp_nzz
-
-        ! set BCs
-        if (present(east))   xeast  = east
-        if (present(west))   xwest  = west
-        if (present(north))  ynorth = north
-        if (present(south))  ysouth = south
-        if (present(bottom)) zbott  = bottom
-        if (present(top))    ztop   = top
-
-        ! check number material
-        if (maxval(mat_map) > nmat ) call fatal_error(fid, 'Material number ' &
-        // n2c(maxval(mat_map)) // ' is greater than number of material')
-
-        ! -Indexing non zero material for staggered mesh-
-        allocate(c % ystag(c % nyy), c % xstag(c % nxx))
-
-        !Indexing non zero material for staggered mesh along y direction
-        do j= 1, c % nyy
-            c % ystag(j) % smin = c % nxx
-            do i = 1, c % nxx
-                if (mat_map(i,j,1) /= 0) then
-                    c % ystag(j) % smin = i
-                    exit
-                end if
-            end do
-        end do
+                ! Set i, j, k
+                i = c % ix(n); j = c % iy(n); k = c % iz(n)
+    
+                D  = c % xs % D(n, g)
+                xd = c % xdel(i)
+                yd = c % ydel(j)
+                zd = c % zdel(k)
+    
+                ! Set FDM coupling coefficients in x direction
+                if (i == c % ystag(j) % smax) then
+                    if (xeast == zero_flux) then
+                        c % df(n, g, 1) = 2. * big * D / (2. * D + big * xd)
+                    elseif (xeast == zero_incoming) then
+                        c % df(n, g, 1) =  D / (2. * D + 0.5 * xd)
+                    else
+                        c % df(n, g, 1) =  0.
+                    end if
+                else
+                    DN  = c % xs % D(c % xyz(i+1, j, k), g)
+                    xdn = c % xdel(i+1)
+                    c % df(n, g, 1) =  2. * D * DN / (D * xdn +  DN * xd)
+                endif
+    
+                if (i == c % ystag(j) % smin) then
+                    if (xwest == zero_flux) then
+                        c % df(n, g, 2) = 2. * big * D / (2. * D + big * xd)
+                    elseif (xwest == zero_incoming) then
+                        c % df(n, g, 2) =  D / (2. * D + 0.5 * xd)
+                    else
+                        c % df(n, g, 2) =  0.
+                    end if
+                else
+                    DN  = c % xs % D(c % xyz(i-1, j, k), g)
+                    xdn = c % xdel(i-1)
+                    c % df(n, g, 2) =  2. * D * DN / (D * xdn +  DN * xd)
+                endif
+    
+                ! Set FDM coupling coefficients in y direction
+                if (j == c % xstag(i) % smax) then
+                    if (ynorth == zero_flux) then
+                        c % df(n, g, 3) = 2. * big * D / (2. * D + big * yd)
+                    elseif (ynorth == zero_incoming) then
+                        c % df(n, g, 3) =  D / (2. * D + 0.5 * yd)
+                    else
+                        c % df(n, g, 3) =  0.
+                    end if
+                else
+                    DN  = c % xs % D(c % xyz(i, j+1, k), g)
+                    ydn = c % ydel(j+1)
+                    c % df(n, g, 3) =  2. * D * DN / (D * ydn +  DN * yd)
+                endif
+    
+                if (j == c % xstag(i) % smin) then
+                    if (ysouth == 0) then
+                        c % df(n, g, 4) = 2. * big * D / (2. * D + big * yd)
+                    elseif (ysouth == 1) then
+                        c % df(n, g, 4) =  D / (2. * D + 0.5 * yd)
+                    else
+                        c % df(n, g, 4) =  0.
+                    end if
+                else
+                    DN  = c % xs % D(c % xyz(i, j-1, k), g)
+                    ydn = c % ydel(j-1)
+                    c % df(n, g, 4) =  2. * D * DN / (D * ydn +  DN * yd)
+                endif
+    
+                ! Set FDM coupling coefficients in z direction
+                if (k == c % nzz) then
+                    if (ztop == 0) then
+                        c % df(n, g, 5) = 2. * big * D / (2. * D + big * zd)
+                    elseif (ztop == 1) then
+                        c % df(n, g, 5) =  D / (2. * D + 0.5 * zd)
+                    else
+                        c % df(n, g, 5) =  0.
+                    end if
+                else
+                    DN  = c % xs % D(c % xyz(i, j, k+1), g)
+                    zdn = c % zdel(k+1)
+                    c % df(n, g, 5) =  2. * D * DN / (D * zdn +  DN * zd)
+                endif
         
-        do j= 1, c % nyy
-            c % ystag(j) % smax = 0
-            do i = c % nxx, 1, -1
-                if (mat_map(i,j,1) /= 0) then
-                    c % ystag(j) % smax = i
-                    exit
-                end if
-            end do
-        end do
-        
-        !Indexing non zero material for staggered mesh along x direction
-        do i= 1, c % nxx
-            c % xstag(i) % smin = c % nyy
-            do j = 1, c % nyy
-                if (mat_map(i,j,1) /= 0) then
-                    c % xstag(i) % smin = j
-                    exit
-                end if
-            end do
-        end do
-        
-        do i= 1, c % nxx
-            c % xstag(i) % smax = 0
-            do j = c % nyy, 1, -1
-                if (mat_map(i,j,1) /= 0) then
-                    c % xstag(i)%smax = j
-                    exit
-                end if
-            end do
-        end do
-        
-        ! Checking zero material between non-zero material
-        do k = 1, c % nzz
-            do j = 1, c % nyy
-                do i = c % ystag(j) % smin, c % ystag(j) % smax
-                    if (mat_map(i,j,k) == 0) call fatal_error(fid, &
-                    'Zero material found inside core_rect. Check material assignment')
-                end do
-            end do
-        end do
-        do k = 1, c % nzz
-            do i = 1, c % nxx
-                do j = c % xstag(i) % smin, c % xstag(i) % smax
-                    if (mat_map(i,j,k) == 0) call fatal_error(fid, &
-                    'Zero material found inside core_rect. Check material assignment')
-                end do
+                if (k == 1) then
+                    if (zbott == 0) then
+                        c % df(n, g, 6) = 2. * big * D / (2. * D + big * zd)
+                    elseif (zbott == 1) then
+                        c % df(n, g, 6) =  D / (2. * D + 0.5 * zd)
+                    else
+                        c % df(n, g, 6) =  0.
+                    end if
+                else
+                    DN  = c % xs % D(c % xyz(i, j, k-1), g)
+                    zdn = c % zdel(k-1)
+                    c % df(n, g, 6) =  2. * D * DN / (D * zdn +  DN * zd)
+                endif
             end do
         end do
 
-        ! set total number of nodes
-        n = 0
-        do k = 1, c % nzz
-            do j = 1, c % nyy
-                do i = c % ystag(j) % smin, c % ystag(j) % smax
-                     n = n + 1
-                end do
-            end do
-        end do
-
-        c % nnod = n
-        
     end subroutine
 
 
@@ -890,7 +836,7 @@ module fdm
 
         ! real(dp), allocatable :: prec_dens(:)      ! precusor_density
         ! real(dp), allocatable :: trans_src(:)      ! source for transient mode
-        ! real(dp), allocatable :: ext_src(:)        ! external source
+        ! real(dp), allocatable :: exsrc(:)        ! external source
         ! real(dp), allocatable :: omega(:)          ! Exponential transformation constant
         ! real(dp), allocatable :: sigrp(:)          ! Initial removal cross sections before added by parameters required for transient
         ! real(dp), allocatable :: L    (:)          ! Total leakages for node n and group g
