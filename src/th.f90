@@ -1,7 +1,7 @@
 module th
 
     use iso_fortran_env, only: real64
-    use util
+    use utilities
 
     implicit none
 
@@ -18,29 +18,17 @@ module th
     real(dp), parameter   :: hg    = 1.0e4               ! Gap heat transfer coef
 
     ! Steam Table data for water at 15.5 MPa
-    integer, parameter :: ntem = 9                                 ! Number of temperature in steam table
-    real(dp)           :: stab(ntem, 6) = transpose(reshape( [  &  ! Steam table matrixs
-    !Temp     Density    Enthalpy   Prandtl    Kinematic Visc.   Thermal Conduct.
-    ! oC      (g/cm3)     (J/kg)     
-    543.15, 0.78106745,  1182595.0, 0.820773,     0.128988,         0.60720, &
-    553.15, 0.76428125,  1232620.0, 0.829727,     0.126380,         0.59285, &
-    563.15, 0.74619716,  1284170.0, 0.846662,     0.124118,         0.57710, &
-    573.15, 0.72650785,  1337630.0, 0.863597,     0.121856,         0.55970, &
-    583.15, 0.70475081,  1393570.0, 0.915035,     0.120105,         0.54045, &
-    593.15, 0.68018488,  1452895.0, 0.966472,     0.118354,         0.51880, &
-    603.15, 0.65150307,  1517175.0, 1.166745,     0.143630,         0.49420, &
-    613.15, 0.61590149,  1589770.0, 1.515852,     0.195931,         0.46550, &
-    617.91, 0.59896404,  1624307.1, 1.681940,     0.220813,         0.45185],&
-    [6, ntem]))
+    integer, parameter    :: ntem = 9                                 ! Number of temperature in steam table
+    real(dp), allocatable :: stab(:,:)
     
     ! Thermal-hydraulics data
-    type :: th_type
+    type, public :: th_type
         integer :: nzz
         integer :: n_fuel     = 10                      ! number of Fuel meat mesh
         integer :: n_gap_clad = 2                       ! number of ring in gap and cladding (one each)
         integer :: n_ring                               ! Number Total mesh (+2 mesh for gap and clad)
         
-        real(dp)              :: alpha = 0.7            ! parameter used to determine average fuel temp
+        real(dp)              :: alpha = 0.7            ! parameter used to determine lumped fuel temp
         real(dp)              :: cflow                  ! Sub-channel mass flow rate (kg/s)
         real(dp)              :: s_area                 ! sub-channel area (m2)
         real(dp)              :: dia                    ! Pin diameter (m)
@@ -55,10 +43,12 @@ module th
         real(dp), pointer :: zdel(:)
     end type
 
+    public :: set_th_data, th_update, th_transient
+
     contains
 
     !===============================================================================================!
-    ! Do final TH setup
+    ! Set th data
     !===============================================================================================!
 
     subroutine set_th_data(t, fid_inp, nzz, zdel, rf, tg, tc, ppitch, cflow, cf, t_inlet)
@@ -87,6 +77,7 @@ module th
         t % cf      = cf
 
         call th_setup(t, tg, tc)
+        call set_steam_table()
         
     end subroutine
 
@@ -126,6 +117,29 @@ module th
     end subroutine
 
     !===============================================================================================!
+    ! set steam table
+    !===============================================================================================!
+
+    subroutine set_steam_table()
+
+        allocate(stab(ntem, 6))
+        stab = transpose(reshape( [  &  ! Steam table matrixs
+        !Temp     Density    Enthalpy   Prandtl    Kinematic Visc.   Thermal Conduct.
+        ! oC      (g/cm3)     (J/kg)                  1e-6 m2/s          W/(mK)
+        543.15, 0.78106745,  1182595.0, 0.820773,     0.128988,         0.60720, &
+        553.15, 0.76428125,  1232620.0, 0.829727,     0.126380,         0.59285, &
+        563.15, 0.74619716,  1284170.0, 0.846662,     0.124118,         0.57710, &
+        573.15, 0.72650785,  1337630.0, 0.863597,     0.121856,         0.55970, &
+        583.15, 0.70475081,  1393570.0, 0.915035,     0.120105,         0.54045, &
+        593.15, 0.68018488,  1452895.0, 0.966472,     0.118354,         0.51880, &
+        603.15, 0.65150307,  1517175.0, 1.166745,     0.143630,         0.49420, &
+        613.15, 0.61590149,  1589770.0, 1.515852,     0.195931,         0.46550, &
+        617.91, 0.59896404,  1624307.1, 1.681940,     0.220813,         0.45185  &
+        ],[6, ntem]))
+        
+    end subroutine
+
+    !===============================================================================================!
     ! To get enthalpy from steam table for given coolant temp.
     !===============================================================================================!
 
@@ -139,7 +153,7 @@ module th
         
         if ((temperature < stab(1,1)) .OR. (temperature > stab(ntem,1))) then
             call fatal_error(fid, &
-            'Coolant temp. : ' // n2c(temperature, 3) // 'K' // new_line('a') // &
+            'Coolant temp. : ' // n2c(temperature, 3) // ' K' // new_line('a') // &
             'ERROR : MODERATOR TEMP. IS out OF THE RANGE OF DATA in THE STEAM TABLE' // new_line('a') // &
             'CHECK INPUT COOLANT MASS FLOW RATE OR CORE POWER' )
         end if
@@ -192,7 +206,7 @@ module th
         else
             call fatal_error(fid, &
             'CHECK INPUT COOLANT MASS FLOW RATE OR CORE POWER' // new_line('a') // &
-            'ERROR: ENTHALPY'// n2c(ent/1000., 1) //' KJ/Kg IS out OF THE RANGE in THE STEAM TABLE')
+            'ERROR: ENTHALPY '// n2c(ent/1000., 1) //' KJ/Kg IS out OF THE RANGE in THE STEAM TABLE')
         end if
         
         ! Interpolate
@@ -279,17 +293,16 @@ module th
         Nu = 0.023_DP*(Pr**0.4_DP)*(Re**0.8_DP)               ! Calculate Nusselt Number
         geths = (tc / t % dh) * Nu                            ! Calculate heat transfer coefficient
     
-    
     end function geths
 
     !===============================================================================================!
     ! To update thermal parameters
     !===============================================================================================!
 
-    subroutine th_upd(t, lin_pow, tfm, heat_flux, ftem, mtem, cden)
+    subroutine th_update(t, linear_pow, tfm, heat_flux, ftem, mtem, cden)
     
         class(th_type)          :: t
-        real(dp), intent(in)    :: lin_pow(:)    ! Linear Power Density (W/cm)
+        real(dp), intent(in)    :: linear_pow(:) ! Linear Power Density (W/cm)
         real(dp), intent(inout) :: heat_flux(:)  ! heat flux
         real(dp), intent(inout) :: tfm(:,:)      ! Fuel pin mesh temperature (nzz, n_ring)
         real(dp), intent(out)   :: ftem(:)       ! fuel temperature
@@ -310,6 +323,9 @@ module th
         real(dp)  :: cpline          ! Coolant Linear power densisty (W/m)
         real(dp)  :: Pr, kv, tcon    ! Coolant Prandtl Number, Kinematic viscosity, and thermal conductivity
         real(dp)  :: zd              ! delta z in meter
+        real(dp)  :: ent_bound       ! enthalpy at the node boundary
+        integer   :: error_flag
+
         
         !set initial tridiagonal matrix element a, b
         a = 0._dp; b = 0._dp; c = 0._dp;
@@ -318,18 +334,20 @@ module th
         call getent(t % t_inlet, ent_inlet)
 
         ! sweep in the axial direction
-        do k = 2, t % nzz
-            cpline = heat_flux(k) * pi * t % dia  + t % cf * lin_pow(k) * 100._DP        ! Coolant Linear power densisty (W/m)
+        do k = 1, t % nzz
+            cpline = heat_flux(k) * pi * t % dia  + t % cf * linear_pow(k) * 100._DP     ! Coolant Linear power densisty (W/m)
             zd = t % zdel(k) * 0.01_DP
             if (k == 1) then
                 enthalpy(k) = ent_inlet + 0.5_DP * cpline * zd / t % cflow               ! Calculate coolant enthalpy
+                ent_bound   = 2. * enthalpy(k) - ent_inlet
             else
-                enthalpy(k) = enthalpy(k-1) + 0.5_DP * cpline * zd / t % cflow
+                enthalpy(k) = ent_bound + 0.5_DP * cpline * zd / t % cflow
+                ent_bound   = 2. * enthalpy(k) - ent_bound
             end if
             call gettd(enthalpy(k), mtem(k), cden(k), Pr, kv, tcon)
         
             hs = geths(t, cden(k), Pr, kv, tcon)                                         ! calculate heat transfer coeff
-            pdens = (1._DP - t % cf) * 100._DP * lin_pow(k) / (pi * t % rf**2)           ! Fuel pin Power Density (W/m3)
+            pdens = (1._DP - t % cf) * 100._DP * linear_pow(k) / (pi * t % rf**2)        ! Fuel pin Power Density (W/m3)
         
             ! Calculate tridiagonal matrix: a, b, c and source: d
             ! For nt=1 [FUEL CENTERLINE]
@@ -379,7 +397,11 @@ module th
             d(t % n_ring+1) = t % rc * hs * mtem(k)
           
             ! Solve tridiagonal matrix
-            call TridiaSolve(a, b, c, d, tfm(k, :))
+            call TridiaSolve(a, b, c, d, tfm(k, :), error_flag)
+            if(error_flag .ne. 0) then
+                write(error_unit,*) "Error: TridiaSolve routine failed"
+                stop
+            end if
           
             ! Get lumped fuel temp
             ftem(k) = (1. - t % alpha) * tfm(k, 1) + alp * tfm(k, t % n_ring-1)
@@ -388,18 +410,18 @@ module th
             heat_flux(k) = hs * (tfm(k, t % n_ring+1) - mtem(k))
         end do
     
-    end subroutine th_upd
+    end subroutine
 
     !===============================================================================================!
     ! To update thermal parameters (transient case)
     !===============================================================================================!
 
-    subroutine th_trans(t, h, lin_pow, flow_rate, enthalpy, &
+    subroutine th_transient(t, h, lin_power, flow_rate, enthalpy, &
         tfm, heat_flux, ftem, mtem, cden)
         
         class(th_type)          :: t
         real(dp), intent(in)    :: h             ! Time step
-        real(dp), intent(in)    :: lin_pow(:)    ! Linear Power Density (W/cm)
+        real(dp), intent(in)    :: lin_power(:)  ! Linear Power Density (W/cm)
         real(dp), intent(inout) :: flow_rate(:)  ! coolant mass flow rate (kg/s)
         real(dp), intent(inout) :: enthalpy(:)   ! updated enthalpy
         real(dp), intent(inout) :: heat_flux(:)  ! heat flux
@@ -424,8 +446,10 @@ module th
         real(dp)  :: ent_inlet                             ! Coolant inlet enthalpy
         real(dp)  :: cpline                                ! Coolant Linear power densisty (W/m)
         real(dp)  :: Pr, kv, tcon                          ! Coolant Prandtl Number, Kinematic viscosity, and thermal conductivity
-        real(dp) :: R
-        real(dp) :: sq_rdel
+        real(dp)  :: R
+        real(dp)  :: sq_rdel
+        real(dp)  :: ent_bound                             ! enthalpy at the node boundary
+        integer   :: error_flag
         
         !set initial tridiagonal matrix element a, b
         a = 0._dp; b = 0._dp; c = 0._dp;
@@ -436,25 +460,27 @@ module th
         
         do k = 1, t % nzz
             mdens  = cden(k) * 1000._DP                                                 ! Coolant density (kg/m3)
-            cpline = heat_flux(k) * pi * t % dia + t % cf * lin_pow(k) * 100._DP        ! Coolant Linear power densisty (W/m)
+            cpline = heat_flux(k) * pi * t % dia + t % cf * lin_power(k) * 100._DP      ! Coolant Linear power densisty (W/m)
             vol    = t % s_area * t % zdel(k) * 0.01_DP                                 ! channel node volume
             eps    = mdens * vol / h
         
             ! Calculate coolant enthalpy
             if (k == 1) then
-                enthalpy(k)   = (cpline * t % zdel(k) * 0.01_DP + 2._DP * flow_rate(k) * ent_inlet &
-                + eps * ent_prev(k)) / (eps + 2._DP * flow_rate(k))                             ! Calculate enthalpy
-                call gettd(enthalpy(k), mtem(k), cden(k), Pr, kv, tcon, R)                      ! Get corresponding temp and density
+                enthalpy(k)   = (cpline * t % zdel(k) * 0.01_DP + 2._DP * flow_rate(k) &
+                * ent_inlet + eps * ent_prev(k)) / (eps + 2._DP * flow_rate(k))          ! Calculate enthalpy
+                ent_bound     = 2. * enthalpy(k) - ent_inlet
                 flow_rate(k)  = t % cflow - 0.5_dp * vol / h * R * (enthalpy(k) - ent_prev(k))
             else
-                enthalpy(k) = (cpline * t % zdel(k) * 0.01_DP + 2._DP * flow_rate(k) * enthalpy(k-1) &
-                + eps * ent_prev(k)) / (eps + 2._DP * flow_rate(k))
-                call gettd(enthalpy(k), mtem(k), cden(k), Pr, kv, tcon, R)
-                flow_rate(k)    = flow_rate(k-1) - 0.5_dp * vol / h * R * (enthalpy(k) - ent_prev(k))
+                enthalpy(k)  = (cpline * t % zdel(k) * 0.01_DP + 2._DP * flow_rate(k) &
+                * ent_bound + eps * ent_prev(k)) / (eps + 2._DP * flow_rate(k))
+                ent_bound    = 2. * enthalpy(k) - ent_bound
+                flow_rate(k) = flow_rate(k-1) - 0.5_dp * vol / h * R * (enthalpy(k) - ent_prev(k))
             end if
+
+            call gettd(enthalpy(k), mtem(k), cden(k), Pr, kv, tcon, R)                   ! Get corresponding temp and density
         
             hs = geths(t, cden(k), Pr, kv, tcon)                                         ! Calculate heat transfer coef
-            pdens = (1._DP - t % cf) * 100._DP * lin_pow(k) / (pi * t % rf**2)           ! Fuel pin Power Density (W/m3)
+            pdens = (1._DP - t % cf) * 100._DP * lin_power(k) / (pi * t % rf**2)         ! Fuel pin Power Density (W/m3)
         
             ! Calculate tridiagonal matrix: a, b, c and source: d
             ! For nt=1 [FUEL CENTERLINE]
@@ -517,7 +543,11 @@ module th
             d(t % n_ring+1) = t % rc * hs * mtem(k) + eta * tfm(k,t % n_ring+1)
         
             ! Solve tridiagonal matrix
-            call TridiaSolve(a, b, c, d, tfm(k, :))
+            call TridiaSolve(a, b, c, d, tfm(k, :), error_flag)
+            if(error_flag .ne. 0) then
+                write(error_unit,*) "Error: TridiaSolve routine failed"
+                stop
+            end if
         
             ! Get lumped fuel temp
             ftem(k) = (1.- t % alpha) * tfm(k, 1) + t % alpha * tfm(k, t % n_ring-1)
@@ -526,7 +556,7 @@ module th
             heat_flux(k) = hs * (tfm(k, t % n_ring+1) - mtem(k))
         end do
         
-    end subroutine th_trans
+    end subroutine
     
 end module
     

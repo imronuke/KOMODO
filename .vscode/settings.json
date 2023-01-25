@@ -14,4 +14,5 @@
         "latex",
         "plaintext"
     ],
+    "fortran.fortls.path": "fortls",
 }

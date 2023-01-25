@@ -1,6 +1,7 @@
 module read
+    use iso_fortran_env, only: input_unit, output_unit, error_unit
     use data
-    use util
+    use utilities
     use fdm
     use xsec
     use print
@@ -36,13 +37,6 @@ module read
     integer            :: uxtab, ukern, uextr, uthet
     integer            :: uoutp
     integer            :: bunit
-    
-    ! Card active/inactive indicator (active = 1, inactive = 0)
-    integer :: bmode = NO, bxsec = NO, bgeom = NO, bcase = NO, besrc = NO
-    integer :: biter = NO, bprnt = NO, badf  = NO, bcrod = NO, bbcon = NO
-    integer :: bftem = NO, bmtem = NO, bcden = NO, bcbcs = NO, bejct = NO
-    integer :: bther = NO, bxtab = NO, bkern = NO, bextr = NO, bthet = NO
-    integer :: boutp = NO
     
     ! This declaration is to notify that the error in separated card file (in case so)
     integer, allocatable                :: unit_array(:)     ! Array of buffer unit number
@@ -160,19 +154,19 @@ module read
           call inp_kernel(ukern)
         else
           if (scr) then
-            write(*,*)
-            write(*,*) ' NODAL KERNEL  : SEMI-ANALYTIC NODAL METHOD'
+            write(output_unit,*)
+            write(output_unit,*) ' NODAL KERNEL  : SEMI-ANALYTIC NODAL METHOD'
           end if
         end if
         
         ! Card XSEC
         if (bxsec == YES) then
             call inp_xsec(uxsec)
-        ! else if (bxtab == 1) then
+        ! else if (bxtab == YES) then
         !     call inp_xtab(uxtab)
         else
             write(ounit,1021) '%XSEC OR %XTAB'
-            write(*,1021) '%XSEC OR %XTAB'
+            write(output_unit,1021) '%XSEC OR %XTAB'
             stop
         end if
         
@@ -182,90 +176,88 @@ module read
             call inp_geom2(ugeom)
         else
             write(ounit,1021) '%GEOM'
-            write(*,1021) '%GEOM'
+            write(output_unit,1021) '%GEOM'
             stop
         end if
         
         ! ! Card PRNT
-        ! if (bprnt == 1) call inp_prnt (uprnt)
+        ! if (bprnt == YES) call inp_prnt (uprnt)
         
-        ! ! Card CBCS
-        ! if (mode == 'BCSEARCH' .AND. bcbcs == 1) then
-        !     call inp_cbcs(ucbcs)
-        ! else if (mode == 'BCSEARCH' .AND. bcbcs == 0 .AND. bxtab == 0) then
-        !     write(ounit,*) '   ERROR: CALCULATION MODE IS CRITICAL BORON CONCENTRATION SEARCH'
-        !     write(ounit,1041) 'CBCS', 'CRITICAL BORON CONCENTRATION SEARCH'
-        !     write(*,*) '   ERROR: CALCULATION MODE IS CRITICAL BORON CONCENTRATION SEARCH'
-        !     write(*,1041) 'CBCS', 'CRITICAL BORON CONCENTRATION SEARCH'
-        !     stop
-        ! else if (mode /= 'BCSEARCH' .AND. bcbcs == 1) then
-        !     write(ounit,*) '   ERROR: CBCS CARD IS PROHIBITED FOR THIS CALCULATION MODE'
-        !     write(*,*) '   ERROR: CBCS CARD IS PROHIBITED FOR THIS CALCULATION MODE'
-        !     stop
-        ! else if (mode == 'BCSEARCH' .AND. bbcon == 1) then
-        !     write(ounit,*) '   ERROR: BCON CARD IS PROHIBITED FOR THIS CALCULATION MODE'
-        !     write(*,*) '   ERROR: BCON CARD IS PROHIBITED FOR THIS CALCULATION MODE'
-        !     stop
-        ! else
-        !     CONTINUE
-        ! end if
+        ! Card CBCS
+        if (mode == 'BCSEARCH' .AND. bcbcs == YES) then
+            call inp_cbcs(ucbcs)
+        else if (mode == 'BCSEARCH' .AND. bcbcs == 0 .AND. bxtab == 0) then
+            write(ounit,*) '   ERROR: CALCULATION MODE IS CRITICAL BORON CONCENTRATION SEARCH'
+            write(ounit,1041) 'CBCS', 'CRITICAL BORON CONCENTRATION SEARCH'
+            write(error_unit,*) '   ERROR: CALCULATION MODE IS CRITICAL BORON CONCENTRATION SEARCH'
+            write(error_unit,1041) 'CBCS', 'CRITICAL BORON CONCENTRATION SEARCH'
+            stop
+        else if (mode /= 'BCSEARCH' .AND. bcbcs == YES) then
+            write(ounit,*) '   ERROR: CBCS CARD IS PROHIBITED FOR THIS CALCULATION MODE'
+            write(error_unit,*) '   ERROR: CBCS CARD IS PROHIBITED FOR THIS CALCULATION MODE'
+            stop
+        else if (mode == 'BCSEARCH' .AND. bbcon == YES) then
+            write(ounit,*) '   ERROR: BCON CARD IS PROHIBITED FOR THIS CALCULATION MODE'
+            write(error_unit,*) '   ERROR: BCON CARD IS PROHIBITED FOR THIS CALCULATION MODE'
+            stop
+        else
+            continue
+        end if
         
-        ! if (mode == 'BCSEARCH' .AND. bxtab == 1 .AND. bther == 0) then
-        !   write(ounit,*) '   ERROR: THER CARD REQUIRED IN THIS PROBLEM'
-        !   write(*,*) '   ERROR: THER CARD IS REQUIRED IN THIS PROBLEM'
-        !   stop
-        ! end if
+        if (mode == 'BCSEARCH' .AND. bxtab == YES .AND. bther == 0) then
+            call input_error(ounit, msg='   ERROR: %THER CARD REQUIRED IN THIS PROBLEM')
+        end if
         
         
-        ! !CARD CROD
-        ! if (bcrod == 1) call inp_crod (ucrod)
+        !CARD CROD
+        if (bcrod == YES) call inp_crod (ucrod)
         
         ! ! Card EJCT (Rod Ejection)
-        ! if (mode == 'RODEJECT' .AND. bejct == 1 .AND. bcrod == 1) then
+        ! if (mode == 'RODEJECT' .AND. bejct == YES .AND. bcrod == YES) then
         !     call inp_ejct(uejct)
         ! else if (mode == 'RODEJECT' .AND. bejct /= 1) then
         !     write(ounit,*) '   CALCULATION MODE ROD EJECTION'
         !     write(ounit,1041) 'EJCT', 'ROD EJECTION - TRANSIENT'
-        !     write(*,*) '   CALCULATION MODE ROD EJECTION'
-        !     write(*,1041) 'EJCT', 'ROD EJECTION - TRANSIENT'
+        !     write(error_unit,*) '   CALCULATION MODE ROD EJECTION'
+        !     write(error_unit,1041) 'EJCT', 'ROD EJECTION - TRANSIENT'
         !     stop
         ! else if (mode == 'RODEJECT' .AND. bcrod /= 1) then
         !     write(ounit,*) '   CALCULATION MODE ROD EJECTION'
         !     write(ounit,1041) 'CROD', 'CONTROL ROD'
-        !     write(*,*) '   CALCULATION MODE ROD EJECTION'
-        !     write(*,1041) 'CROD', 'CONTROL ROD'
+        !     write(error_unit,*) '   CALCULATION MODE ROD EJECTION'
+        !     write(error_unit,1041) 'CROD', 'CONTROL ROD'
         !     stop
-        ! else if (mode /= 'RODEJECT' .AND. bejct == 1) then
+        ! else if (mode /= 'RODEJECT' .AND. bejct == YES) then
         !     write(ounit,*) '   EJCT CARD IS NOT NECESSARY FOR THIS CALCULATION MODE'
-        !     write(*,*) '   EJCT CARD IS NOT NECESSARY FOR THIS CALCULATION MODE'
+        !     write(error_unit,*) '   EJCT CARD IS NOT NECESSARY FOR THIS CALCULATION MODE'
         !     stop
         ! else
-        !     CONTINUE
+        !     continue
         ! end if
         
-        ! if (boutp == 1) call inp_outp(uoutp)
+        ! if (boutp == YES) call inp_outp(uoutp)
         
         ! ! Card ITER
-        ! if (biter == 1) call inp_iter (uiter)
+        ! if (biter == YES) call inp_iter (uiter)
         
         ! ! Card THET
-        ! if (bthet == 1) call inp_thet (uthet)
+        ! if (bthet == YES) call inp_thet (uthet)
 
-        ! if (bextr == 1) call inp_extr()
+        ! if (bextr == YES) call inp_extr()
         
         !CARD THER
-        if (bther == 1 .AND. mode == 'FIXEDSRC') then
+        if (bther == YES .AND. mode == 'FIXEDSRC') then
             message = '   ERROR: %THER CARD NOT VALID FOR FIXED SOURCE CALCULATION MODE'
             call input_error(ounit, msg=message)
-        else if (bther == 1 .AND. mode == 'ADJOINT') then
+        else if (bther == YES .AND. mode == 'ADJOINT') then
             message = '   ERROR: %THER CARD NOT VALID FOR ADJOINT CALCULATION MODE'
             call input_error(ounit, msg=message)
-        else if (bther == 1 .AND. bftem == 1 .AND. (bmtem ==1 .OR. bcden == 1)) then
+        else if (bther == YES .AND. bftem == YES .AND. (bmtem ==1 .OR. bcden == YES)) then
             call inp_ther (uther)
-        else if (bther == 1 .AND. bxtab == 1) then
+        else if (bther == YES .AND. bxtab == YES) then
               call inp_ther (uther)
         else if (bther == 0) then
-            CONTINUE
+            continue
         else
             if (bxtab /= 1) then
               message = '   ERROR: WHEN %THER CARD PRESENT %FTEM AND,' // &
@@ -276,46 +268,46 @@ module read
         end if
         
         !CARD BCON
-        if (bbcon == 1 .AND. bxtab == 0) call inp_bcon (ubcon)
-        if (bbcon == 1 .AND. bxtab == 1 .AND. mode == 'RODEJECT') call inp_bcon (ubcon)
+        if (bbcon == YES .AND. bxtab == 0) call inp_bcon (ubcon)
+        if (bbcon == YES .AND. bxtab == YES .AND. mode == 'RODEJECT') call inp_bcon (ubcon)
         
         !CARD FTEM
-        if (bftem == 1 .AND. bxtab == 0) call inp_ftem (uftem)
+        if (bftem == YES .AND. bxtab == 0) call inp_ftem (uftem)
         
         !CARD MTEM
-        if (bmtem == 1 .AND. bxtab == 0) call inp_mtem (umtem)
+        if (bmtem == YES .AND. bxtab == 0) call inp_mtem (umtem)
         
         !CARD CDEN
-        if (bcden == 1 .AND. bxtab == 0) call inp_cden (ucden)
+        if (bcden == YES .AND. bxtab == 0) call inp_cden (ucden)
         
         !CARD ADF
-        if (badf == 1 .AND. bxtab == 0) then
+        if (badf == YES .AND. bxtab == 0) then
             call inp_adf (uadf)
-        else if (badf == 1 .AND. bxtab == 1) then
+        else if (badf == YES .AND. bxtab == YES) then
             message = '  BOTH %ADF AND %XTAB CARDS CANNOT PRESENT TOGETHER'
             call input_error(ounit, msg=message)
         else
             continue
         end if
         
-        ! ! Card ESRC
-        ! allocate(exsrc(nnod, ng))   ! For transient or rod ejection problem, this used to
-        ! exsrc = 0._DP               ! store transient terms
-        ! if (mode == 'FIXEDSRC' .AND. besrc == 1) then
-        !     call inp_esrc(uesrc)
-        ! else if (mode == 'FIXEDSRC' .AND. besrc /= 1) then
-        !     write(ounit,*) '   CALCULATION MODE IS FIXED SOURCE'
-        !     write(ounit,1041) 'ESRC', 'FIXED SOURCE'
-        !     write(*,*) '   CALCULATION MODE IS FIXED SOURCE'
-        !     write(*,1041) 'ESRC', 'FIXED SOURCE'
-        !     stop
-        ! else if (mode /= 'FIXEDSRC' .AND. besrc == 1) then
-        !     write(ounit,*) '   ESRC CARD IS NOT NECESSARY FOR THIS CALCULATION MODE'
-        !     write(*,*) '   ESRC CARD IS NOT NECESSARY FOR THIS CALCULATION MODE'
-        !     stop
-        ! else
-        !     CONTINUE
-        ! end if
+        ! Card ESRC
+        allocate(exsrc(nnod, ng))   ! For transient or rod ejection problem, this used to
+        exsrc = 0._DP               ! store transient terms
+        if (mode == 'FIXEDSRC' .AND. besrc == YES) then
+            call inp_esrc(uesrc)
+        else if (mode == 'FIXEDSRC' .AND. besrc /= 1) then
+            write(ounit,*) '   CALCULATION MODE IS FIXED SOURCE'
+            write(ounit,1041) 'ESRC', 'FIXED SOURCE'
+            write(error_unit,*) '   CALCULATION MODE IS FIXED SOURCE'
+            write(error_unit,1041) 'ESRC', 'FIXED SOURCE'
+            stop
+        else if (mode /= 'FIXEDSRC' .AND. besrc == YES) then
+            write(ounit,*) '   ESRC CARD IS NOT NECESSARY FOR THIS CALCULATION MODE'
+            write(error_unit,*) '   ESRC CARD IS NOT NECESSARY FOR THIS CALCULATION MODE'
+            stop
+        else
+            continue
+        end if
         
         ! deallocate(mat_map)
         ! do i= 1,np
@@ -330,6 +322,7 @@ module read
         write(ounit,*) ' ************************', '  STOP READING INPUT  ', '********************************'
         
         1021 format(2X, 'CARD ', A, ' DOES NOT PRESENT. THIS CARD IS MANDATORY')
+        1041 FORMAT(2X, 'CARD ', A, ' DOES NOT PRESENT. THIS CARD IS MANDATORY FOR ', A,' CALCULATION MODE')
         
         
         close(UNIT=umode); close(UNIT=uxsec); close(UNIT=ugeom); close(UNIT=ucase)
@@ -354,11 +347,11 @@ module read
         write(ounit, 2409)
         write(ounit, *)
         
-        write(*, *)
-        write(*, 2409)
-        write(*, 2411)
-        write(*, 2412)
-        write(*, 2409)
+        write(output_unit, *)
+        write(output_unit, 2409)
+        write(output_unit, 2411)
+        write(output_unit, 2412)
+        write(output_unit, 2409)
         
         2409 format(11X, '###########################################################')
         2411 format(11X, '#                 KOMODO Version: 0.2                     #')
@@ -375,13 +368,13 @@ module read
         integer :: eof
         integer :: nline
         
-        write(*, *)
-        write(*, *) "GIT COMMIT SHA    : ", __GIT_COMMIT_HASH
-        write(*, *) "GIT COMMIT DATE   : ", __GIT_DATE
-        write(*, *) "GIT COMMIT BRANCH : ", __GIT_BRANCH
-        write(*, *)
-        write(*, *)
-        write(*, *)
+        write(output_unit, *)
+        write(output_unit, *) "GIT COMMIT SHA    : ", __GIT_COMMIT_HASH
+        write(output_unit, *) "GIT COMMIT DATE   : ", __GIT_DATE
+        write(output_unit, *) "GIT COMMIT BRANCH : ", __GIT_BRANCH
+        write(output_unit, *)
+        write(output_unit, *)
+        write(output_unit, *)
         
         
         write(ounit,*) '  =============================INPUT DATA STARTS HERE==========================='
@@ -517,7 +510,7 @@ module read
             case('OUTP'); bunit = uoutp; boutp = YES
             case DEFAULT
                 write(ounit,1014) ln, iline
-                write(*,1014) ln, iline
+                write(error_unit,1014) ln, iline
                 stop
             end select
             end if
@@ -542,16 +535,16 @@ module read
         integer, optional, intent(in) :: xtab, buf
 
         if ((.not. present(iost))) then
-            write(*,*)''//achar(27)//'[31m OOPS! WE FOUND AN ERROR.'//achar(27)//'[0m'
+            write(error_unit,*)''//achar(27)//'[31m OOPS! WE FOUND AN ERROR.'//achar(27)//'[0m'
             write(funit,*) msg
-            write(*,*) msg
+            write(error_unit,*) msg
             stop
         endif
         
         if (iost < 0) then
             write(funit,*)
-            write(*,*)
-            write(*,*)''//achar(27)//'[31m OOPS! WE FOUND AN ERROR.'//achar(27)//'[0m'
+            write(error_unit,*)
+            write(error_unit,*)''//achar(27)//'[31m OOPS! WE FOUND AN ERROR.'//achar(27)//'[0m'
         
             if (present(xtab)) then
                 write(funit, 1014) ln, xtab
@@ -561,12 +554,12 @@ module read
             end if
             write(funit,*) msg
             if (present(xtab)) then
-                write(*, 1014) ln, xtab
+                write(error_unit, 1014) ln, xtab
             else
-                write(*, 1006) card_array(findloc(unit_array,buf))
-                write(*, 1013) ln, file_array(findloc(unit_array,buf))
+                write(error_unit, 1006) card_array(findloc(unit_array,buf))
+                write(error_unit, 1013) ln, file_array(findloc(unit_array,buf))
             end if
-            write(*,*) msg
+            write(error_unit,*) msg
             1013 format(2x, 'THIS LINE NEEDS MORE INPUT DATA. LINE', I4, &
             ' IN FILE : ', A100)
             1014 format(2x, 'ERROR: LINE', I4, &
@@ -576,8 +569,8 @@ module read
         
         if (iost > 0) then
             write(funit,*)
-            write(*,*)
-            write(*,*)''//achar(27)//'[31m OOPS! WE FOUND AN ERROR.'//achar(27)//'[0m'
+            write(error_unit,*)
+            write(error_unit,*)''//achar(27)//'[31m OOPS! WE FOUND AN ERROR.'//achar(27)//'[0m'
         
             if (present(xtab)) then
                 write(funit, 1005) ln, xtab
@@ -587,12 +580,12 @@ module read
             end if
             write(funit,*) msg
             if (present(xtab)) then
-                write(*, 1005) ln, xtab
+                write(error_unit, 1005) ln, xtab
             else
-                write(*, 1006) card_array(findloc(unit_array,buf))
-                write(*, 1004) ln, file_array(findloc(unit_array,buf))
+                write(error_unit, 1006) card_array(findloc(unit_array,buf))
+                write(error_unit, 1004) ln, file_array(findloc(unit_array,buf))
             end if
-            write(*,*) msg
+            write(error_unit,*) msg
             1006 format(2X, 'ERROR: THERE IS AN ERROR IN CARD %', A4)
             1004 format(2X, 'PLEASE CHECK LINE NUMBER', I4, ' IN FILE : ', A100)
             1005 format(2X, 'ERROR: PLEASE CHECK LINE NUMBER', I4, &
@@ -642,14 +635,14 @@ module read
             end if
         case DEFAULT
             write(ounit,1032) mode
-            write(*,1032) mode
+            write(error_unit,1032) mode
             stop
         end select
         
         write(ounit,1031) mode_desc
         write(ounit,*)
-        write(*,1031) mode_desc
-        write(*,*)
+        write(error_unit,1031) mode_desc
+        write(error_unit,*)
         
         1031 format(2X, 'CALCULATION MODE : ', A60)
         1032 format(2X, 'MODE : ', A10, ' IS UNIDENTIFIED')
@@ -683,8 +676,8 @@ module read
         write(ounit,1006) case_id
         write(ounit,1007) case_exp
         
-        write(*,1006) case_id
-        write(*,1007) case_exp
+        write(output_unit,1006) case_id
+        write(output_unit,1007) case_exp
         1006 format(2X, 'CASE ID : ', A100)
         1007 format(2X, A100)
     
@@ -735,7 +728,7 @@ module read
         comm2 = index(iline, '\')
         if (comm1 > 0 .OR. comm2 > 0) then
             write(ounit, *) '  ERROR: SLASH (/) OR BACKSLASH (\) NOT ACCEPTED IN %XSEC CARD '
-            write(*, *) '  ERROR: SLASH (/) OR BACKSLASH (\) NOT ACCEPTED IN %XSEC CARD '
+            write(error_unit, *) '  ERROR: SLASH (/) OR BACKSLASH (\) NOT ACCEPTED IN %XSEC CARD '
             stop
         end if
         backspace(xbunit)
@@ -931,12 +924,13 @@ module read
     
         integer, intent(in) :: xbunit
         
-        integer            :: ln, ios
-        integer            :: i, j, k, lx, ly, lz, xtot, ytot, ztot
-        character(LEN=2)   :: mmap(nxx, nyy)
-        integer, parameter :: xm = 36
-        integer            :: ip, ipr, kp
-        integer            :: x_start, x_finish
+        integer              :: ln, ios
+        integer              :: i, j, k, lx, ly, lz, xtot, ytot, ztot
+        character(LEN=2)     :: mmap(nxx, nyy)
+        integer, parameter   :: xm = 36
+        integer              :: ip, ipr, kp
+        integer              :: x_start, x_finish
+        integer, allocatable :: mat_map(:,:,:)
         
         ! READING number of planar
         read(xbunit, *, IOSTAT=ios) ind, ln, np
@@ -1026,7 +1020,7 @@ module read
         call fatal_error(ounit, 'Boundary condition values must be smaller than 3')
 
         ! Calculate necessary data for rectangular geometry
-        call finalize_rect_geometry()
+        call finalize_rect_geometry(mat_map)
 
         ! Wrting core geometry output
         if (ogeom) then
@@ -1086,7 +1080,7 @@ module read
                 do lz= 1, zdiv(k)
                     if (ztot == nzz) then
                         write(ounit,'(I9, A6, I13, F15.2)') ztot, ' (TOP)', zpln(k), zdel(ztot)
-                    else if (ztot == 1) then
+                    else if (ztot == YES) then
                         write(ounit,'(I9, A9, I10, F15.2)') ztot, ' (BOTTOM)', zpln(k), zdel(ztot)
                     else
                         write(ounit,'(I9, I19, F15.2)') ztot, zpln(k), zdel(ztot)
@@ -1153,6 +1147,8 @@ module read
         
         write(ounit,*)
         write(ounit,*) ' ...Core geometry is successfully read...'
+
+        deallocate(mat_map)
     
     end subroutine inp_geom2
 
@@ -1160,9 +1156,10 @@ module read
     ! Calculate necessary data for rectangular geometry
     !===============================================================================================!
 
-    subroutine finalize_rect_geometry()
+    subroutine finalize_rect_geometry(mat_map)
 
-        integer :: i, j, k, n
+        integer, intent(in) :: mat_map(:,:,:)
+        integer             :: i, j, k, n
         
         ! -Indexing non zero material for staggered mesh-
         allocate(ystag(nyy), xstag(nxx))
@@ -1255,6 +1252,23 @@ module read
                 end do
             end do
         end do
+
+        !set material index
+        allocate(ind_mat(nnod))
+        do k = 1, nzz
+            do j = 1, nyy
+                do i = ystag(j)%smin, ystag(j)%smax
+                    n = xyz(i,j,k)
+                    ind_mat(n) = mat_map(i, j, k)
+                end do
+            end do
+        end do
+
+        ! Calculate core height
+        coreh = 0._DP
+        do k = 1, nzz
+            coreh = coreh + zdel(k)
+        end do
         
     end subroutine
 
@@ -1297,8 +1311,8 @@ module read
         write(ounit,*) '           ------------------------------------'
         
         write(ounit,1648) kern_desc
-        write(*,*)
-        write(*,1648) kern_desc
+        write(output_unit,*)
+        write(output_unit,1648) kern_desc
         
         1648 format (2X, 'NODAL KERNEL  : ', A30)
         
@@ -1308,7 +1322,7 @@ module read
     ! To read assembly discontinuity factors (ADF) if any
     !===============================================================================================!
 
-    subroutine inp_adf (xbunit)
+    subroutine inp_adf(xbunit)
     
         integer, intent(in) :: xbunit
         
@@ -1319,7 +1333,7 @@ module read
         type(ADF_type), dimension(nx,ny,nz,ng) :: xdc
         type(ADF_type), dimension(nxx,nyy,nzz,ng) :: xxdc
         
-        integer :: g, i, j, k, u
+        integer :: g, i, j, k, u, n
         integer :: rot, x1, x2, y1, y2, z1, z2
         integer :: xtot, ytot, ztot
         integer :: lz, ly, lx
@@ -1639,7 +1653,8 @@ module read
                                 do lx= 1, xdiv(i)
                                     xtot = xtot+1
                                     xxdc(xtot,ytot,ztot,g)%dc = 0._DP
-                                    if (mat_map(xtot, ytot, ztot) /= 0) xxdc(xtot,ytot,ztot,g)%dc = 1._DP
+                                    n = xyz(xtot, ytot, ztot)
+                                    if (n /= 0)            xxdc(xtot,ytot,ztot,g)%dc = 1._DP
                                     if (xtot == tx(i))     xxdc(xtot,ytot,ztot,g)%dc(2) = xdc(i,j,k,g)%dc(2)
                                     if (xtot == tx(i+1)-1) xxdc(xtot,ytot,ztot,g)%dc(1) = xdc(i,j,k,g)%dc(1)
                                     if (ytot == ty(j))     xxdc(xtot,ytot,ztot,g)%dc(4) = xdc(i,j,k,g)%dc(4)
@@ -1689,7 +1704,7 @@ module read
         x3 = a3
         x4 = a4
         
-        if (rot == 1) then
+        if (rot == YES) then
             a1 = x4
             a2 = x3
             a3 = x1
@@ -1726,6 +1741,13 @@ module read
         integer :: i, g, h
         integer :: popt
         integer, dimension(ng) :: group
+
+        real(dp) :: rbcon                        ! Fuel temperature Reference in Kelvin
+        real(dp) :: csigtr(nmat,ng)              ! XSEC changes
+        real(dp) :: csiga(nmat,ng)
+        real(dp) :: cnuf(nmat,ng)
+        real(dp) :: csigf(nmat,ng)
+        real(dp) :: csigs(nmat,ng,ng)
         
         write(ounit,*)
         write(ounit,*)
@@ -1738,12 +1760,6 @@ module read
         call input_error(ounit, ios, ln, message, buf=xbunit)
         
         if (bxtab == NO) then  ! if XTAB File does not present
-            allocate(csigtr(nmat,ng))
-            allocate(csiga (nmat,ng))
-            allocate(cnuf  (nmat,ng))
-            allocate(csigf (nmat,ng))
-            allocate(csigs (nmat,ng,ng))
-          
             ! read CX changes per ppm born change
             do i = 1, nmat
                 do g= 1, ng
@@ -1754,6 +1770,10 @@ module read
                 end do
             end do
         end if
+
+        ! set xs change for boron concentration
+        allocate(xsc % bcon)
+        call set_xs_change(xsc % bcon, nmat, ng, rbcon, csigtr, csiga, cnuf, csigf, csigs)
         
         !! BCON PRINT OPTION
         read(xbunit, *, IOSTAT=ios) ind, ln, popt
@@ -1807,6 +1827,13 @@ module read
         integer :: i, g, h
         integer :: popt
         integer, dimension(ng) :: group
+
+        real(dp) :: rbcon                        ! Fuel temperature Reference in Kelvin
+        real(dp) :: csigtr(nmat,ng)              ! XSEC changes
+        real(dp) :: csiga(nmat,ng)
+        real(dp) :: cnuf(nmat,ng)
+        real(dp) :: csigf(nmat,ng)
+        real(dp) :: csigs(nmat,ng,ng)
         
         write(ounit,*)
         write(ounit,*)
@@ -1820,11 +1847,6 @@ module read
         
         if (bxtab == 0) then  ! if xtab file present
             ! read CX changes per ppm born change
-            allocate(csigtr(nmat,ng))
-            allocate(csiga (nmat,ng))
-            allocate(cnuf  (nmat,ng))
-            allocate(csigf (nmat,ng))
-            allocate(csigs (nmat,ng,ng))
             do i = 1, nmat
                 do g= 1, ng
                     read(xbunit, *, IOSTAT=ios) ind, ln, csigtr(i,g), &
@@ -1834,6 +1856,10 @@ module read
                 end do
             end do
         end if
+
+        ! set xs change for boron concentration
+        allocate(xsc % bcon)
+        call set_xs_change(xsc % bcon, nmat, ng, rbcon, csigtr, csiga, cnuf, csigf, csigs)
         
         !! BCON PRINT OPTION
         read(xbunit, *, IOSTAT=ios) ind, ln, popt
@@ -1890,6 +1916,13 @@ module read
         integer :: i, g, h
         integer :: popt
         integer, dimension(ng) :: group
+
+        real(dp) :: rftem                        ! Fuel temperature Reference in Kelvin
+        real(dp) :: fsigtr(nmat,ng)              ! XSEC changes
+        real(dp) :: fsiga(nmat,ng)
+        real(dp) :: fnuf(nmat,ng)
+        real(dp) :: fsigf(nmat,ng)
+        real(dp) :: fsigs(nmat,ng,ng)
         
         write(ounit,*)
         write(ounit,*)
@@ -1897,17 +1930,16 @@ module read
         write(ounit,*) '           --------------------------------------------'
         
         ! read Fuel Temperature
-        read(xbunit, *, IOSTAT=ios) ind, ln, cftem, fuel_temp_ref
+        read(xbunit, *, IOSTAT=ios) ind, ln, cftem, rftem
         message = ' error in READING average fuel temperature and fuel temperature reference'
         call input_error(ounit, ios, ln, message, buf=xbunit)
         
         ! ASSIGN CFTEM to FTEM
-        if (bther == 0) allocate (ftem(nnod))
+        allocate (ftem(nnod))
         ftem = cftem   !Initial guess for fuel temperature
         
         if (bxtab == 0) then  ! if XTAB File does not present
             ! read CX changes fuel temperature change
-            allocate(fsigtr(nmat,ng), fsiga(nmat,ng), fnuf(nmat,ng), fsigf(nmat,ng), fsigs(nmat,ng,ng))
             do i = 1, nmat
                 do g= 1, ng
                     read(xbunit, *, IOSTAT=ios) ind, ln, fsigtr(i,g), &
@@ -1917,6 +1949,10 @@ module read
                 end do
             end do
         end if
+
+        ! set xs change for fuel temperature
+        allocate(xsc % ftem)
+        call set_xs_change(xsc % ftem, nmat, ng, rftem, fsigtr, fsiga, fnuf, fsigf, fsigs)
         
         !! FTEM PRINT OPTION
         read(xbunit, *, IOSTAT=ios) ind, ln, popt
@@ -1927,7 +1963,7 @@ module read
             else
                 write(ounit,1256) cftem
             end if
-            write(ounit,1242) fuel_temp_ref
+            write(ounit,1242) rftem
         
             if (bxtab == 0) then  ! if XTAB File does not present
                 write(ounit,*)
@@ -1978,6 +2014,13 @@ module read
         integer :: i, g, h
         integer :: popt
         integer, dimension(ng) :: group
+
+        real(dp) :: rmtem                        ! Fuel temperature Reference in Kelvin
+        real(dp) :: msigtr(nmat,ng)              ! XSEC changes
+        real(dp) :: msiga(nmat,ng)
+        real(dp) :: mnuf(nmat,ng)
+        real(dp) :: msigf(nmat,ng)
+        real(dp) :: msigs(nmat,ng,ng)
         
         write(ounit,*)
         write(ounit,*)
@@ -1985,17 +2028,16 @@ module read
         write(ounit,*) '           --------------------------------------------'
         
         ! read Moderator Temperature
-        read(xbunit, *, IOSTAT=ios) ind, ln, cmtem, mod_temp_ref
+        read(xbunit, *, IOSTAT=ios) ind, ln, cmtem, rmtem
         message = ' error in READING Moderator temperature and Moderator temperature reference'
         call input_error(ounit, ios, ln, message, buf=xbunit)
         
         ! ASSIGN CMTEM to MTEM
-        if (bther == 0) allocate (mtem(nnod))
+        allocate (mtem(nnod))
         mtem = cmtem
         
         if (bxtab == 0) then  ! if XTAB File does not present
             ! read CX changes per moderator temperature change
-            allocate(msigtr(nmat,ng), msiga(nmat,ng), mnuf(nmat,ng), msigf(nmat,ng), msigs(nmat,ng,ng))
             do i = 1, nmat
                 do g= 1, ng
                     read(xbunit, *, IOSTAT=ios) ind, ln, msigtr(i,g), &
@@ -2005,6 +2047,10 @@ module read
                 end do
             end do
         end if
+
+        ! set xs change for moderator temperature
+        allocate(xsc % mtem)
+        call set_xs_change(xsc % mtem, nmat, ng, rmtem, msigtr, msiga, mnuf, msigf, msigs)
         
         !! MTEM PRINT OPTION
         read(xbunit, *, IOSTAT=ios) ind, ln, popt
@@ -2015,7 +2061,7 @@ module read
             else
                 write(ounit,1276) cmtem
             end if
-            write(ounit,1262) mod_temp_ref
+            write(ounit,1262) rmtem
             if (bxtab == 0) then  ! if XTAB File does not present
                 write(ounit,*)
                 write(ounit,*) ' MATERIAL CX CHANGES PER MODERATOR TEMPERATURE CHANGES : '
@@ -2065,6 +2111,13 @@ module read
         integer :: i, g, h
         integer :: popt
         integer, dimension(ng) :: group
+
+        real(dp) :: rcden                        ! Fuel temperature Reference in Kelvin
+        real(dp) :: lsigtr(nmat,ng)              ! XSEC changes
+        real(dp) :: lsiga(nmat,ng)
+        real(dp) :: lnuf(nmat,ng)
+        real(dp) :: lsigf(nmat,ng)
+        real(dp) :: lsigs(nmat,ng,ng)
         
         write(ounit,*)
         write(ounit,*)
@@ -2072,17 +2125,16 @@ module read
         write(ounit,*) '           --------------------------------------------'
         
         ! read Coolant Density
-        read(xbunit, *, IOSTAT=ios) ind, ln, ccden, mod_dens_ref
+        read(xbunit, *, IOSTAT=ios) ind, ln, ccden, rcden
         message = ' error in READING Coolant Density and Coolant Density reference'
         call input_error(ounit, ios, ln, message, buf=xbunit)
         
         !ASSIGN CCDEN TO CDEN
-        if (bther == 0) allocate (cden(nnod))
+        allocate (cden(nnod))
         cden = ccden
         
         if (bxtab == 0) then  ! if XTAB File does not present
             ! read CX changes per Coolant Density change
-            allocate(lsigtr(nmat,ng), lsiga(nmat,ng), lnuf(nmat,ng), lsigf(nmat,ng), lsigs(nmat,ng,ng))
             do i = 1, nmat
                 do g= 1, ng
                     read(xbunit, *, IOSTAT=ios) ind, ln, lsigtr(i,g), &
@@ -2092,6 +2144,10 @@ module read
                 end do
             end do
         end if
+
+        ! set xs change for coolant density
+        allocate(xsc % cden)
+        call set_xs_change(xsc % cden, nmat, ng, rcden, lsigtr, lsiga, lnuf, lsigf, lsigs)
         
         !! CDEN PRINT OPTION
         read(xbunit, *, IOSTAT=ios) ind, ln, popt
@@ -2102,7 +2158,7 @@ module read
             else
                 write(ounit,1376) ccden
             end if
-            write(ounit,1362) mod_dens_ref
+            write(ounit,1362) rcden
             if (bxtab == 0) then  ! if XTAB File does not present
                 write(ounit,*)
                 write(ounit,*) ' MATERIAL CX CHANGES PER COOLANT DENSITY CHANGES : '
@@ -2142,7 +2198,7 @@ module read
     ! To read thermalhydraulics parameters input
     !===============================================================================================!
     
-    subroutine inp_ther (xbunit)
+    subroutine inp_ther(xbunit)
     
         integer, intent(in) :: xbunit
         
@@ -2151,15 +2207,15 @@ module read
         
         integer   :: nfpin, ngt        ! Number of fuel pin and guide tubes
         real(dp)  :: cmflow
-        real(dp)  :: ppitch            ! pin picth (m)
         integer   :: popt
         
         write(ounit,*)
         write(ounit,*)
         write(ounit,*) '           >>>>   READING THERMAL-HYDRAULIC DATA   <<<<'
         write(ounit,*) '           --------------------------------------------'
-        
-        allocate (ftem(nnod), mtem(nnod), cden(nnod))
+
+        ! Allocate th object
+        allocate(th)
         
         ! read Percent Power
         read(xbunit, *, IOSTAT=ios) ind, ln, percent_pow
@@ -2239,6 +2295,189 @@ module read
     end subroutine inp_ther
 
     !===============================================================================================!
+    ! To read control rod position
+    !===============================================================================================!
+    
+    subroutine inp_crod (xbunit)
+    
+        integer, intent(in) :: xbunit
+        
+        integer :: ln   !Line number
+        integer :: ios
+        
+        integer              :: i, j, g, h
+        integer              :: bmap(nx, ny)       ! Radial control rod bank map (assembly wise)
+        integer              :: popt
+        integer              :: xtot, ytot, ly, lx
+        integer              :: group(ng)
+        integer, allocatable :: bank(:)
+        real(dp), allocatable :: dsigtr(:,:), dsiga(:,:), dnuf(:,:), dsigf(:,:)  ! XSEC changes due to CR insertion
+        real(dp), allocatable :: dsigs(:,:,:)
+        real(dp), allocatable :: ddc  (:,:,:)                                    ! ADF changes due to control rod
+    
+        
+        write(ounit,*)
+        write(ounit,*)
+        write(ounit,*) '           >>>> READING CONTROL RODS INSERTION <<<<'
+        write(ounit,*) '           --------------------------------------------'
+        
+        read(xbunit, *, IOSTAT=ios) ind, ln, nbank, nstep
+        message = ' error in READING number of control rod bank and max. number of steps'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        read(xbunit, *, IOSTAT=ios) ind, ln, zero_pos, step_size
+        message = ' error in READING zeroth step rod position and step size'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        allocate(bpos(nbank))
+        
+        !!! read CONTROL ROD BANK POSITIONS
+        read(xbunit, *, IOSTAT=ios) ind, ln, (bpos(i), i = 1, nbank)
+        message = ' error in READING bank position'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        
+        !!! Check Control Rod Bank POSITION
+        do i = 1, nbank
+            if (bpos(i) > real(nstep)) then
+                message = 'ERROR: POSITION OF CONTROL ROD BANK ' // n2c(i) // ' IS ' &
+                // n2c(bpos(i),2) // ' WHICH IS HIGHER THAN NUMBER OF STEPS.'
+                call input_error(ounit, msg=message)
+            end if
+            if (bpos(i) < 0.) then
+                message = 'ERROR: POSITION OF CONTROL ROD BANK ' // n2c(i) // ' IS ' &
+                // n2c(bpos(i),2) // ' WHICH IS LOWER THAN 0.'
+                call input_error(ounit, msg=message)
+            end if
+            if (coreh < bpos(i)*step_size) then
+                message = 'ERROR: CORE HEIGHT ' // n2c(coreh,2) // ' IS LOWER THAN CONTROL ROD POSITION ' &
+                // n2c(bpos(i)*step_size+zero_pos, 2) // new_line('a') // ' BANK NUMBER ' // n2c(i)
+                call input_error(ounit, msg=message)
+            end if
+        end do
+        
+        !!! READ CONTROL ROD BANK MAP
+        do j = ny, 1, -1
+            read(xbunit, *, IOSTAT=ios) ind, ln, (bmap(i,j), i = 1, nx)
+            message = ' error in READING control rod bank map'
+            call input_error(ounit, ios, ln, message, buf=xbunit)
+            do i = 1, nx
+                if (bmap(i,j) > nbank) then
+                    message = '  ERROR: BANK NUMBER ON CR BANK MAP IS GREATER THAN NUMBER OF BANK'
+                    call input_error(ounit, msg=message)
+                    stop
+                end if
+            end do
+        end do
+        
+        if (bxtab == YES) then  !if XTAB FILE PRESENT
+            allocate(dsigtr(nnod,ng))
+            allocate(dsiga (nnod,ng))
+            allocate(dnuf  (nnod,ng))
+            allocate(dsigf (nnod,ng))
+            allocate(dsigs (nnod,ng,ng))
+            allocate(ddc (nnod,6,ng))
+        else
+            allocate(dsigtr(nmat,ng))
+            allocate(dsiga (nmat,ng))
+            allocate(dnuf  (nmat,ng))
+            allocate(dsigf (nmat,ng))
+            allocate(dsigs (nmat,ng,ng))
+        
+            ! Reac CX changes due to control rod increment or dcrement
+            do i = 1, nmat
+                do g= 1, ng
+                    read(xbunit, *, IOSTAT=ios) ind, ln, dsigtr(i,g), &
+                    dsiga(i,g), dnuf(i,g), dsigf(i,g), (dsigs(i,g,h), h = 1, ng)
+                    message = ' error in READING macro xs changes due to control rod insertion'
+                    call input_error(ounit, ios, ln, message, buf=xbunit)
+                end do
+            end do
+        end if
+
+        !!! Convert assembly wise CR bank map to node wise CR bank map
+        allocate(fbmap(nxx,nyy))
+        ytot = 0
+        do j= 1, ny
+            do ly= 1, ydiv(j)
+                ytot = ytot+1
+                xtot = 0
+                do i= 1, nx
+                    do lx= 1, xdiv(i)
+                        xtot = xtot+1
+                        fbmap(xtot, ytot) = bmap(i,j)
+                    end do
+                end do
+            end do
+        end do
+
+        allocate(xsc % crod)
+        call set_xs_change(xsc % crod, nmat, ng, 0._dp, dsigtr, dsiga, dnuf, dsigf, dsigs)
+        call set_xs_crod(fbmap, xyz, zdel, nxx, nyy, nzz, coreh, zero_pos, step_size)
+        
+        !! CROD PRINT OPTION
+        read(xbunit, *, IOSTAT=ios) ind, ln, popt
+        if (ios == 0 .AND. popt > 0) then
+        
+            write(ounit,1201) nbank
+            write(ounit,1216) NINT(nstep)
+            write(ounit,1202) zero_pos
+            write(ounit,1203) step_size
+        
+            allocate(bank(nbank))
+            do i = 1, nbank
+                bank(i) = i
+            end do
+            write(ounit,*) ' INITIAL CONTROL ROD BANK POSITION (STEPS) : '
+            write(ounit,*) ' (0 means fully inserted) '
+            write(ounit, 1204)(bank(i), i = 1, nbank)
+            write(ounit, 1205)(bpos(i), i = 1, nbank)
+        
+            write(ounit,*)
+            write(ounit,*) ' CONTROL ROD BANK MAP : '
+            do j = ny, 1, -1
+                write(ounit,'(100I3)' ) (bmap(i,j), i = 1, nx)
+            end do
+        
+            if (bxtab == 0) then  ! if xtab file present
+              write(ounit,*)
+              write(ounit,*) ' MATERIAL CX INCREMENT OR DECREMENT DUE TO CR INSERTION : '
+              do i= 1, nmat
+                 write(ounit,1209) i
+                  write(ounit,1211)'GROUP', 'TRANSPORT', 'ABSORPTION', &
+                  'NU*FISS', 'FISSION'
+                  do g= 1, ng
+                      write(ounit,1210) g, dsigtr(i,g), dsiga(i,g), &
+                      dnuf(i,g), dsigf(i,g)
+                      group(g) = g
+                  end do
+                  write(ounit,*)'  --SCATTERING MATRIX--'
+                  write(ounit,'(4X, A5, 20I9)') "G/G'", (group(g), g=1,ng)
+                  do g= 1, ng
+                      write(ounit,1215)g, (dsigs(i,g,h), h=1,ng)
+                  end do
+              end do
+            end if
+            deallocate(bank)
+        end if
+        
+        1201 format(2X, 'NUMBER OF CONTROL ROD BANK  :', I3)
+        1216 format(2X, 'MAX. NUMBER OF STEPS        :', I4)
+        1202 format(2X, 'FULLY INSERTED POSITION (cm): ', F4.1, ' (FROM BOTTOM OF THE CORE)')
+        1203 format(2X, 'STEP SIZE (cm)              : ', F8.4)
+        1204 format(2X, 10(:, 2X, 'Bank ', I2))
+        1205 format(10(:, 2X, F7.1), /)
+        1209 format(4X, 'MATERIAL', I3)
+        1211 format(2X, A7, A12, A12, 2A13)
+        1210 format(2X, I6, F13.6, F12.6, 2F13.6)
+        1215 format(4X, I3, F14.6, 20F10.6)
+        
+        write(ounit,*)
+        write(ounit,*) ' ...Control Rods Insertion card is successfully read...'
+    
+    end subroutine inp_crod
+
+    !===============================================================================================!
     ! To calculate necessay data for TH
     !===============================================================================================!
     
@@ -2284,174 +2523,154 @@ module read
                 end do
             end do
         end do
-        
-        ! ! Guess fuel and moderator temperature
-        ! allocate(tfm(nnod, nt+1)) ! allocate fuel pin mesh temperature
-        ! tfm = 900.                !Initial guess for radial fuel pin temperature distribution
-        ! if (bxtab == 1) then
-        !   ftem = 900.; cden = 0.711; mtem = 500.
-        ! end if
-        
-        ! allocate(enthalpy(nnod))
-        ! allocate(heat_flux(nnod))
-        
-        ! ! Initial heat-flux rate
-        ! heat_flux = 0.
     
     end subroutine
     
-    ! !******************************************************************************!
+    !===============================================================================================!
+    !  To read extra sources if any
+    !===============================================================================================!
     
-    ! subroutine inp_esrc (xbunit)
-    ! !
-    ! ! Purpose:
-    ! !    To read extra sources if any
-    ! !
-    
-    ! USE data, ONLY: exsrc, ng, nx, ny, nz, &
-    !                  xdiv, ydiv, zdiv, xyz
-    
-    ! IMPLICIT NONE
-    
-    ! integer, intent(in) :: xbunit
-    
-    ! integer :: ln, ios  ! line number and IOSTAT status
-    ! integer :: g, i, j, k, n
-    ! integer :: xt, yt, zt
-    ! integer :: it, jt, kt
-    ! integer :: nsrc
-    ! real(dp)    :: sden                                       ! Source density
-    ! real(dp), dimension(:), allocatable :: spec               ! Source Spectrum
-    ! character(LEN=1), dimension(:,:), allocatable :: spos ! Source position
-    ! integer :: xpos, ypos, zpos
-    ! real(dp) :: summ
-    
-    ! write(ounit,*)
-    ! write(ounit,*)
-    ! write(ounit,*) '           >>>>>READING EXTRA SOURCE<<<<<'
-    ! write(ounit,*) '           -------------------------------'
-    
-    ! ! read number of source
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, nsrc
-    ! message = ' error in READING number of extra source'
-    ! call input_error(ounit, ios, ln, message, buf=xbunit)
-    
-    ! allocate(spec(ng), spos(nx,ny))
-    
-    ! do n = 1, nsrc
-    !     ! read source density
-    !     read(xbunit, *, IOSTAT=ios) ind, ln, sden
-    !     message = ' error in READING source density'
-    !     call input_error(ounit, ios, ln, message, buf=xbunit)
-    
-    !     if (sden <= 0.0) then
-    !         write(ounit,*) '  ERROR: SOURCE DENSITY SHALL BE GREATER THAN ZERO'
-    !         stop
-    !     end if
-    
-    !     ! read source spectrum
-    !     read(xbunit, *, IOSTAT=ios) ind, ln, (spec(g), g = 1, ng)
-    !     message = ' error in READING source spectrum'
-    !     call input_error(ounit, ios, ln, message, buf=xbunit)
-    
-    !     ! Is total spectrum = 1._DP?
-    !     summ = 0._DP
-    !     do g = 1, ng
-    !         summ = summ + spec(g)
-    !     end do
-    !     ! Check total spectrum
-    !     if (ABS(summ - 1._DP) > 1.e-5_DP) then
-    !         write(ounit,*) 'TOTAL SOURCE SPECTRUM AT LINE', ln, ' IS NOT EQUAL TO 1._DP'
-    !         stop
-    !     end if
-    
-    !     ! write OUTPUT
-    !     write(ounit,'(A12,I3)') '     SOURCE ', n
-    !     write(ounit,*)         '-----------------'
-    !     write(ounit,'(A20,ES10.3, A11)') '  Source Density  : ', sden, '  n/(m^3*s)'
-    !     write(ounit,'(A19,100F6.2)') '  Source Spectrum : ', (spec(g), g = 1, ng)
-    !     write(ounit,*) ' Source Position '
-    
-    !     ! read source position
-    !     do
-    !         read(xbunit, *, IOSTAT=ios) ind, ln, zpos
-    !         message = ' error in READING axial position (zpos) of extra source'
-    !         call input_error(ounit, ios, ln, message, buf=xbunit)
-    !         if (zpos < 1) exit
-    !         if (zpos > nz) then
-    !             write(ounit,* ) '  ERROR: WRONG EXTRA SOURCES POSITION (ZPOS)'
-    !             write(ounit, 2033) ln, zpos
-    !             stop
-    !         end if
-    !         spos = '0'
-    !         do
-    !             read(xbunit, *, IOSTAT=ios) ind, ln, xpos, ypos
-    !             message = ' error in READING radial position (xpos and ypos) of extra source'
-    !             call input_error(ounit, ios, ln, message, buf=xbunit)
-    !             if (xpos < 1 .OR. ypos < 1) exit
-    
-    !             if (xpos > nx) then
-    !                 write(ounit,* ) '  ERROR: WRONG EXTRA SOURCES POSITION (XPOS)'
-    !                 write(ounit, 2033) ln, xpos, ypos
-    !                 stop
-    !             end if
-    
-    !             if (ypos > ny) then
-    !                 write(ounit,* ) '  ERROR: WRONG EXTRA SOURCES POSITION (YPOS)'
-    !                 write(ounit, 2033) ln, xpos, ypos
-    !                 stop
-    !             end if
-    
-    !             spos(xpos,ypos) = 'X'
-    
-    !             zt = 0
-    !             kt = 1
-    !             do k = 1, zpos
-    !                 if (k > 1) kt = zt + 1
-    !                 zt = zt + zdiv(k)
-    !             end do
-    
-    !             yt = 0
-    !             jt = 1
-    !             do j = 1, ypos
-    !                 if (j > 1) jt = yt + 1
-    !                 yt = yt + ydiv(j)
-    !             end do
-    
-    !             xt = 0
-    !             it = 1
-    !             do i = 1, xpos
-    !                 if (i > 1) it = xt + 1
-    !                 xt = xt + xdiv(i)
-    !             end do
-    
-    !             do k = kt, zt
-    !                 do j = jt, yt
-    !                     do i = it, xt
-    !                         do g = 1, ng
-    !                             exsrc(xyz(i,j,k), g) = exsrc(xyz(i,j,k), g) + &
-    !                             sden * spec(g)
-    !                         end do
-    !                     end do
-    !                 end do
-    !             end do
-    
-    !         end do
-    
-    !         write(ounit,'(A18,I3)') '   Plane number : ', zpos
-    !         write(ounit,'(7X,100I3)') (i, i = 1, nx)
-    !         do j = ny, 1, -1
-    !             write(ounit,'(4X,I3, 100A3 )') j, (spos(i,j), i=1, nx)
-    !         end do
-    !         write(ounit,*)
-    !     end do
-    ! end do
-    
-    ! 2033 format(2X,'LINE', I4, ' : ', I3, I3)
-    
-    ! deallocate(spec, spos)
-    
-    ! end subroutine inp_esrc
+    subroutine inp_esrc (xbunit)
+   
+        integer, intent(in) :: xbunit
+        
+        integer :: ln, ios  ! line number and IOSTAT status
+        integer :: g, i, j, k, n
+        integer :: xt, yt, zt
+        integer :: it, jt, kt
+        integer :: nsrc
+        real(dp)    :: sden                                       ! Source density
+        real(dp), dimension(:), allocatable :: spec               ! Source Spectrum
+        character(LEN=1), dimension(:,:), allocatable :: spos ! Source position
+        integer :: xpos, ypos, zpos
+        real(dp) :: summ
+        
+        write(ounit,*)
+        write(ounit,*)
+        write(ounit,*) '           >>>>>READING EXTRA SOURCE<<<<<'
+        write(ounit,*) '           -------------------------------'
+        
+        ! read number of source
+        read(xbunit, *, IOSTAT=ios) ind, ln, nsrc
+        message = ' error in READING number of extra source'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        allocate(spec(ng), spos(nx,ny))
+        
+        do n = 1, nsrc
+            ! read source density
+            read(xbunit, *, IOSTAT=ios) ind, ln, sden
+            message = ' error in READING source density'
+            call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+            if (sden <= 0.0) then
+                write(ounit,*) '  ERROR: SOURCE DENSITY SHALL BE GREATER THAN ZERO'
+                stop
+            end if
+        
+            ! read source spectrum
+            read(xbunit, *, IOSTAT=ios) ind, ln, (spec(g), g = 1, ng)
+            message = ' error in READING source spectrum'
+            call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+            ! Is total spectrum = 1._DP?
+            summ = 0._DP
+            do g = 1, ng
+                summ = summ + spec(g)
+            end do
+            ! Check total spectrum
+            if (ABS(summ - 1._DP) > 1.e-5_DP) then
+                write(ounit,*) 'TOTAL SOURCE SPECTRUM AT LINE', ln, ' IS NOT EQUAL TO 1._DP'
+                stop
+            end if
+        
+            ! write OUTPUT
+            write(ounit,'(A12,I3)') '     SOURCE ', n
+            write(ounit,*)         '-----------------'
+            write(ounit,'(A20,ES10.3, A11)') '  Source Density  : ', sden, '  n/(m^3*s)'
+            write(ounit,'(A19,100F6.2)') '  Source Spectrum : ', (spec(g), g = 1, ng)
+            write(ounit,*) ' Source Position '
+        
+            ! read source position
+            do
+                read(xbunit, *, IOSTAT=ios) ind, ln, zpos
+                message = ' error in READING axial position (zpos) of extra source'
+                call input_error(ounit, ios, ln, message, buf=xbunit)
+                if (zpos < 1) exit
+                if (zpos > nz) then
+                    write(ounit,* ) '  ERROR: WRONG EXTRA SOURCES POSITION (ZPOS)'
+                    write(ounit, 2033) ln, zpos
+                    stop
+                end if
+                spos = '0'
+                do
+                    read(xbunit, *, IOSTAT=ios) ind, ln, xpos, ypos
+                    message = ' error in READING radial position (xpos and ypos) of extra source'
+                    call input_error(ounit, ios, ln, message, buf=xbunit)
+                    if (xpos < 1 .OR. ypos < 1) exit
+        
+                    if (xpos > nx) then
+                        write(ounit,* ) '  ERROR: WRONG EXTRA SOURCES POSITION (XPOS)'
+                        write(ounit, 2033) ln, xpos, ypos
+                        stop
+                    end if
+        
+                    if (ypos > ny) then
+                        write(ounit,* ) '  ERROR: WRONG EXTRA SOURCES POSITION (YPOS)'
+                        write(ounit, 2033) ln, xpos, ypos
+                        stop
+                    end if
+        
+                    spos(xpos,ypos) = 'X'
+        
+                    zt = 0
+                    kt = 1
+                    do k = 1, zpos
+                        if (k > 1) kt = zt + 1
+                        zt = zt + zdiv(k)
+                    end do
+        
+                    yt = 0
+                    jt = 1
+                    do j = 1, ypos
+                        if (j > 1) jt = yt + 1
+                        yt = yt + ydiv(j)
+                    end do
+        
+                    xt = 0
+                    it = 1
+                    do i = 1, xpos
+                        if (i > 1) it = xt + 1
+                        xt = xt + xdiv(i)
+                    end do
+        
+                    do k = kt, zt
+                        do j = jt, yt
+                            do i = it, xt
+                                do g = 1, ng
+                                    exsrc(xyz(i,j,k), g) = exsrc(xyz(i,j,k), g) + &
+                                    sden * spec(g)
+                                end do
+                            end do
+                        end do
+                    end do
+        
+                end do
+        
+                write(ounit,'(A18,I3)') '   Plane number : ', zpos
+                write(ounit,'(7X,100I3)') (i, i = 1, nx)
+                do j = ny, 1, -1
+                    write(ounit,'(4X,I3, 100A3 )') j, (spos(i,j), i=1, nx)
+                end do
+                write(ounit,*)
+            end do
+        end do
+        
+        2033 format(2X,'LINE', I4, ' : ', I3, I3)
+        
+        deallocate(spec, spos)
+
+    end subroutine inp_esrc
     
     ! !******************************************************************************!
     
@@ -2490,13 +2709,13 @@ module read
     ! write(ounit,'(A,I5)') '  MAX. NUMBER OF OUTER ITERATION PER T-H ITERATION      : ', n_outer_th
     
     ! if (n_outer < upd_interval .and. kern /= ' FDM') then
-    !   write(*,*) "ERROR: MAX. NUMBER OF OUTER ITERATION SHOULD BE BIGGER THAN NODAL UPDATE INTERVAL"
+    !   write(error_unit,*) "ERROR: MAX. NUMBER OF OUTER ITERATION SHOULD BE BIGGER THAN NODAL UPDATE INTERVAL"
     !   write(ounit,*) "ERROR: MAX. NUMBER OF OUTER ITERATION SHOULD BE BIGGER THAN NODAL UPDATE INTERVAL"
     !   stop
     ! end if
     
-    ! if (n_outer_th < upd_interval .and. kern /= ' FDM' .and. bther == 1) then
-    !   write(*,*) "ERROR: MAX. NUMBER OF OUTER ITERATION PER T-H ITERATION SHOULD BE BIGGER THAN NODAL UPDATE INTERVAL"
+    ! if (n_outer_th < upd_interval .and. kern /= ' FDM' .and. bther == YES) then
+    !   write(error_unit,*) "ERROR: MAX. NUMBER OF OUTER ITERATION PER T-H ITERATION SHOULD BE BIGGER THAN NODAL UPDATE INTERVAL"
     !   write(ounit,*) "ERROR: MAX. NUMBER OF OUTER ITERATION PER T-H ITERATION SHOULD BE BIGGER THAN NODAL UPDATE INTERVAL"
     !   stop
     ! end if
@@ -2546,13 +2765,13 @@ module read
     ! call input_error(ounit, ios, ln, message, buf=xbunit)
     
     ! if (small_theta < 0.001) then
-    !   write(*,*)
-    !   write(*,*) "ERROR: THETA VALUE IS TOO SMALL"
+    !   write(error_unit,*)
+    !   write(error_unit,*) "ERROR: THETA VALUE IS TOO SMALL"
     !   stop
     ! end if
     ! if (small_theta > 1.0) then
-    !   write(*,*)
-    !   write(*,*) "ERROR: THETA VALUE SHALL NOT GREATER THAT 1.0"
+    !   write(error_unit,*)
+    !   write(error_unit,*) "ERROR: THETA VALUE SHALL NOT GREATER THAT 1.0"
     !   stop
     ! end if
     ! big_theta = (1._dp - small_theta) / small_theta
@@ -2606,189 +2825,7 @@ module read
     
     ! end subroutine inp_prnt
     
-    ! !******************************************************************************!
-    
-    ! subroutine inp_crod (xbunit)
-    
-    ! !
-    ! ! Purpose:
-    ! !    To read control rod position
-    
-    ! USE data, ONLY: nx, ny, nmat, ng, xdiv, ydiv, &
-    !                  nxx, nyy, bpos, nbank, nstep, zero_pos, step_size, &
-    !                  dsigtr, dsiga, dnuf, dsigf, dsigs, ddc, nnod, coreh, fbmap
-    
-    ! IMPLICIT NONE
-    
-    ! integer, intent(in) :: xbunit
-    
-    ! integer :: ln   !Line number
-    ! integer :: ios
-    
-    ! integer :: i, j, g, h
-    ! integer, dimension(nx, ny) :: bmap       ! Radial control rod bank map (assembly wise)
-    ! integer :: popt
-    ! integer :: xtot, ytot, ly, lx
-    ! integer, dimension(ng) :: group
-    ! integer, dimension(:), allocatable :: bank
-    
-    ! write(ounit,*)
-    ! write(ounit,*)
-    ! write(ounit,*) '           >>>> READING CONTROL RODS INSERTION <<<<'
-    ! write(ounit,*) '           --------------------------------------------'
-    
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, nbank, nstep
-    ! message = ' error in READING number of control rod bank and max. number of steps'
-    ! call input_error(ounit, ios, ln, message, buf=xbunit)
-    
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, zero_pos, step_size
-    ! message = ' error in READING zeroth step rod position and step size'
-    ! call input_error(ounit, ios, ln, message, buf=xbunit)
-    
-    ! allocate(bpos(nbank))
-    
-    ! !!! read CONTROL ROD BANK POSITIONS
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, (bpos(i), i = 1, nbank)
-    ! message = ' error in READING bank position'
-    ! call input_error(ounit, ios, ln, message, buf=xbunit)
-    
-    
-    ! !!! Check Control Rod Bank POSITION
-    ! do i = 1, nbank
-    !     if (bpos(i) > real(nstep)) then
-    !         write(ounit,1999) 'ERROR: POSITION OF CONTROL ROD BANK ', i, ' IS ', bpos(i), ' WHICH IS HIGHER THAN NUMBER OF STEPS.'
-    !         stop
-    !     end if
-    !     if (bpos(i) < 0.) then
-    !         write(ounit,1999) 'ERROR: POSITION OF CONTROL ROD BANK ', i, ' IS ', bpos(i), ' WHICH IS LOWER THAN 0.'
-    !         stop
-    !     end if
-    !     if (coreh < bpos(i)*step_size) then
-    !         write(ounit,1998) 'ERROR: CORE HEIGHT ', coreh, ' IS LOWER THAN CONTROL ROD POSITION ', bpos(i)*step_size+zero_pos
-    !         write(ounit,*) ' BANK NUMBER ', i
-    !         stop
-    !     end if
-    ! end do
-    ! 1999 format (2X, A, I2, A, F5.1, A)
-    ! 1998 format (2X, A, F6.2, A, F6.2)
-    
-    ! !!! read CONTROL ROD BANK MAP
-    ! do j = ny, 1, -1
-    !     read(xbunit, *, IOSTAT=ios) ind, ln, (bmap(i,j), i = 1, nx)
-    !     message = ' error in READING control rod bank map'
-    !     call input_error(ounit, ios, ln, message, buf=xbunit)
-    !     do i = 1, nx
-    !         if (bmap(i,j) > nbank) then
-    !             write(ounit,*) '  ERROR: BANK NUMBER ON CR BANK MAP IS GREATER THAN NUMBER OF BANK'
-    !             stop
-    !         end if
-    !     end do
-    ! end do
-    
-    ! if (bxtab == 1) then  !if XTAB FILE PRESENT
-    !   allocate(dsigtr(nnod,ng))
-    !   allocate(dsiga (nnod,ng))
-    !   allocate(dnuf  (nnod,ng))
-    !   allocate(dsigf (nnod,ng))
-    !   allocate(dsigs (nnod,ng,ng))
-    !   allocate(ddc (nnod,6,ng))
-    ! else
-    !   allocate(dsigtr(nmat,ng))
-    !   allocate(dsiga (nmat,ng))
-    !   allocate(dnuf  (nmat,ng))
-    !   allocate(dsigf (nmat,ng))
-    !   allocate(dsigs (nmat,ng,ng))
-    
-    !   ! Reac CX changes due to control rod increment or dcrement
-    !   do i = 1, nmat
-    !       do g= 1, ng
-    !           read(xbunit, *, IOSTAT=ios) ind, ln, dsigtr(i,g), &
-    !           dsiga(i,g), dnuf(i,g), dsigf(i,g), (dsigs(i,g,h), h = 1, ng)
-    !           message = ' error in READING macro xs changes due to control rod insertion'
-    !           call input_error(ounit, ios, ln, message, buf=xbunit)
-    !       end do
-    !   end do
-    ! end if
-    
-    ! !! CROD PRINT OPTION
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, popt
-    ! if (ios == 0 .AND. popt > 0) then
-    
-    !     write(ounit,1201) nbank
-    !     write(ounit,1216) NINT(nstep)
-    !     write(ounit,1202) zero_pos
-    !     write(ounit,1203) step_size
-    
-    !     allocate(bank(nbank))
-    !     do i = 1, nbank
-    !         bank(i) = i
-    !     end do
-    !     write(ounit,*) ' INITIAL CONTROL ROD BANK POSITION (STEPS) : '
-    !     write(ounit,*) ' (0 means fully inserted) '
-    !     write(ounit, 1204)(bank(i), i = 1, nbank)
-    !     write(ounit, 1205)(bpos(i), i = 1, nbank)
-    
-    !     write(ounit,*)
-    !     write(ounit,*) ' CONTROL ROD BANK MAP : '
-    !     do j = ny, 1, -1
-    !         write(ounit,'(100I3)' ) (bmap(i,j), i = 1, nx)
-    !     end do
-    
-    !     if (bxtab == 0) then  ! if xtab file present
-    !       write(ounit,*)
-    !       write(ounit,*) ' MATERIAL CX INCREMENT OR DECREMENT DUE TO CR INSERTION : '
-    !       do i= 1, nmat
-    !          write(ounit,1209) i
-    !           write(ounit,1211)'GROUP', 'TRANSPORT', 'ABSORPTION', &
-    !           'NU*FISS', 'FISSION'
-    !           do g= 1, ng
-    !               write(ounit,1210) g, dsigtr(i,g), dsiga(i,g), &
-    !               dnuf(i,g), dsigf(i,g)
-    !               group(g) = g
-    !           end do
-    !           write(ounit,*)'  --SCATTERING MATRIX--'
-    !           write(ounit,'(4X, A5, 20I9)') "G/G'", (group(g), g=1,ng)
-    !           do g= 1, ng
-    !               write(ounit,1215)g, (dsigs(i,g,h), h=1,ng)
-    !           end do
-    !       end do
-    !     end if
-    !     deallocate(bank)
-    ! end if
-    
-    ! 1201 format(2X, 'NUMBER OF CONTROL ROD BANK  :', I3)
-    ! 1216 format(2X, 'MAX. NUMBER OF STEPS        :', I4)
-    ! 1202 format(2X, 'FULLY INSERTED POSITION (cm): ', F4.1, ' (FROM BOTTOM OF THE CORE)')
-    ! 1203 format(2X, 'STEP SIZE (cm)              : ', F8.4)
-    ! 1204 format(2X, 10(:, 2X, 'Bank ', I2))
-    ! 1205 format(10(:, 2X, F7.1), /)
-    ! 1209 format(4X, 'MATERIAL', I3)
-    ! 1211 format(2X, A7, A12, A12, 2A13)
-    ! 1210 format(2X, I6, F13.6, F12.6, 2F13.6)
-    ! 1215 format(4X, I3, F14.6, 20F10.6)
-    
-    
-    ! !!! Convert assembly wise CR bank map to node wise CR bank map
-    ! allocate(fbmap(nxx,nyy))
-    ! ytot = 0
-    ! do j= 1, ny
-    !     do ly= 1, ydiv(j)
-    !         ytot = ytot+1
-    !         xtot = 0
-    !         do i= 1, nx
-    !             do lx= 1, xdiv(i)
-    !                  xtot = xtot+1
-    !                  fbmap(xtot, ytot) = bmap(i,j)
-    !             end do
-    !         end do
-    !     end do
-    ! end do
-    
-    
-    ! write(ounit,*)
-    ! write(ounit,*) ' ...Control Rods Insertion card is successfully read...'
-    
-    ! end subroutine inp_crod
+
     
     ! !******************************************************************************!
     
@@ -2831,7 +2868,7 @@ module read
     !     call input_error(ounit, ios, ln, message, buf=xbunit)
     !     if (fbpos(i) > nstep) then
     !       write(ounit, 1889) ln
-    !       write(*, 1889) ln
+    !       write(error_unit, 1889) ln
     !       stop
     !       1889 format(2X, "ERROR AT LINE ", I4, ": WRONG FINAL CONTROL ROD POSITION")
     !     end if
@@ -2905,28 +2942,28 @@ module read
     ! ! ttot must be bigger than tstep1 and tstep2
     ! if ((total_time < time_step_1) .OR. (total_time < time_step_2)) then
     !     write(ounit,*) 'ERROR: TOTAL SIMULATION TIME SHALL BE GREATER THAN TIME STEPS'
-    !     write(*,*) 'ERROR: TOTAL SIMULATION TIME SHALL BE GREATER THAN TIME STEPS'
+    !     write(error_unit,*) 'ERROR: TOTAL SIMULATION TIME SHALL BE GREATER THAN TIME STEPS'
     !     stop
     ! end if
     
     ! ! tdiv must be bigger than tstep1
     ! if (time_mid < time_step_1) then
     !     write(ounit,*) 'ERROR: THE TIME WHEN SECOND TIME STEP STARTS SHALL BE GREATER THAN FIRST TIME STEP'
-    !     write(*,*) 'ERROR: THE TIME WHEN SECOND TIME STEP STARTS SHALL BE GREATER THAN FIRST TIME STEP'
+    !     write(error_unit,*) 'ERROR: THE TIME WHEN SECOND TIME STEP STARTS SHALL BE GREATER THAN FIRST TIME STEP'
     !     stop
     ! end if
     
     ! ! tdiv must be less than ttot
     ! if (time_mid > total_time) then
     !     write(ounit,*) 'ERROR: THE TIME WHEN SECOND TIME STEP STARTS SHALL BE LESS THAN TOTAL TIME'
-    !     write(*,*) 'ERROR: THE TIME WHEN SECOND TIME STEP STARTS SHALL BE LESS THAN TOTAL TIME'
+    !     write(error_unit,*) 'ERROR: THE TIME WHEN SECOND TIME STEP STARTS SHALL BE LESS THAN TOTAL TIME'
     !     stop
     ! end if
     
     ! ! number of steps shall be less than 10,000
     ! if (NINT(time_mid/time_step_1)+NINT((total_time-time_mid)/time_step_2) > 10000) then
     !     write(ounit,*) 'ERROR: NUMBER OF TOTAL TIME STEPS ARE MORE THAN 10,000'
-    !     write(*,*) 'ERROR: NUMBER OF TOTAL TIME STEPS ARE MORE THAN 10,000'
+    !     write(error_unit,*) 'ERROR: NUMBER OF TOTAL TIME STEPS ARE MORE THAN 10,000'
     !     stop
     ! end if
     
@@ -3143,7 +3180,7 @@ module read
     ! do k= nz, 1, -1
     !     if (k == nz) then
     !         write(ounit,'(2X,I8,A7,F13.3, F12.2)') k, ' (TOP)', faxi(k), coreh-summ
-    !     else if (k == 1) then
+    !     else if (k == YES) then
     !         write(ounit,'(2X,I8,A10,F10.3, F12.2)') k, ' (BOTTOM)', faxi(k), coreh-summ
     !     else
     !         write(ounit,'(2X,I8,F20.3, F12.2)') k, faxi(k), coreh-summ
@@ -3192,7 +3229,7 @@ module read
     ! integer :: ip, ipr
     ! integer :: negf
     
-    ! if (bther == 1) call flux_atpower()  !calculate actual flux at given power level
+    ! if (bther == YES) call flux_atpower()  !calculate actual flux at given power level
     
     ! fx = 0._DP
     ! do g = 1, ng
@@ -3265,7 +3302,7 @@ module read
     ! write(ounit,*)
     ! if (negf > 0) write(ounit,*) '    ....WARNING: NEGATIVE FLUX ENCOUNTERED....'
     ! write(ounit,*)
-    ! if (bther == 1) then
+    ! if (bther == YES) then
     !   write(ounit,*) '    Radial Flux Distribution [#neutrons/(cm2.second)]'
     !   write(ounit,*) '  ===================================================='
     ! else
@@ -3444,7 +3481,7 @@ module read
     !         ! Check branch dimension
     !         if (m(j)%nd < 1 .OR. m(j)%nb < 1 .OR. m(j)%nf < 1 .OR. m(j)%nm < 1) then
     !           write(ounit, *) ' ERROR: MINIMUM NUMBER OF BRANCH IS 1'
-    !           write(*, *) ' ERROR: MINIMUM NUMBER OF BRANCH IS 1'
+    !           write(error_unit, *) ' ERROR: MINIMUM NUMBER OF BRANCH IS 1'
     !           stop
     !         end if
     
@@ -3457,7 +3494,7 @@ module read
     !         ! allocate XSEC DATA
     !         allocate(m(j)%velo(ng))
     !         allocate(m(j)%xsec(m(j)%nd, m(j)%nb, m(j)%nf, m(j)%nm))
-    !         if (m(j)%trod == 1) allocate(m(j)%rxsec(m(j)%nd, m(j)%nb, m(j)%nf, m(j)%nm))
+    !         if (m(j)%trod == YES) allocate(m(j)%rxsec(m(j)%nd, m(j)%nb, m(j)%nf, m(j)%nm))
     !         do s = 1, m(j)%nd
     !           do t = 1, m(j)%nb
     !             do u = 1, m(j)%nf
@@ -3468,7 +3505,7 @@ module read
     !                 allocate(m(j)%xsec(s,t,u,v)%nuf(ng))
     !                 allocate(m(j)%xsec(s,t,u,v)%dc(ng,6))
     !                 allocate(m(j)%xsec(s,t,u,v)%sigs(ng,ng))
-    !                 if (m(j)%trod == 1) then
+    !                 if (m(j)%trod == YES) then
     !                   allocate(m(j)%rxsec(s,t,u,v)%sigtr(ng))
     !                   allocate(m(j)%rxsec(s,t,u,v)%siga(ng))
     !                   allocate(m(j)%rxsec(s,t,u,v)%sigf(ng))
@@ -3483,20 +3520,20 @@ module read
     
     !         ! Skip lines to read desired composition in the xtab file
     !         nskip = ng*m(j)%nb*m(j)%nf*m(j)%nm
-    !         if (m(j)%tadf  == 1) then  ! if dc present
-    !           if (m(j)%trod  == 1) then
+    !         if (m(j)%tadf  == YES) then  ! if dc present
+    !           if (m(j)%trod  == YES) then
     !             call skipread(tunit, j, (xtab(j)%cnum-1)*(10*nskip+2*ng*nskip+4))
     !           else
     !             call skipread(tunit, j, (xtab(j)%cnum-1)*(5*nskip+ng*nskip+4))
     !           end if
     !         else if (m(j)%tadf  == 2) then
-    !           if (m(j)%trod  == 1) then
+    !           if (m(j)%trod  == YES) then
     !             call skipread(tunit, j, (xtab(j)%cnum-1)*(20*nskip+2*ng*nskip+4))
     !           else
     !             call skipread(tunit, j, (xtab(j)%cnum-1)*(10*nskip+ng*nskip+4))
     !           end if
     !         else
-    !           if (m(j)%trod  == 1) then
+    !           if (m(j)%trod  == YES) then
     !             call skipread(tunit, j, (xtab(j)%cnum-1)*(8*nskip+2*ng*nskip+4))
     !           else
     !             call skipread(tunit, j, (xtab(j)%cnum-1)*(4*nskip+ng*nskip+4))
@@ -3506,7 +3543,7 @@ module read
     !         ! read unrodded XSEC
     !         call readXS (tunit, j, 0, m(j)%xsec)
     !         ! read rodded XSEC
-    !         if (m(j)%trod == 1) call readXS (tunit, j, 1, m(j)%rxsec)
+    !         if (m(j)%trod == YES) call readXS (tunit, j, 1, m(j)%rxsec)
     !         !read fission spectrum
     !         read(tunit, *, IOSTAT=iost) ind, ln, (chi(j,g), g = 1, ng)
     !         message = ' ERROR IN XTAB FILE: CANNOT read FISSION SPECTRUM'
@@ -3611,8 +3648,8 @@ module read
     !     if (par(k-1) > par(k)) then
     !       write(ounit,*) "  ERROR IN XTAB FILE  ", fname
     !       write(ounit,*) "  ", messPar, " parameter SHALL BE IN ORDER, SMALL to BIG"
-    !       write(*,*) "  ERROR IN XTAB FILE  ", fname
-    !       write(*,*) "  ", messPar, " parameter SHALL BE IN ORDER, SMALL to BIG"
+    !       write(error_unit,*) "  ERROR IN XTAB FILE  ", fname
+    !       write(error_unit,*) "  ", messPar, " parameter SHALL BE IN ORDER, SMALL to BIG"
     !       stop
     !     end if
     !   end do
@@ -3724,7 +3761,7 @@ module read
     !   end do
     ! end do
     ! !read dc
-    ! if (m(mat_map)%tadf  == 1) then  ! if dc present
+    ! if (m(mat_map)%tadf  == YES) then  ! if dc present
     !   do g = 1, ng
     !     do v = 1, m(mat_map)%nm
     !       do u = 1, m(mat_map)%nf
@@ -3766,7 +3803,7 @@ module read
     !     end do
     !   end do
     ! else
-    !   CONTINUE
+    !   continue
     ! end if
     
     
@@ -3787,8 +3824,8 @@ module read
     !   if (eof < 0) then              !Check end of file
     !     write(ounit,1131) matnum
     !     write(ounit,1132)
-    !     write(*,1131) matnum
-    !     write(*,1132)
+    !     write(output_unit,1131) matnum
+    !     write(output_unit,1132)
     !     stop
     !   end if
     ! end do

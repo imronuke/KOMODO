@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.15)
 
 option(GPU     "Use OpenACC GPU          "  OFF)
-option(DEBUG   "DEBUGGING MODE           "  OFF)
+option(DEBUG   "DEBUGGING MODE           "  ON)
 option(PROFILE "USE PROFILING MODE       "  OFF)
+option(OpenMP  "USE OpenMP Parallel      "  OFF)
 
 # Set for debug only
 if(GPU)
@@ -12,6 +13,9 @@ else()
    set(CMAKE_Fortran_FLAGS "-cpp -std=f2008")
    if (PROFILE)
       string(CONCAT CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -pg -fopt-info")
+   endif()
+   if (OpenMP)
+      string(CONCAT CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fopenmp")
    endif()
    if(DEBUG)
       string(CONCAT CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fbacktrace -g -pedantic ")

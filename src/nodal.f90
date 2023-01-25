@@ -10,10 +10,10 @@ module nodal
     ! Annals of Nuclear Energy, 25(8), 507–528. https://doi.org/10.1016/S0306-4549(97)00078-9
     ! ------------------------------
 
-    use iso_fortran_env, only: real64
+    use iso_fortran_env, only: real64, output_unit
     use stagger
     use xsec
-    use util
+    use utilities
 
     implicit none
 
@@ -70,6 +70,7 @@ module nodal
     public :: set_nodal_data, set_nodal_pointer
     public :: alloc_data
     public :: nodal_update_sanm, nodal_update_pnm
+    public :: TLUpd0
 
     contains
 
@@ -77,17 +78,16 @@ module nodal
     ! Assign data necessary for higher order nodal coupling coeff (D hat)
     !===============================================================================================!
 
-    subroutine set_nodal_data(d, ng, nnod, nxx, nyy, nzz, east, west, north, south, top, bottom, &
-        calc_mode, fid_inp, only_axial)
+    subroutine set_nodal_data(d, fid_inp, ng, nnod, nxx, nyy, nzz, &
+        east, west, north, south, top, bottom, only_axial)
         
         class(nodal_type), intent(inout)       :: d
+        integer, intent(in)                    :: fid_inp
         integer, intent(in)                    :: ng, nnod
         integer, intent(in)                    :: nxx, nyy, nzz
-        integer, intent(in)                    :: fid_inp
         integer, intent(in)                    :: east, west
         integer, intent(in)                    :: north, south
         integer, intent(in)                    :: top, bottom
-        character(*), intent(in)               :: calc_mode    
         logical, intent(in)                    :: only_axial
 
         ! set data
@@ -96,7 +96,6 @@ module nodal
         d % nxx        = nxx
         d % nyy        = nyy
         d % nzz        = nzz
-        d % calc_mode  = trim(adjustl(calc_mode))
         d % only_axial = only_axial
         fid            = fid_inp 
 
@@ -191,12 +190,15 @@ module nodal
     ! Polynomial Nodal Method (PNM)
     !===============================================================================================!
 
-    subroutine nodal_update_pnm(d)
+    subroutine nodal_update_pnm(d, calc_mode)
 
-        class(nodal_type) :: d
+        class(nodal_type)        :: d
+        character(*), intent(in) :: calc_mode
     
         integer  :: n, p
         integer  :: i, j, k
+
+        d % calc_mode = trim(adjustl(calc_mode))
 
         d % An = 1. / 15.; d % Bn = 1. / 35.; d % En = 2. / 7.
         d % Fn = 2. / 5.; d % Gn = 10.; d % Hn = 6.
@@ -275,12 +277,15 @@ module nodal
     ! Semi-Analytic Nodal Method (SANM)
     !===============================================================================================!
 
-    subroutine nodal_update_sanm(d)
+    subroutine nodal_update_sanm(d, calc_mode)
 
-        class(nodal_type) :: d
+        class(nodal_type)        :: d
+        character(*), intent(in) :: calc_mode
     
         integer  :: n, p
         integer  :: i, j, k
+
+        d % calc_mode = trim(adjustl(calc_mode))
     
         call get_source(d)
     
@@ -992,7 +997,7 @@ module nodal
             end do
         else if (d % calc_mode == 'transient') then
             stop "transient not yet implemented"
-        else
+        else  ! Adjoint calculation
             do g = 1, d % ng
                 do h = 1, d % ng
                     if (g == h) then
@@ -1450,6 +1455,30 @@ module nodal
         end if
 
     end subroutine
+
+    !===============================================================================================!
+    ! To factorize A to L, U. L and U matrices combined into LU
+    !===============================================================================================!
+
+    function LU_solve(node, nsize, A, b) result(x)
+    
+        integer, intent(in)   :: node, nsize
+        real(dp), intent(in)  :: A(:,:)   ! LHS matrix
+        real(dp), intent(in)  :: b(:)     ! RHS vector
+        real(dp)              :: x(nsize)
+
+        integer  :: err
+        real(dp) :: LU(nsize, nsize)
+
+        call LU_decompose(A, LU, err)
+        if (err < 0) then
+            print *, "LU solve failed for node " // n2c(node)
+            stop
+        end if
+
+        x = LU_subst(LU, b)
+
+    end function
 
     
 end module

@@ -1,10 +1,11 @@
 module data
 
 
-    use iso_fortran_env, only: real64
-    use fdm
+    use iso_fortran_env, only: real64, output_unit
     use stagger
-    use time, only: timer
+    use fdm
+    use xsec
+    use th
   
     implicit none
   
@@ -23,14 +24,26 @@ module data
     integer, parameter    :: REFLECTIVE = 2
 
     integer :: ounit                      ! output file unit number
+
+    ! Card active/inactive indicator (active = 1, inactive = 0)
+    integer :: bmode = NO, bxsec = NO, bgeom = NO, bcase = NO, besrc = NO
+    integer :: biter = NO, bprnt = NO, badf  = NO, bcrod = NO, bbcon = NO
+    integer :: bftem = NO, bmtem = NO, bcden = NO, bcbcs = NO, bejct = NO
+    integer :: bther = NO, bxtab = NO, bkern = NO, bextr = NO, bthet = NO
+    integer :: boutp = NO
     
     character(len=length_word) :: mode    ! calculation mode
 
-    type(core_rect) :: fdm                ! Finite Difference Object
-  
+    type(core_rect)            :: fdm            ! Finite Difference Object
+    type(th_type), allocatable :: th             ! Thermal-hydraulics Object
+    type(xs_change_type)       :: xsc            ! object fo xs changes due to a parameter change
+
+
     ! Flux and fission source
     real(dp), allocatable :: flux(:,:)           ! node-averaged flux
     real(dp), allocatable :: fsrc(:)             ! node-averaged fission source
+    real(dp), allocatable :: prev_flux(:,:)      ! previous time-step node-averaged flux
+    real(dp), allocatable :: prev_fsrc(:)        ! previous time-step node-averaged fission source
     real(dp), allocatable :: exsrc(:,:)          ! node-averaged external source
 
     ! Material wise XS [dimension(nmat, ng)]
@@ -62,36 +75,16 @@ module data
     integer, allocatable          :: iy(:)               ! index in y direction for given node index
     integer, allocatable          :: iz(:)               ! index in z direction for given node index
     integer, allocatable          :: xyz(:,:,:)          ! node index for given index in x, y, and z directions
-    integer, allocatable          :: mat_map(:,:,:)      ! node-wise material map
+    integer, allocatable          :: ind_mat(:)          ! node-wise material index (material map)
     integer                       :: east, west          ! BC
     integer                       :: north, south        ! 0 = zero flux, 1 = zero incoming current
     integer                       :: bottom, top         ! 2 = Reflective
 
-    ! FUEL TEMPERATURE
-    real(dp), allocatable                   :: ftem(:)                      ! Fuel temperature in Kelvin for each nodes
-    real(dp)                                :: rftem                        ! Fuel temperature Reference in Kelvin
-    real(dp), dimension(:,:), allocatable   :: fsigtr, fsiga, fnuf, fsigf   ! XSEC changes per fuel temp changes
-    real(dp), dimension(:,:,:), allocatable :: fsigs
-    
-    ! MODERATOR TEMPERATURE
-    real(dp), allocatable                   :: mtem(:)                      ! Moderator temperature in Kelvin for each nodes
-    real(dp)                                :: rmtem                        ! Moderator temperature Reference in Kelvin
-    real(dp), dimension(:,:), allocatable   :: msigtr, msiga, mnuf, msigf   ! XSEC changes per Moderator temp changes
-    real(dp), dimension(:,:,:), allocatable :: msigs
-    
-    ! COOLANT DENSITY
-    real(dp), allocatable                   :: cden(:)                      ! Coolant Density in g/cm3 for each nodes
-    real(dp)                                :: rcden                        ! Coolant Density Reference in g/cm3
-    real(dp), dimension(:,:), allocatable   :: lsigtr, lsiga, lnuf, lsigf   ! XSEC changes per Coolant density changes
-    real(dp), dimension(:,:,:), allocatable :: lsigs
-    
-    ! Boron Concentration
-    real(dp)                                :: bcon                         ! Boron concentration in ppm
-    real(dp)                                :: rbcon                        ! Boron concentration in ppm Reference
-    real(dp), dimension(:,:), allocatable   :: csigtr, csiga, cnuf, csigf   ! XSEC changes due to boron concentration
-    real(dp), dimension(:,:,:), allocatable :: csigs
-
     ! Thermal-hydraulics parameters
+    real(dp), allocatable :: ftem(:)                ! Fuel temperature in Kelvin for each nodes
+    real(dp), allocatable :: mtem(:)                ! Moderator temperature in Kelvin for each nodes
+    real(dp), allocatable :: cden(:)                ! Coolant Density in g/cm3 for each nodes
+    real(dp)              :: bcon                   ! Boron concentration in ppm
     real(dp)              :: total_power            ! sum of node power
     real(dp)              :: power                  ! Reactor power for given geometry (watt)
     real(dp)              :: percent_pow            ! Reactor percent power in percent
@@ -99,29 +92,27 @@ module data
     real(dp), allocatable :: npow(:)                ! nodes power (watt)
     real(dp)              :: t_inlet                ! coolant inlet temperature (kelvin)
     real(dp)              :: rf, tg, tc             ! Fuel meat radius, gap thickness, clad thickness (m)
+    real(dp)              :: ppitch                 ! pin picth (m)
     real(dp)              :: cf                     ! heat fraction deposited into coolant
     real(dp)              :: cflow                  ! Sub-channel mass flow rate (kg/s)
     real(dp), allocatable :: node_nf(:,:)           ! Number of fuel pin per node
     real(dp), allocatable :: tfm(:,:)               ! Fuel pin mesh/ring temperature for each nodes
     real(dp)              :: th_err                 ! Doppler error
-    real(dp), allocatable :: ent  (:)               ! Coolant Enthalpy (J/Kg)
-    real(dp), allocatable :: heatf(:)               ! Heat flux (W/m2
-    real(dp), allocatable :: frate(:)               ! coolant mass flow rate
+    real(dp), allocatable :: enthalpy  (:)          ! Coolant Enthalpy (J/Kg)
+    real(dp), allocatable :: heat_flux (:)          ! sub-channel heat flux (W/m2
+    real(dp), allocatable :: flow_rate(:)           ! sub-channel coolant mass flow rate(Kg/s)
     
     ! Crod changes
-    integer :: nb                                                         ! Number of CR banks
-    real(dp), allocatable :: bpos (:)                                     ! CR bank position
-    real(dp), allocatable :: fbpos(:)                                     ! Final CR bank position
-    real(dp), dimension(:,:), allocatable :: dsigtr, dsiga, dnuf, dsigf   ! XSEC changes due to CR insertion
-    real(dp), allocatable :: dsigs(:,:,:)
-    real(dp), allocatable :: ddc  (:,:,:)                                 ! increment or decreent for ADF
-    real(dp), allocatable :: tmove (:)                                    ! Time when CR bank starts moving
-    real(dp), allocatable :: bspeed(:)                                    ! CR bank movement speed
-    integer,  allocatable :: mdir  (:)                                    ! To indicate CR movement direction (0=do not move, 1=down, 2 = up)
-    real(dp)              :: nstep                                        ! Number of steps
-    real(dp)              :: coreh                                        ! Core Height
-    integer, allocatable  :: fbmap(:,:)                                   ! Radial control rod bank map (node wise)
-    real(dp)              :: pos0, ssize                                  ! Zero step position and step size
+    integer :: nbank                                                         ! Number of CR banks
+    real(dp), allocatable :: bpos (:)                                        ! CR bank position
+    real(dp), allocatable :: fbpos(:)                                        ! Final CR bank position
+    real(dp), allocatable :: tmove (:)                                       ! Time when CR bank starts moving
+    real(dp), allocatable :: bspeed(:)                                       ! CR bank movement speed
+    integer,  allocatable :: mdir  (:)                                       ! To indicate CR movement direction (0=do not move, 1=down, 2 = up)
+    real(dp)              :: nstep                                           ! Number of steps
+    real(dp)              :: coreh                                           ! Core Height
+    integer, allocatable  :: fbmap(:,:)                                      ! Radial control rod bank map (node wise)
+    real(dp)              :: zero_pos, step_size                             ! Zero step position and step size
   
     ! Iteration Control
     real(dp) :: max_flux_error = 1.e-5    ! Flux Error Criteria
@@ -139,9 +130,9 @@ module data
     integer :: print_rad_pow=YES, print_axi_pow=YES, print_flux=YES
     
     ! parameter references for TH feedback
-    real(dp) :: fuel_temp_ref      ! Fuel temperature Reference in Kelvin
-    real(dp) :: mod_temp_ref       ! Moderator temperature Reference in Kelvin
-    real(dp) :: mod_dens_ref       ! Coolant Density Reference in g/cm3
+    ! real(dp) :: fuel_temp_ref      ! Fuel temperature Reference in Kelvin
+    ! real(dp) :: mod_temp_ref       ! Moderator temperature Reference in Kelvin
+    ! real(dp) :: mod_dens_ref       ! Coolant Density Reference in g/cm3
 
     
     ! Transient parameters
