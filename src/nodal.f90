@@ -1020,23 +1020,23 @@ module nodal
 
         class(nodal_type), target, intent(inout) :: d
         
-        real(dp) :: L1(d % nnod, d % ng)
-        real(dp) :: L2(d % nnod, d % ng)
-        real(dp) :: L3(d % nnod, d % ng)
+        real(dp) :: Lx(d % nnod, d % ng)
+        real(dp) :: Ly(d % nnod, d % ng)
+        real(dp) :: Lz(d % nnod, d % ng)
         integer  :: g, n
         
-        call TLUpd0(d, L1, L2, L3)
+        call TLUpd0(d, Lx, Ly, Lz)
 
         do g = 1, d % ng
             do n = 1, d % nnod
                 if (d % calc_mode == 'transient') then
-                    d % Sx(n,g) =  L2(n,g) + L3(n,g) - d % exsrc(n,g)
-                    d % Sy(n,g) =  L1(n,g) + L3(n,g) - d % exsrc(n,g)
-                    d % Sz(n,g) =  L1(n,g) + L2(n,g) - d % exsrc(n,g)
+                    d % Sx(n,g) =  Ly(n,g) + Lz(n,g) - d % exsrc(n,g)
+                    d % Sy(n,g) =  Lx(n,g) + Lz(n,g) - d % exsrc(n,g)
+                    d % Sz(n,g) =  Lx(n,g) + Ly(n,g) - d % exsrc(n,g)
                 else
-                    d % Sx(n,g) =  L2(n,g) + L3(n,g)
-                    d % Sy(n,g) =  L1(n,g) + L3(n,g)
-                    d % Sz(n,g) =  L1(n,g) + L2(n,g)
+                    d % Sx(n,g) =  Ly(n,g) + Lz(n,g)
+                    d % Sy(n,g) =  Lx(n,g) + Lz(n,g)
+                    d % Sz(n,g) =  Lx(n,g) + Ly(n,g)
                 end if
             end do
         end do
@@ -1047,12 +1047,12 @@ module nodal
     ! To update zeroth transverse leakages (J_plus - J_minus) for group g and nod n
     !===============================================================================================!
 
-    subroutine TLUpd0(d, L1, L2, L3)
+    subroutine TLUpd0(d, Lx, Ly, Lz)
         
         class(nodal_type), target, intent(inout) :: d
-        real(dp), intent(out)                    :: L1(d % nnod, d % ng)
-        real(dp), intent(out)                    :: L2(d % nnod, d % ng)
-        real(dp), intent(out)                    :: L3(d % nnod, d % ng)
+        real(dp), intent(out)                    :: Lx(d % nnod, d % ng)
+        real(dp), intent(out)                    :: Ly(d % nnod, d % ng)
+        real(dp), intent(out)                    :: Lz(d % nnod, d % ng)
 
         real(dp) :: jp, jm
         integer  :: p, m
@@ -1093,7 +1093,7 @@ module nodal
                          - d % dn(n,g,2) * (d % flux(n,g) + d % flux(m,g))
                 end if
         
-                L1(n, g) = (jp - jm)  / d % xdel(i)
+                Lx(n, g) = (jp - jm)  / d % xdel(i)
         
                 ! y-direction zeroth transverse leakage
                 if (j /= d % xstag(i) % smax) p = d % xyz(i,j+1,k)
@@ -1123,7 +1123,7 @@ module nodal
                          - d % dn(n,g,4) * (d % flux(n,g) + d % flux(m,g))
                 end if
         
-                L2(n, g) = (jp - jm)  / d % ydel(j)
+                Ly(n, g) = (jp - jm)  / d % ydel(j)
         
                 ! z-direction zeroth transverse leakage
                 if (k /= d % nzz) p = d % xyz(i,j,k+1)
@@ -1153,7 +1153,7 @@ module nodal
                          - d % dn(n,g,6) * (d % flux(n,g) + d % flux(m,g))
                 end if
         
-                L3(n, g) = (jp - jm)  / d % zdel(k)
+                Lz(n, g) = (jp - jm)  / d % zdel(k)
         
             end do
         end do

@@ -1,6 +1,6 @@
 module th
 
-    use iso_fortran_env, only: real64
+    use iso_fortran_env, only: real64, error_unit
     use utilities
 
     implicit none

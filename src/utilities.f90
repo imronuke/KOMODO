@@ -423,7 +423,7 @@ module utilities
         read(char2,*,iostat=ios) number
         if (ios .ne. 0) then
             write(error_unit,*) "failed to convert character " // char2 // " to real"
-            stop 
+            stop
         end if
      
     end function
@@ -462,8 +462,14 @@ module utilities
         nxx = size(matrix, dim=1)
         nyy = size(matrix, dim=2)
      
-        if (mod(nxx, px) .ne. 0) stop "matrix_block: matrix dim 1 cannot be divided by nx"
-        if (mod(nyy, py) .ne. 0) stop "matrix_block: matrix dim 2 cannot be divided by ny"
+        if (mod(nxx, px) .ne. 0) then
+            write(error_unit,*) "matrix_block: matrix dim 1 cannot be divided by nx"
+            stop
+        end if
+        if (mod(nyy, py) .ne. 0) then
+            write(error_unit,*) "matrix_block: matrix dim 2 cannot be divided by ny"
+            stop
+        end if
 
         nx = nxx / px
         ny = nyy / py
@@ -486,7 +492,7 @@ module utilities
     end function
 
     !==============================================================================!
-    ! flip a 2D matrix in y axis
+    ! flip a 2D matrix in x axis
     !==============================================================================!
 
     function flipy(matrix) result(res)
@@ -494,11 +500,10 @@ module utilities
         real(dp), intent(in)      :: matrix(:,:)
         real(dp)                  :: res(size(matrix, dim=1), size(matrix, dim=2))
 
-        integer :: n, i, nx
+        integer :: n, i
 
-        nx = size(matrix, dim=1)
-        n  = nx
-        do i = 1, nx
+        n = size(matrix, dim=1)
+        do i = 1, size(matrix, dim=1)
             res(i,:) = matrix(n, :)
             n = n - 1
         end do
@@ -506,7 +511,7 @@ module utilities
     end function
 
     !==============================================================================!
-    ! flip a 2D matrix in x axis
+    ! flip a 2D matrix in y axis
     !==============================================================================!
 
     function flipx(matrix) result(res)
@@ -514,11 +519,10 @@ module utilities
         real(dp), intent(in)      :: matrix(:,:)
         real(dp)                  :: res(size(matrix, dim=1), size(matrix, dim=2))
 
-        integer :: n, j, ny
+        integer :: n, j
 
-        ny = size(matrix, dim=2)
-        n  = ny
-        do j = 1, ny
+        n = size(matrix, dim=2)
+        do j = 1, size(matrix, dim=2)
             res(:,j) = matrix(:, n)
             n = n - 1
         end do
@@ -526,7 +530,7 @@ module utilities
     end function
 
     !==============================================================================!
-    ! rotate 2D matrix clock-wise for 90 degree
+    ! rotate clock-wise for 90 degree
     !==============================================================================!
 
     function rotate90(matrix) result(res)
@@ -547,7 +551,7 @@ module utilities
     end function
 
     !==============================================================================!
-    ! rotate 2D matrix clock-wise for 180 degree
+    ! rotate clock-wise for 180 degree
     !==============================================================================!
 
     function rotate180(matrix) result(res)
@@ -563,7 +567,7 @@ module utilities
     end function
 
     !==============================================================================!
-    ! rotate 2D matrix clock-wise for 270 degree
+    ! rotate clock-wise for 270 degree
     !==============================================================================!
 
     function rotate270(matrix) result(res)
@@ -575,6 +579,28 @@ module utilities
 
         tmp = rotate180(matrix)
         res = rotate90(tmp)
+
+    end function
+    
+    !==============================================================================!
+    ! find average of an 2d array (zero excluded)
+    !==============================================================================!
+
+    function mean(matrix) result(res)
+        
+        real(dp), intent(in)   :: matrix(:,:)
+        real(dp)               :: res
+        
+        integer :: i, j, n
+        
+        n = 0
+        do j = 1, size(matrix, dim=2)
+            do i = 1, size(matrix, dim=1)
+                if (matrix(i,j) > 0.0) n = n + 1
+            end do
+        end do
+        
+        res = sum(matrix) / real(n)
 
     end function
 

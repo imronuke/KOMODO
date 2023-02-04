@@ -21,33 +21,25 @@ program main
     
     select case(mode)
         case('FIXEDSRC')
-            CALL fixedsrc()
+            call fixedsrc()
         case('ADJOINT')
-            CALL adjoint()
-        ! case('RODEJECT')
-        !     IF (bther == 0) THEN
-        !         CALL rod_eject()
-        !     ELSE
-        !         CALL rod_eject_th()
-        !     END IF
+            call adjoint()
+        case('RODEJECT')
+            call rod_eject()
         case('BCSEARCH')
-            if (bther == YES) then
-                call cbsearch_th()
-            else
-                call cbsearch()
-            end if
-        case DEFAULT
-            CALL forward()
-    END select
+            call cbc_search()
+        case default
+            call forward()
+    end select
     
-    ! IF (transient_warning) THEN
+    ! if (transient_warning) then
     !     write(ounit,*)
     !     write(ounit,*) '  WARNING: ONE OR MORE OUTER ITERATIONS DID NOT CONVERGE.'&
     !                    // 'YOU MAY NEED TO REDUCE TIME STEP'
     !     write(output_unit,*)
     !     write(output_unit,*) '  WARNING: ONE OR MORE OUTER ITERATIONS DID NOT CONVERGE.'&
     !                   // 'YOU MAY NEED TO REDUCE TIME STEP'
-    ! END IF
+    ! end if
 
     call total % off
     
@@ -83,4 +75,4 @@ program main
     write(output_unit,*)
     write(output_unit,*) "  KOMODO EXIT NORMALLY"
 
-END PROGRAM
+end PROGRAM

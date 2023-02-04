@@ -91,7 +91,7 @@ module linear_system
 
         z   = sp_matvec(n, mtx, ind, x)
         r   = xpby(n, b, -1._dp, z)
-        r0  = equal(n, r)
+        r0  = copy(n, r)
         
         rho   = 1.0_dp
         alpha = 1.0_dp
@@ -241,7 +241,7 @@ module linear_system
         integer   :: n
         
         x = 0._dp
-        do n = 1, nnod
+        do concurrent (n = 1:nnod)
             x = x + a(n) * b(n)
         end do
      
@@ -263,7 +263,7 @@ module linear_system
       
         do concurrent (n = 1:nnod)
             w(n) = alpha*x(n) + beta*y(n)
-        enddo
+        end do
      
     end function
 
@@ -281,7 +281,7 @@ module linear_system
     
         do concurrent (n = 1:nnod)
             w(n) = x(n) + beta*y(n)
-        enddo
+        end do
      
     end function
 
@@ -289,7 +289,7 @@ module linear_system
     !to perform copy value x to y (x=y)                                                   !
     !===============================================================================================!
 
-    pure function equal(nnod, x) result(y)
+    pure function copy(nnod, x) result(y)
 
         integer, intent(in)    :: nnod
         real(dp), intent(in)   :: x(:)
@@ -299,7 +299,7 @@ module linear_system
     
         do concurrent (n = 1:nnod)
             y(n) = x(n)
-        enddo
+        end do
      
     end function
 

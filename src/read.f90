@@ -1,15 +1,18 @@
 module read
-    use iso_fortran_env, only: input_unit, output_unit, error_unit
+    use iso_fortran_env, only: real64, input_unit, output_unit, error_unit
     use data
+    use control, only: xsc, th, tr
     use utilities
-    use fdm
     use xsec
     use print
     
     implicit none
+
+    private
     
     save
     
+    integer, parameter  :: dp = real64
     character(length_line) :: iname, oname
     
     ! ind is used to read x indicator in beginning of input buffer line.
@@ -57,7 +60,8 @@ module read
     end type
     type(MAT_ASGN), dimension(:), allocatable :: planar         ! planar
     
-    
+    public :: inp_read
+
     contains
     
     !===============================================================================================!
@@ -212,36 +216,34 @@ module read
         !CARD CROD
         if (bcrod == YES) call inp_crod (ucrod)
         
-        ! ! Card EJCT (Rod Ejection)
-        ! if (mode == 'RODEJECT' .AND. bejct == YES .AND. bcrod == YES) then
-        !     call inp_ejct(uejct)
-        ! else if (mode == 'RODEJECT' .AND. bejct /= 1) then
-        !     write(ounit,*) '   CALCULATION MODE ROD EJECTION'
-        !     write(ounit,1041) 'EJCT', 'ROD EJECTION - TRANSIENT'
-        !     write(error_unit,*) '   CALCULATION MODE ROD EJECTION'
-        !     write(error_unit,1041) 'EJCT', 'ROD EJECTION - TRANSIENT'
-        !     stop
-        ! else if (mode == 'RODEJECT' .AND. bcrod /= 1) then
-        !     write(ounit,*) '   CALCULATION MODE ROD EJECTION'
-        !     write(ounit,1041) 'CROD', 'CONTROL ROD'
-        !     write(error_unit,*) '   CALCULATION MODE ROD EJECTION'
-        !     write(error_unit,1041) 'CROD', 'CONTROL ROD'
-        !     stop
-        ! else if (mode /= 'RODEJECT' .AND. bejct == YES) then
-        !     write(ounit,*) '   EJCT CARD IS NOT NECESSARY FOR THIS CALCULATION MODE'
-        !     write(error_unit,*) '   EJCT CARD IS NOT NECESSARY FOR THIS CALCULATION MODE'
-        !     stop
-        ! else
-        !     continue
-        ! end if
+        ! Card EJCT (Rod Ejection)
+        if (mode == 'RODEJECT' .AND. bejct == YES .AND. bcrod == YES) then
+            call inp_ejct(uejct)
+        else if (mode == 'RODEJECT' .AND. bejct /= 1) then
+            write(ounit,*) '   CALCULATION MODE ROD EJECTION'
+            write(ounit,1041) 'EJCT', 'ROD EJECTION - TRANSIENT'
+            write(error_unit,*) '   CALCULATION MODE ROD EJECTION'
+            write(error_unit,1041) 'EJCT', 'ROD EJECTION - TRANSIENT'
+            stop
+        else if (mode == 'RODEJECT' .AND. bcrod /= 1) then
+            write(ounit,*) '   CALCULATION MODE ROD EJECTION'
+            write(ounit,1041) 'CROD', 'CONTROL ROD'
+            write(error_unit,*) '   CALCULATION MODE ROD EJECTION'
+            write(error_unit,1041) 'CROD', 'CONTROL ROD'
+            stop
+        else if (mode /= 'RODEJECT' .AND. bejct == YES) then
+            write(ounit,*) '   EJCT CARD IS NOT NECESSARY FOR THIS CALCULATION MODE'
+            write(error_unit,*) '   EJCT CARD IS NOT NECESSARY FOR THIS CALCULATION MODE'
+            stop
+        end if
         
         ! if (boutp == YES) call inp_outp(uoutp)
         
         ! ! Card ITER
-        ! if (biter == YES) call inp_iter (uiter)
+        ! if (biter == YES) call inp_iter(uiter)
         
-        ! ! Card THET
-        ! if (bthet == YES) call inp_thet (uthet)
+        ! Card THET
+        if (bthet == YES) call inp_thet(uthet)
 
         ! if (bextr == YES) call inp_extr()
         
@@ -762,7 +764,7 @@ module read
         ! Writing output
         do i= 1, nmat
             write(ounit,1009) i
-            write(ounit,1011)'GROUP', 'TRANSPORT', 'DIFFUSION', 'ABSORPTION', &
+            write(ounit,1011)'GROUP', 'TRANSPORT', 'DIFFUSION', 'absORPTION', &
             'REMOVAL', 'NU*FISS', 'KAP*FIS','FISS. SPCTR'
             do g= 1, ng
                 write(ounit,1010) g, sigtr(i,g), D(i,g), siga(i,g), &
@@ -1785,7 +1787,7 @@ module read
                 write(ounit,*) ' MATERIAL CX CHANGES PER PPM BORON CHANGES : '
                 do i= 1, nmat
                    write(ounit,1429) i
-                    write(ounit,1431)'GROUP', 'TRANSPORT', 'ABSORPTION', &
+                    write(ounit,1431)'GROUP', 'TRANSPORT', 'absORPTION', &
                     'NU*FISS', 'FISSION'
                     do g= 1, ng
                         write(ounit,1430) g, csigtr(i,g), csiga(i,g), &
@@ -1873,7 +1875,7 @@ module read
               write(ounit,*) ' MATERIAL CX CHANGES PER PPM BORON CHANGES : '
                 do i= 1, nmat
                    write(ounit,1229) i
-                    write(ounit,1231)'GROUP', 'TRANSPORT', 'ABSORPTION', &
+                    write(ounit,1231)'GROUP', 'TRANSPORT', 'absORPTION', &
                     'NU*FISS', 'FISSION'
                     do g= 1, ng
                         write(ounit,1230) g, csigtr(i,g), csiga(i,g), &
@@ -1970,7 +1972,7 @@ module read
                 write(ounit,*) ' MATERIAL CX CHANGES PER FUEL TEMPERATURE CHANGES : '
                 do i= 1, nmat
                    write(ounit,1249) i
-                    write(ounit,1251)'GROUP', 'TRANSPORT', 'ABSORPTION', &
+                    write(ounit,1251)'GROUP', 'TRANSPORT', 'absORPTION', &
                     'NU*FISS', 'FISSION'
                     do g= 1, ng
                         write(ounit,1250) g, fsigtr(i,g), fsiga(i,g), &
@@ -2067,7 +2069,7 @@ module read
                 write(ounit,*) ' MATERIAL CX CHANGES PER MODERATOR TEMPERATURE CHANGES : '
                 do i= 1, nmat
                    write(ounit,1269) i
-                    write(ounit,1271)'GROUP', 'TRANSPORT', 'ABSORPTION', &
+                    write(ounit,1271)'GROUP', 'TRANSPORT', 'absORPTION', &
                     'NU*FISS', 'FISSION'
                     do g= 1, ng
                         write(ounit,1270) g, msigtr(i,g), msiga(i,g), &
@@ -2164,7 +2166,7 @@ module read
                 write(ounit,*) ' MATERIAL CX CHANGES PER COOLANT DENSITY CHANGES : '
                 do i= 1, nmat
                    write(ounit,1369) i
-                    write(ounit,1371)'GROUP', 'TRANSPORT', 'ABSORPTION', &
+                    write(ounit,1371)'GROUP', 'TRANSPORT', 'absORPTION', &
                     'NU*FISS', 'FISSION'
                     do g= 1, ng
                         write(ounit,1370) g, lsigtr(i,g), lsiga(i,g), &
@@ -2329,29 +2331,29 @@ module read
         message = ' error in READING zeroth step rod position and step size'
         call input_error(ounit, ios, ln, message, buf=xbunit)
         
-        allocate(bpos(nbank))
+        allocate(bank_pos(nbank))
         
         !!! read CONTROL ROD BANK POSITIONS
-        read(xbunit, *, IOSTAT=ios) ind, ln, (bpos(i), i = 1, nbank)
+        read(xbunit, *, IOSTAT=ios) ind, ln, (bank_pos(i), i = 1, nbank)
         message = ' error in READING bank position'
         call input_error(ounit, ios, ln, message, buf=xbunit)
         
         
         !!! Check Control Rod Bank POSITION
         do i = 1, nbank
-            if (bpos(i) > real(nstep)) then
+            if (bank_pos(i) > real(nstep)) then
                 message = 'ERROR: POSITION OF CONTROL ROD BANK ' // n2c(i) // ' IS ' &
-                // n2c(bpos(i),2) // ' WHICH IS HIGHER THAN NUMBER OF STEPS.'
+                // n2c(bank_pos(i),2) // ' WHICH IS HIGHER THAN NUMBER OF STEPS.'
                 call input_error(ounit, msg=message)
             end if
-            if (bpos(i) < 0.) then
+            if (bank_pos(i) < 0.) then
                 message = 'ERROR: POSITION OF CONTROL ROD BANK ' // n2c(i) // ' IS ' &
-                // n2c(bpos(i),2) // ' WHICH IS LOWER THAN 0.'
+                // n2c(bank_pos(i),2) // ' WHICH IS LOWER THAN 0.'
                 call input_error(ounit, msg=message)
             end if
-            if (coreh < bpos(i)*step_size) then
+            if (coreh < bank_pos(i)*step_size) then
                 message = 'ERROR: CORE HEIGHT ' // n2c(coreh,2) // ' IS LOWER THAN CONTROL ROD POSITION ' &
-                // n2c(bpos(i)*step_size+zero_pos, 2) // new_line('a') // ' BANK NUMBER ' // n2c(i)
+                // n2c(bank_pos(i)*step_size+zero_pos, 2) // new_line('a') // ' BANK NUMBER ' // n2c(i)
                 call input_error(ounit, msg=message)
             end if
         end do
@@ -2431,7 +2433,7 @@ module read
             write(ounit,*) ' INITIAL CONTROL ROD BANK POSITION (STEPS) : '
             write(ounit,*) ' (0 means fully inserted) '
             write(ounit, 1204)(bank(i), i = 1, nbank)
-            write(ounit, 1205)(bpos(i), i = 1, nbank)
+            write(ounit, 1205)(bank_pos(i), i = 1, nbank)
         
             write(ounit,*)
             write(ounit,*) ' CONTROL ROD BANK MAP : '
@@ -2444,7 +2446,7 @@ module read
               write(ounit,*) ' MATERIAL CX INCREMENT OR DECREMENT DUE TO CR INSERTION : '
               do i= 1, nmat
                  write(ounit,1209) i
-                  write(ounit,1211)'GROUP', 'TRANSPORT', 'ABSORPTION', &
+                  write(ounit,1211)'GROUP', 'TRANSPORT', 'absORPTION', &
                   'NU*FISS', 'FISSION'
                   do g= 1, ng
                       write(ounit,1210) g, dsigtr(i,g), dsiga(i,g), &
@@ -2579,7 +2581,7 @@ module read
                 summ = summ + spec(g)
             end do
             ! Check total spectrum
-            if (ABS(summ - 1._DP) > 1.e-5_DP) then
+            if (abs(summ - 1._DP) > 1.e-5_DP) then
                 write(ounit,*) 'TOTAL SOURCE SPECTRUM AT LINE', ln, ' IS NOT EQUAL TO 1._DP'
                 stop
             end if
@@ -2671,6 +2673,188 @@ module read
         deallocate(spec, spos)
 
     end subroutine inp_esrc
+
+    !===============================================================================================!
+    !  To read rod ejection input
+    !===============================================================================================!
+    
+    subroutine inp_ejct (xbunit)
+        
+        integer, intent(in) :: xbunit
+        
+        integer :: ln   !Line number
+        integer :: ios  ! IOSTAT status
+        
+        integer :: i, g
+        integer :: popt
+        integer, dimension(nbank) :: bank
+        character(LEN=4) :: cnb         ! number of bank (character type)
+        
+        write(ounit,*)
+        write(ounit,*)
+        write(ounit,*) '           >>>>     READING ROD EJECTION DATA      <<<<'
+        write(ounit,*) '           --------------------------------------------'
+        
+        allocate(tr)
+        allocate(t_move(nbank), bank_speed(nbank), direction(nbank), bank_pos_final(nbank))
+        
+        ! read Final CR bank position, time to start, and speed
+        do i = 1, nbank
+            read(xbunit, *, IOSTAT=ios) ind, ln, bank_pos_final(i), t_move(i), bank_speed(i)
+            write (cnb,'(I4)') nbank
+            cnb = trim(adjustl(cnb))
+            message = ' error in READING Final CR Bank Position, time to move and speed for bank : ' // cnb
+            call input_error(ounit, ios, ln, message, buf=xbunit)
+            if (bank_pos_final(i) > nstep) then
+                write(ounit, 1889) ln
+                write(error_unit, 1889) ln
+                stop
+                1889 format(2X, "ERROR AT LINE ", I4, &
+                ": UNEXPECTED FINAL BANK POSITION (GREATER THAN NUMBER OF STEP)")
+            end if
+            if (abs(bank_pos_final(i)-bank_pos(i)) < 1.e-5_DP) then
+                direction(i) = 0  ! not moving
+            else if (bank_pos_final(i)-bank_pos(i) > 1.e-5_DP) then
+                direction(i) = 2  ! up
+            else
+                direction(i) = 1  ! down
+            end if
+        end do
+        
+        ! read time for CR to be ejected
+        read(xbunit, *, IOSTAT=ios) ind, ln, total_time, time_step_1, time_mid, time_step_2
+        message = ' error in time parameters'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        if (bxtab == 0) then  ! if XTAB File does not present
+            ! read beta (delayed neutron fraction)
+            read(xbunit, *, IOSTAT=ios) ind, ln, (beta(i), i = 1, nf)
+            message = ' error in READING delayed netron fraction (beta)'
+            call input_error(ounit, ios, ln, message, buf=xbunit)
+
+            ! read precusor decay constant
+            read(xbunit, *, IOSTAT=ios) ind, ln, (lambda(i), i = 1, nf)
+            message = ' error in READING precusor decay constant'
+            call input_error(ounit, ios, ln, message, buf=xbunit)
+
+            ! read neutron velocity
+            allocate(neutron_velo(ng))
+            read(xbunit, *, IOSTAT=ios) ind, ln, (neutron_velo(g), g = 1, ng)
+            message = ' error in READING neutron velocity'
+            call input_error(ounit, ios, ln, message, buf=xbunit)
+        end if
+        
+        !! EJCT PRINT OPTION
+        read(xbunit, *, IOSTAT=ios) ind, ln, popt
+        if (ios == 0 .AND. popt > 0) then
+        
+            do i = 1, nbank
+                bank(i) = i
+            end do
+            write(ounit, 1294)(bank(i), i = 1, nbank)
+            write(ounit, 1295)(bank_pos_final(i), i = 1, nbank)
+            write(ounit, 1281)(t_move(i), i = 1, nbank)
+            write(ounit, 1282)(bank_speed(i), i = 1, nbank)
+        
+            write(ounit,*)
+            write(ounit,*) ' TIME parameterS IN SECONDS : '
+            write(ounit,1297) total_time
+            write(ounit,1298) time_step_1
+            write(ounit,1299) time_step_2
+            write(ounit,1300) time_mid
+        
+            if (bxtab == 0) then  ! if XTAB File does not present
+                write(ounit,*)
+                write(ounit,*) ' DELAYED NEUTRON FRACTION : '
+                write(ounit,'(100F11.5)') (beta(i), i = 1, nf)
+
+                write(ounit,*)
+                write(ounit,*) ' PRECUSOR DECAY CONSTANT (1/s): '
+                write(ounit,'(100F11.5)') (lambda(i), i = 1, nf)
+
+                write(ounit,*)
+                write(ounit,*) ' NEUTRON VELOCITY (cm/s) : '
+                write(ounit,'(100ES15.5)') (neutron_velo(g), g = 1, ng)
+            end if
+        end if
+        
+        ! ttot must be bigger than tstep1 and tstep2
+        if ((total_time < time_step_1) .OR. (total_time < time_step_2)) then
+            write(ounit,*) 'ERROR: TOTAL SIMULATION TIME SHALL BE GREATER THAN TIME STEPS'
+            write(error_unit,*) 'ERROR: TOTAL SIMULATION TIME SHALL BE GREATER THAN TIME STEPS'
+            stop
+        end if
+        
+        ! tdiv must be bigger than tstep1
+        if (time_mid < time_step_1) then
+            write(ounit,*) 'ERROR: THE TIME WHEN SECOND TIME STEP STARTS SHALL BE GREATER THAN FIRST TIME STEP'
+            write(error_unit,*) 'ERROR: THE TIME WHEN SECOND TIME STEP STARTS SHALL BE GREATER THAN FIRST TIME STEP'
+            stop
+        end if
+        
+        ! tdiv must be less than ttot
+        if (time_mid > total_time) then
+            write(ounit,*) 'ERROR: THE TIME WHEN SECOND TIME STEP STARTS SHALL BE LESS THAN TOTAL TIME'
+            write(error_unit,*) 'ERROR: THE TIME WHEN SECOND TIME STEP STARTS SHALL BE LESS THAN TOTAL TIME'
+            stop
+        end if
+        
+        ! number of steps shall be less than 10,000
+        if (NINT(time_mid/time_step_1)+NINT((total_time-time_mid)/time_step_2) > 10000) then
+            write(ounit,*) 'ERROR: NUMBER OF TOTAL TIME STEPS ARE MORE THAN 10,000'
+            write(error_unit,*) 'ERROR: NUMBER OF TOTAL TIME STEPS ARE MORE THAN 10,000'
+            stop
+        end if
+        
+        write(ounit,*)
+        write(ounit,*) ' ...Rod Ejection Card is successfully read...'
+        
+        1294 format(25X, 99(:, 2X, 'Bank ', I2))
+        1295 format(2X, 'FINAL BANK POS. (STEP)', 99(:, 2X, F7.1), /)
+        1281 format(2X, 'STARTS MOVE (SECOND)  ', 99(:, 2X, F7.1), /)
+        1282 format(2X, 'SPEED (STEP/SECOND)   ', 99(:, 2X, F7.1), /)
+        1297 format(4X, 'TOTAL SIMULATION TIME         : ', F6.2)
+        1298 format(4X, 'FIRST TIME STEP               : ', F6.4)
+        1299 format(4X, 'SECOND TIME STEP              : ', F6.4)
+        1300 format(4X, 'WHEN SECOND TIME STEP APPLY?  : ', F6.2)
+        
+    end subroutine inp_ejct
+
+    !===============================================================================================!
+    !  To read theta value for transient problem
+    !===============================================================================================!
+    
+    subroutine inp_thet (xbunit)
+    
+        integer, intent(in) :: xbunit
+        
+        integer :: ln   !Line number
+        integer :: ios  ! IOSTAT status
+        
+        read(xbunit, *, IOSTAT=ios) ind, ln, small_theta
+        message = ' error in theta in %THETA card'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        if (small_theta < 0.001) then
+            write(error_unit,*)
+            write(error_unit,*) "ERROR: THETA VALUE IS TOO SMALL"
+            stop
+        end if
+        if (small_theta > 1.0) then
+            write(error_unit,*)
+            write(error_unit,*) "ERROR: THETA VALUE SHALL NOT GREATER THAT 1.0"
+            stop
+        end if
+        
+        write(ounit,*)
+        write(ounit,*)
+        write(ounit,*) '               >>>>>READING THETA CARD<<<<<'
+        write(ounit,*) '           ------------------------------------'
+        
+        write(ounit,'(A,F6.2)') '  THETA IS  : ', small_theta
+    
+    
+    end subroutine
     
     ! !******************************************************************************!
     
@@ -2745,49 +2929,6 @@ module read
     
     ! !******************************************************************************!
     
-    ! subroutine inp_thet (xbunit)
-    
-    ! !
-    ! ! Purpose:
-    ! !    To read iteration theta value for transient problem
-    
-    ! USE data, ONLY: small_theta, big_theta
-    
-    ! IMPLICIT NONE
-    
-    ! integer, intent(in) :: xbunit
-    
-    ! integer :: ln   !Line number
-    ! integer :: ios  ! IOSTAT status
-    
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, small_theta
-    ! message = ' error in theta in %THETA card'
-    ! call input_error(ounit, ios, ln, message, buf=xbunit)
-    
-    ! if (small_theta < 0.001) then
-    !   write(error_unit,*)
-    !   write(error_unit,*) "ERROR: THETA VALUE IS TOO SMALL"
-    !   stop
-    ! end if
-    ! if (small_theta > 1.0) then
-    !   write(error_unit,*)
-    !   write(error_unit,*) "ERROR: THETA VALUE SHALL NOT GREATER THAT 1.0"
-    !   stop
-    ! end if
-    ! big_theta = (1._dp - small_theta) / small_theta
-    
-    ! write(ounit,*)
-    ! write(ounit,*)
-    ! write(ounit,*) '               >>>>>READING THETA CARD<<<<<'
-    ! write(ounit,*) '           ------------------------------------'
-    
-    ! write(ounit,'(A,F6.2)') '  THETA IS  : ', small_theta
-    
-    
-    ! end subroutine inp_thet
-    
-    ! !******************************************************************************!
-    
     ! subroutine inp_prnt (xbunit)
     
     ! !
@@ -2827,161 +2968,9 @@ module read
     
 
     
-    ! !******************************************************************************!
+
     
-    ! subroutine inp_ejct (xbunit)
-    
-    ! !
-    ! ! Purpose:
-    ! !    To read rod ejection input
-    
-    ! USE data, ONLY: nf, ng, lambda, beta, neutron_velo, nbank, tbeta, nmat, &
-    !                  total_time, time_step_1, time_mid, time_step_2, bpos, fbpos, tmove, &
-    !                  bspeed, mdir, nstep
-    
-    ! IMPLICIT NONE
-    
-    ! integer, intent(in) :: xbunit
-    
-    ! integer :: ln   !Line number
-    ! integer :: ios  ! IOSTAT status
-    
-    ! integer :: i, g
-    ! integer :: popt
-    ! integer, dimension(nbank) :: bank
-    ! character(LEN=4) :: cnb         ! number of bank (character type)
-    
-    ! write(ounit,*)
-    ! write(ounit,*)
-    ! write(ounit,*) '           >>>>     READING ROD EJECTION DATA      <<<<'
-    ! write(ounit,*) '           --------------------------------------------'
-    
-    ! allocate(tmove(nbank), bspeed(nbank), mdir(nbank), fbpos(nbank))
-    ! allocate(tbeta(nmat))
-    
-    ! ! read Final CR bank position, time to start, and speed
-    ! do i = 1, nbank
-    !     read(xbunit, *, IOSTAT=ios) ind, ln, fbpos(i), tmove(i), bspeed(i)
-    !     write (cnb,'(I4)') nbank
-    !     cnb = trim(adjustl(cnb))
-    !     message = ' error in READING Final CR Bank Position, time to move and speed for bank : ' // cnb
-    !     call input_error(ounit, ios, ln, message, buf=xbunit)
-    !     if (fbpos(i) > nstep) then
-    !       write(ounit, 1889) ln
-    !       write(error_unit, 1889) ln
-    !       stop
-    !       1889 format(2X, "ERROR AT LINE ", I4, ": WRONG FINAL CONTROL ROD POSITION")
-    !     end if
-    !     if (ABS(fbpos(i)-bpos(i)) < 1.e-5_DP) then
-    !         mdir(i) = 0
-    !     else if (fbpos(i)-bpos(i) > 1.e-5_DP) then
-    !         mdir(i) = 2
-    !     else
-    !         mdir(i) = 1
-    !     end if
-    ! end do
-    
-    ! ! read time for CR to be ejected
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, total_time, time_step_1, time_mid, time_step_2
-    ! message = ' error in time parameters'
-    ! call input_error(ounit, ios, ln, message, buf=xbunit)
-    
-    ! if (bxtab == 0) then  ! if XTAB File does not present
-    !   ! read beta (delayed neutron fraction)
-    !   read(xbunit, *, IOSTAT=ios) ind, ln, (beta(i), i = 1, nf)
-    !   message = ' error in READING delayed netron fraction (beta)'
-    !   call input_error(ounit, ios, ln, message, buf=xbunit)
-    
-    !   ! read precusor decay constant
-    !   read(xbunit, *, IOSTAT=ios) ind, ln, (lambda(i), i = 1, nf)
-    !   message = ' error in READING precusor decay constant'
-    !   call input_error(ounit, ios, ln, message, buf=xbunit)
-    
-    !   ! read neutron velocity
-    !   allocate(neutron_velo(ng))
-    !   read(xbunit, *, IOSTAT=ios) ind, ln, (neutron_velo(g), g = 1, ng)
-    !   message = ' error in READING neutron velocity'
-    !   call input_error(ounit, ios, ln, message, buf=xbunit)
-    ! end if
-    
-    
-    ! !! EJCT PRINT OPTION
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, popt
-    ! if (ios == 0 .AND. popt > 0) then
-    
-    !     do i = 1, nbank
-    !         bank(i) = i
-    !     end do
-    !     write(ounit, 1294)(bank(i), i = 1, nbank)
-    !     write(ounit, 1295)(fbpos(i), i = 1, nbank)
-    !     write(ounit, 1281)(tmove(i), i = 1, nbank)
-    !     write(ounit, 1282)(bspeed(i), i = 1, nbank)
-    
-    !     write(ounit,*)
-    !     write(ounit,*) ' TIME parameterS IN SECONDS : '
-    !     write(ounit,1297) total_time
-    !     write(ounit,1298) time_step_1
-    !     write(ounit,1299) time_step_2
-    !     write(ounit,1300) time_mid
-    
-    !     if (bxtab == 0) then  ! if XTAB File does not present
-    !       write(ounit,*)
-    !       write(ounit,*) ' DELAYED NEUTRON FRACTION : '
-    !       write(ounit,'(100F11.5)') (beta(i), i = 1, nf)
-    
-    !       write(ounit,*)
-    !       write(ounit,*) ' PRECUSOR DECAY CONSTANT (1/s): '
-    !       write(ounit,'(100F11.5)') (lambda(i), i = 1, nf)
-    
-    !       write(ounit,*)
-    !       write(ounit,*) ' NEUTRON VELOCITY (cm/s) : '
-    !       write(ounit,'(100ES15.5)') (neutron_velo(g), g = 1, ng)
-    !     end if
-    ! end if
-    
-    ! ! ttot must be bigger than tstep1 and tstep2
-    ! if ((total_time < time_step_1) .OR. (total_time < time_step_2)) then
-    !     write(ounit,*) 'ERROR: TOTAL SIMULATION TIME SHALL BE GREATER THAN TIME STEPS'
-    !     write(error_unit,*) 'ERROR: TOTAL SIMULATION TIME SHALL BE GREATER THAN TIME STEPS'
-    !     stop
-    ! end if
-    
-    ! ! tdiv must be bigger than tstep1
-    ! if (time_mid < time_step_1) then
-    !     write(ounit,*) 'ERROR: THE TIME WHEN SECOND TIME STEP STARTS SHALL BE GREATER THAN FIRST TIME STEP'
-    !     write(error_unit,*) 'ERROR: THE TIME WHEN SECOND TIME STEP STARTS SHALL BE GREATER THAN FIRST TIME STEP'
-    !     stop
-    ! end if
-    
-    ! ! tdiv must be less than ttot
-    ! if (time_mid > total_time) then
-    !     write(ounit,*) 'ERROR: THE TIME WHEN SECOND TIME STEP STARTS SHALL BE LESS THAN TOTAL TIME'
-    !     write(error_unit,*) 'ERROR: THE TIME WHEN SECOND TIME STEP STARTS SHALL BE LESS THAN TOTAL TIME'
-    !     stop
-    ! end if
-    
-    ! ! number of steps shall be less than 10,000
-    ! if (NINT(time_mid/time_step_1)+NINT((total_time-time_mid)/time_step_2) > 10000) then
-    !     write(ounit,*) 'ERROR: NUMBER OF TOTAL TIME STEPS ARE MORE THAN 10,000'
-    !     write(error_unit,*) 'ERROR: NUMBER OF TOTAL TIME STEPS ARE MORE THAN 10,000'
-    !     stop
-    ! end if
-    
-    ! write(ounit,*)
-    ! write(ounit,*) ' ...Rod Ejection Card is successfully read...'
-    
-    ! 1294 format(25X, 99(:, 2X, 'Bank ', I2))
-    ! 1295 format(2X, 'FINAL BANK POS. (STEP)', 99(:, 2X, F7.1), /)
-    ! 1281 format(2X, 'STARTS MOVE (SECOND)  ', 99(:, 2X, F7.1), /)
-    ! 1282 format(2X, 'SPEED (STEP/SECOND)   ', 99(:, 2X, F7.1), /)
-    ! 1297 format(4X, 'TOTAL SIMULATION TIME         : ', F6.2)
-    ! 1298 format(4X, 'FIRST TIME STEP               : ', F6.4)
-    ! 1299 format(4X, 'SECOND TIME STEP              : ', F6.4)
-    ! 1300 format(4X, 'WHEN SECOND TIME STEP APPLY?  : ', F6.2)
-    
-    ! end subroutine inp_ejct
-    
-    ! !******************************************************************************!
+    ! ******************************************************************************!
     
     ! subroutine print_outp(fn)
     
@@ -3590,7 +3579,7 @@ module read
     !       write(ounit,1709) i
     !       write(ounit,'(A,I3)') '     XTAB FILE '// trim(adjustl(xtab(i)%fname)) &
     !       // '. COMPOSITION NUMBER', xtab(i)%cnum
-    !       write(ounit,1707)'GROUP', 'TRANSPORT', 'DifFUSION', 'ABSORPTION', &
+    !       write(ounit,1707)'GROUP', 'TRANSPORT', 'DifFUSION', 'absORPTION', &
     !       'NU*FISS', 'KAP*FIS','FISS. SPCTR', 'NEUTRON VELOCITY'
     !       do g= 1, ng
     !           write(ounit,1706) g, m(i)%xsec(s,t,u,v)%sigtr(g), &
@@ -3698,9 +3687,9 @@ module read
     !         read(tunit, *, IOSTAT=iost) ind, ln, &
     !         (xsec(s,t,u,v)%siga(g), s = 1, m(mat_map)%nd)
     !         if (rod == 0) then
-    !           message = ' ERROR IN XTAB FILE: CANNOT read ABSORPTION XSEC'
+    !           message = ' ERROR IN XTAB FILE: CANNOT read absORPTION XSEC'
     !         else
-    !           message = ' ERROR IN XTAB FILE: CANNOT read RODDED ABSORPTION XSEC'
+    !           message = ' ERROR IN XTAB FILE: CANNOT read RODDED absORPTION XSEC'
     !         end if
     !         call input_error(ounit, iost, ln, message, XTAB=mat_map)
     !       end do

@@ -1,6 +1,7 @@
 module print
-    use iso_fortran_env, only: output_unit
+    use iso_fortran_env, only: real64, output_unit, error_unit
     use data
+    use fdm
     use utilities
 
     implicit none
@@ -9,7 +10,64 @@ module print
 
     public
 
+    integer, parameter, private  :: dp = real64
+
     contains
+
+    !===============================================================================================!
+    ! Initialize calculation
+    !===============================================================================================!
+
+    subroutine print_fail_converge()
+
+        write(error_unit,*)
+        write(error_unit,*) '  MAXIMUM NUMBER OF OUTER ITERATION IS REACHED IN FORWARD CALCULATION.'
+        write(error_unit,*) '  CHECK PROBLEM SPECIFICATION OR CHANGE ITERATION CONTROL (%ITER).'
+        write(error_unit,*) '   The two-node nonlinear iteration seems not stable. Try these:'
+        write(error_unit,*) '   1. Change iteration control using %ITER card, '
+        write(error_unit,*) '      Perhaps by making nodal update less frequent,'
+        write(error_unit,*) '      or increase number inner iteration per outer iteration.'
+        write(error_unit,*) '   2. Ensure the node sizes in all directions are as uniform as possible. '
+        write(error_unit,*) '      Also try smaller node size.'
+        write(error_unit,*) '   3. For transient problem, try to reduce time step size.'
+        write(error_unit,*) 
+        write(error_unit,*) '   If this error persists, contact me at makrus.imron@gmail.com'
+        write(error_unit,*) '  KOMODO is stoping'
+        stop
+
+    end subroutine
+
+    !===============================================================================================!
+    ! Initialize calculation
+    !===============================================================================================!
+
+    subroutine print_transient_step(i_step, t_next, rho, power_mult)
+
+        integer, intent(in)  :: i_step
+        real(dp), intent(in) :: t_next, rho, power_mult
+
+        integer :: n
+
+       ! if (bther == 1) then
+        !   WRITE(*,'(I4, F10.3, F10.4, ES15.4, 12F9.2)') i_step, t_next, rho/ctbeta, &
+        !   power_mult, (bank_pos(n), n = 1, nb)
+        
+        !   IF (maxi) THEN
+        !     WRITE(ounit,'(I4, F10.3, F10.4, ES15.4, 4F10.2, A35)') i_step, t_next, rho/ctbeta, &
+        !     power_mult, tm-273.15, mtm-273.15, tf-273.15, mtf-273.15, 'OUTER ITERATION DID NOT CONVERGE'
+        !   ELSE
+        !     WRITE(ounit,'(I4, F10.3, F10.4, ES15.4, 4F10.2)') i_step, t_next, rho/ctbeta, &
+        !     power_mult, tm-273.15, mtm-273.15, tf-273.15, mtf-273.15
+        !   END IF
+        ! else
+        WRITE(*,'(I4, F10.3, F10.4, ES15.4, 12F9.2)') i_step, t_next, rho, &
+        power_mult, (bank_pos(n), n = 1, nbank)
+      
+        WRITE(ounit,'(I4, F10.3, F10.4, ES15.4)') i_step, t_next, rho, &
+        power_mult
+      ! end if
+
+    end subroutine
 
     !===============================================================================================!
     ! Print header
@@ -18,7 +76,7 @@ module print
     SUBROUTINE print_head()
     
         IMPLICIT NONE
-        if (mode == 'FORWARD' .and. bther == 1) then
+        if (mode == 'FORWARD' .and. bther == YES) then
             WRITE(ounit,*); WRITE(ounit,*)
             WRITE(ounit,3245); WRITE(ounit,3247) mode; WRITE(ounit,3245)
             WRITE(ounit,*)
@@ -45,8 +103,28 @@ module print
             write(output_unit,3245); write(output_unit,3247) mode; write(output_unit,3245)
             write(output_unit,*)
             write(output_unit,3250); write(output_unit,3249)
+        elseif(mode=="RODEJECT") then
+            if (bther == NO) then
+                ! File Output
+                WRITE(ounit,*)
+                WRITE(ounit,*)
+                WRITE(ounit, *) " TRANSIENT RESULTS :"
+                WRITE(ounit, *)
+                WRITE(ounit, *) " Step  Time(s)  React.($)   Rel. Power"
+                WRITE(ounit, *) "-------------------------------------------"
+                ! Terminal Output
+                WRITE(output_unit, *)
+                WRITE(output_unit, *) " TRANSIENT RESULTS :"
+                WRITE(output_unit, *)
+                WRITE(output_unit, *) " Step  Time(s)  React.($)   Rel. Power   CR Bank Pos. (1-end)"
+                WRITE(output_unit, *) "--------------------------------------------------------------"
+            else
+                ! File Output
+                WRITE(ounit,*); WRITE(ounit,*)
+
+            end if
         else
-            if (bther == 0) then
+            if (bther == NO) then
                 ! File Output
                 WRITE(ounit,*); WRITE(ounit,*)
                 WRITE(ounit,2176); WRITE(ounit,2177); WRITE(ounit,2176)
@@ -92,19 +170,20 @@ module print
     ! To print final th parameters
     !===============================================================================================!
 
-    SUBROUTINE print_tail()
+    SUBROUTINE print_tail(c)
 
-        REAL(DP) :: tf, tm, mtm, mtf, otm, cd, ocd
+        class(fdm_base) :: c
+        REAL(DP)         :: tf, tm, mtm, mtf, otm, cd, ocd
     
-        CALL par_ave(ftem, tf)
-        CALL par_ave(mtem, tm)
+        CALL par_ave(c, ftem, tf)
+        CALL par_ave(c, mtem, tm)
     
         mtf = maxval(tfm(:,1))
         mtm = maxval(mtem)
     
-        CALL par_ave_out(mtem, otm)
-        CALL par_ave(cden, cd)
-        CALL par_ave_out(cden, ocd)
+        CALL par_ave_out(c, mtem, otm)
+        CALL par_ave(c, cden, cd)
+        CALL par_ave_out(c, cden, ocd)
     
         ! Write Output
         WRITE(ounit,*)
@@ -132,16 +211,18 @@ module print
     ! To calculate average fuel temp (only for active core)
     !===============================================================================================!
 
-    SUBROUTINE par_ave(par, ave)
+    SUBROUTINE par_ave(c, par, ave)
         
-        REAL(DP), DIMENSION(:), INTENT(IN) :: par
+        class(fdm_base)      :: c
+        REAL(DP), INTENT(IN)  :: par(:)
         REAL(DP), INTENT(OUT) :: ave
+        
         REAL(DP) :: dum, dum2
         INTEGER :: n
         
         dum = 0.; dum2 = 0.
         DO n = 1, nnod
-           IF (fdm % xs % nuf(n,ng) > 0.) THEN
+           IF (c % xs % nuf(n,ng) > 0.) THEN
               dum = dum + par(n) * vdel(n)
               dum2 = dum2 + vdel(n)
            END IF
@@ -155,10 +236,12 @@ module print
     ! To calculate average outlet coolant temperature
     !===============================================================================================!
         
-    SUBROUTINE par_ave_out(par, ave)
+    SUBROUTINE par_ave_out(c, par, ave)
         
-        REAL(DP), DIMENSION(:), INTENT(IN) :: par
+        class(fdm_base)      :: c
+        REAL(DP), INTENT(IN)  :: par(:)
         REAL(DP), INTENT(OUT) :: ave
+ 
         REAL(DP) :: dum, dum2
         INTEGER, DIMENSION(nxx,nyy) :: zmax
         INTEGER :: n, i, j, k
@@ -168,7 +251,7 @@ module print
           DO i = ystag(j)%smin, ystag(j)%smax
             zmax(i,j) = 0
             DO k = 1, nzz/2
-              if (fdm % xs % nuf(xyz(i,j,k),ng) < 1.e-5_dp) zmax(i,j) = zmax(i,j) + 1
+              if (c % xs % nuf(xyz(i,j,k),ng) < 1.e-5_dp) zmax(i,j) = zmax(i,j) + 1
             END DO
           END DO
         END DO
@@ -176,14 +259,14 @@ module print
         DO j = 1, nyy
           DO i = ystag(j)%smin, ystag(j)%smax
             DO k = 1, nzz
-              if (fdm % xs % nuf(xyz(i,j,k),ng) > 1.e-5) zmax(i,j) = zmax(i,j) + 1
+              if (c % xs % nuf(xyz(i,j,k),ng) > 1.e-5) zmax(i,j) = zmax(i,j) + 1
             END DO
           END DO
         END DO
         
         dum = 0.; dum2 = 0.
         DO n = 1, nnod
-           IF (iz(n) == zmax(ix(n),iy(n)) .AND. fdm % xs % nuf(n,ng) > 1.e-5) THEN
+           IF (iz(n) == zmax(ix(n),iy(n)) .AND. c % xs % nuf(n,ng) > 1.e-5) THEN
               dum = dum + par(n) * vdel(n)
               dum2 = dum2 + vdel(n)
            END IF
@@ -330,9 +413,9 @@ module print
     ! calculate power distribution (normalize to number of nodes)
     !===============================================================================================!
 
-    subroutine power_dist_print(f0, pdist)
+    subroutine power_dist_print(c, pdist)
 
-        real(dp), intent(in) :: f0(:,:)  ! Flux
+        class(fdm_base)      :: c
         real(dp), intent(out) :: pdist(:)
 
         integer :: g, n
@@ -341,7 +424,7 @@ module print
         pdist = 0._dp
         do g= 1, ng
             do n= 1, nnod
-              pow = f0(n,g) * fdm % xs % sigf(n,g)
+              pow = c % flux(n,g) * c % xs % nuf(n,g)
               if (pow < 0.) pow = 0.
               pdist(n) = pdist(n) + pow
             end do
@@ -351,8 +434,8 @@ module print
         powtot = 0._dp
         vtot = 0.0
         do n = 1, nnod
-            powtot = powtot + pdist(n) * vdel(n)
-            vtot   = vtot + vdel(n)
+            powtot = powtot + pdist(n) * c % vdel(n)
+            vtot   = vtot + c % vdel(n)
         end do
         
         if (powtot <= 0 .and. (mode .ne. 'FIXEDSRC')) THEN

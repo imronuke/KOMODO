@@ -29,8 +29,8 @@ module fdm
     integer :: ysouth, ynorth               ! South and North Boundary conditions
     integer :: zbott, ztop                  ! Bottom and Top Boundary conditions
 
-    ! core data type
-    type :: core_base
+    ! Finite Difference Method (fdm) data type
+    type, public :: fdm_base
         character(4)        :: kernel        ! Nodal kernel used
         integer             :: nnod          ! Number of nodes
         real(dp), pointer   :: vdel(:)       ! Delta nodes' volume in cm3
@@ -41,49 +41,59 @@ module fdm
     
         real(dp)            :: Keff = 1.0    ! Multiplication factor
 
-        real(dp), pointer   :: fsrc(:)       ! fission source
-        real(dp), pointer   :: flux(:,:)     ! flux
-        real(dp), pointer   :: exsrc(:,:)    ! external source
+        real(dp), pointer     :: fsrc(:) => null()     ! fission source
+        real(dp), pointer     :: flux(:,:) => null()   ! flux
+        real(dp), pointer     :: exsrc(:,:) => null()  ! external source
+        real(dp), allocatable :: scat(:,:)             ! scattering source
     
         type(xs_rect)       :: xs            ! node-wise xs
         type(matrix)        :: m             ! FDM matrix for linear system solver
 
-        integer             :: nod_intv      ! nodal coupling coefficients update interval
         real(dp)            :: fsrc_diff     ! Fission source difference between outer iteration
-        real(dp)            :: flux_diff     ! FLux difference between outer iteration
-        logical             :: is_first = .true.
+        real(dp)            :: flux_diff     ! Flux difference between outer iteration
+
+        ! used only for transient
+        real(dp), pointer   :: total_beta(:) => null()         ! total beta for each material
+        real(dp), pointer   :: dfis(:) => null()  
+
+        integer             :: nod_intv      ! nodal coupling coefficients update interval
+        real(dp)            :: max_flux_err  ! max flux error
+        real(dp)            :: max_fiss_err  ! max fission source error
+        integer             :: max_outer     ! max number of outer iteration
+        integer             :: max_inner     ! max number of outer iteration
+        integer             :: extrp         ! interval for fission source extrapolation
     end type
 
-    ! Rectangular core data type
-    type, extends(core_base), public :: core_rect
-        real(dp), pointer :: xdel(:)        ! Delta x in cm
-        real(dp), pointer :: ydel(:)        ! Delta y in cm
-        real(dp), pointer :: zdel(:)        ! Delta z in cm
+    ! Rectangular FDM data type
+    type, extends(fdm_base), public :: fdm_rect
+        real(dp), pointer :: xdel(:) => null()        ! Delta x in cm
+        real(dp), pointer :: ydel(:) => null()        ! Delta y in cm
+        real(dp), pointer :: zdel(:) => null()        ! Delta z in cm
     
-        integer  :: nxx                     ! Number of nodes in x direction
-        integer  :: nyy                     ! Number of nodes in y direction
-        integer  :: nzz                     ! Number of nodes z direction
+        integer  :: nxx                               ! Number of nodes in x direction
+        integer  :: nyy                               ! Number of nodes in y direction
+        integer  :: nzz                               ! Number of nodes z direction
 
-        integer, pointer :: ix(:)           ! index in x direction for given node index
-        integer, pointer :: iy(:)           ! index in y direction for given node index
-        integer, pointer :: iz(:)           ! index in z direction for given node index
-        integer, pointer :: xyz(:,:,:)      ! node index for given index in x, y, and z directions
+        integer, pointer :: ix(:) => null()           ! index in x direction for given node index
+        integer, pointer :: iy(:) => null()           ! index in y direction for given node index
+        integer, pointer :: iz(:) => null()           ! index in z direction for given node index
+        integer, pointer :: xyz(:,:,:) => null()      ! node index for given index in x, y, and z directions
 
-        integer, pointer :: ind_mat(:)      ! material map / node-wise material index
+        integer, pointer :: ind_mat(:) => null()      ! material map / node-wise material index
         
         ! coupling coeff (order => east, west, north, south, top, bottom)
         real(dp), allocatable      :: df(:,:,:)   ! D tilde : FDM nodal coupling coefficients
         real(dp), allocatable      :: dn(:,:,:)   ! D hat   : Corrected (higher order) nodal coupling coefficients
 
-        type(staggered), pointer   :: xstag(:)    ! Staggered mesh data
-        type(staggered), pointer   :: ystag(:)    ! Staggered mesh data
+        type(staggered), pointer   :: xstag(:) => null()    ! Staggered mesh data
+        type(staggered), pointer   :: ystag(:) => null()    ! Staggered mesh data
 
         type(nodal_type), allocatable :: d        ! nodal update module
 
     end type
 
-    public :: set_rect_data, set_rect_pointer
-    public :: outer_iter, outer_adjoint, outer_fixed_src, fixed_outer
+    public :: set_fdm_data, set_fdm_pointer, set_fdm_transient, deallocate_fdm
+    public :: outer_iter, outer_adjoint, outer_fixed_src, th_outer, transient_outer
 
     contains
 
@@ -91,20 +101,27 @@ module fdm
     ! Set FDM data for rectangular geometry
     !===============================================================================================!
 
-    subroutine set_rect_data(c, kernel, ng, nnod, nxx, nyy, nzz, &
-        nmat, east, west, north, south, bottom, top, output_fid)
+    subroutine set_fdm_data(c, output_fid, kernel, ng, nnod, nxx, nyy, nzz, &
+        nmat, east, west, north, south, top, bottom, nod_intv, max_flux_err, &
+        max_fiss_err, max_outer, max_inner, extrp)
 
-        class(core_rect)              :: c
+        class(fdm_rect)              :: c
+        integer, intent(in)           :: output_fid                               ! output file unit number
         character(*), intent(in)      :: kernel
         integer, intent(in)           :: nnod                                     ! total number of nodes
         integer, intent(in)           :: ng                                       ! number of group
         integer, intent(in)           :: nxx, nyy, nzz                            ! number of nodes in x, y, and z directions
         integer, intent(in)           :: nmat                                     ! number of material
-        integer, intent(in), optional :: east, west, north, south, bottom, top    ! BCs
-        integer, intent(in), optional :: output_fid                               ! output file unit number
+        integer, intent(in)           :: east, west, north, south, bottom, top    ! BCs
+        integer, intent(in)           :: nod_intv      ! nodal coupling coefficients update interval
+        real(dp), intent(in)          :: max_flux_err  ! max flux error
+        real(dp), intent(in)          :: max_fiss_err  ! max fission source error
+        integer, intent(in)           :: max_outer     ! max number of outer iteration
+        integer, intent(in)           :: max_inner     ! max number of outer iteration
+        integer, intent(in)           :: extrp         ! interval for fission source extrapolation
 
         !set output file unit number
-        if(present(output_fid)) fid = output_fid
+        fid = output_fid
 
         !set nodal kernel
         c % kernel = kernel
@@ -117,18 +134,26 @@ module fdm
         c % nxx  = nxx
         c % nyy  = nyy
         c % nzz  = nzz
-
         c % nmat = nmat
 
-        c % nod_intv = ceiling((c % nxx + c % nyy + c % nzz) / 2.5)
-
         ! set BCs
-        if (present(east))   xeast  = east
-        if (present(west))   xwest  = west
-        if (present(north))  ynorth = north
-        if (present(south))  ysouth = south
-        if (present(bottom)) zbott  = bottom
-        if (present(top))    ztop   = top
+        xeast  = east
+        xwest  = west
+        ynorth = north
+        ysouth = south
+        zbott  = bottom
+        ztop   = top
+
+        ! set iterations
+        c % nod_intv     = nod_intv
+        c % max_flux_err = max_flux_err
+        c % max_fiss_err = max_fiss_err
+        c % max_outer    = max_outer   
+        c % max_inner    = max_inner   
+        c % extrp        = extrp
+        
+        ! allocate scattering source
+        allocate(c % scat(nnod, ng))
         
     end subroutine
 
@@ -136,19 +161,19 @@ module fdm
     ! Set FDM pointers for rectangular geometry
     !===============================================================================================!
 
-    subroutine set_rect_pointer(c, flux, fsrc, exsrc, ind_mat, xdel, ydel, zdel, vdel, &
+    subroutine set_fdm_pointer(c, flux, fsrc, exsrc, ind_mat, xdel, ydel, zdel, vdel, &
         xstag, ystag, ix, iy, iz, xyz)
 
-        class(core_rect)       :: c
-        real(dp), intent(inout), target        :: flux(:,:)
+        class(fdm_rect)       :: c
+        real(dp), intent(in), target           :: flux(:,:)
         real(dp), intent(in), target           :: fsrc(:), exsrc(:,:)
         integer, intent(in), target            :: ind_mat(:)      ! 3D Material map
         real(dp), intent(in), target           :: xdel(:), ydel(:), zdel(:), vdel(:)
         integer, intent(in), target            :: ix(:), iy(:), iz(:), xyz(:,:,:)
         type(staggered), intent(in), target    :: xstag(:), ystag(:)
 
-        flux = 1.0  ! Init flux
         c % flux => flux
+        c % flux = 1.0  ! Initialize flux
         if (size(c % flux, dim=1) .ne. c % nnod) stop 'Flux first-dimension size does not match'
         if (size(c % flux, dim=2) .ne. c % ng)   stop 'Flux second-dimension size does not match'
 
@@ -178,20 +203,66 @@ module fdm
         c % xstag => xstag
         c % ystag => ystag
 
+        ! final FDM setup
+        call setup_rectangular(c)
+
     end subroutine
 
     !===============================================================================================!
-    ! to perfom outer iteration
+    ! Set FDM pointers for rectangular geometry
     !===============================================================================================!
 
-    subroutine outer_iter(c, max_flux_err, max_fiss_err, &
-        max_outer, max_inner, extrp, nod_intv, print_iter, is_converge)
+    subroutine set_fdm_transient(c, total_beta, dfis)
 
-        class(core_rect)               :: c
-        real(dp), intent(in)           :: max_flux_err, max_fiss_err
-        integer, intent(in)            :: max_outer, max_inner
-        integer, intent(in)            :: extrp          ! extrapolation interval
-        integer, intent(in), optional  :: nod_intv   ! nodal coupling coefficients update interval
+        class(fdm_rect)       :: c
+        real(dp), intent(in), target        :: dfis(:)
+        real(dp), intent(in), target        :: total_beta(:)
+
+        c % dfis => dfis
+        c % total_beta => total_beta
+
+    end subroutine
+
+    !===============================================================================================!
+    ! Set FDM pointers for rectangular geometry
+    !===============================================================================================!
+
+    subroutine deallocate_fdm(c)
+
+        class(fdm_rect) :: c
+
+        deallocate(c % scat)
+        deallocate(c % df, c % dn)
+        deallocate(c % d)
+
+        c % flux => null()
+        c % fsrc => null()
+        c % exsrc => null()
+        c % ind_mat => null()
+        c % xdel => null()
+        c % ydel => null()
+        c % zdel => null()
+        c % vdel => null()
+        c % ix => null()
+        c % iy => null()
+        c % iz => null()
+        c % xyz => null()
+        c % xstag => null()
+        c % ystag => null()
+
+        c % dfis => null()
+        c % total_beta => null()
+
+
+    end subroutine
+
+    !===============================================================================================!
+    ! to perfom forward outer iteration
+    !===============================================================================================!
+
+    subroutine outer_iter(c, print_iter, is_converge)
+
+        class(fdm_rect)               :: c
         logical, intent(in)            :: print_iter
         logical, intent(out)           :: is_converge
 
@@ -206,50 +277,40 @@ module fdm
 
         call fdm_time % on
 
-        ! Set matrix index only once
-        if (c % is_first) then
-            call setup_rectangular(c)
-            c % is_first = .false.
-        end if
-
         ! Build FDM matrix
         call build_matrix(c, upd_fdm_coupling=.true.)
-
-        if (present(nod_intv)) then
-            c % nod_intv = nod_intv
-        end if
 
         ! Initialize fission source
         call get_fission_src(c)
         fc = integrate(c, c % fsrc)
 
         ! Init error vector
-        errn = 1._DP
+        errn = 1._dp
         e1 = integrate(c, errn)
 
         call fdm_time % off
     
         !Start outer iteration
         is_converge    = .false.
-        do i = 1, max_outer
+        do i = 1, c % max_outer
 
             call fdm_time % on
-            fco        = fc               ! Save old integrated fission source
-            Keo        = c % Keff         ! Save old keff
+            fco       = fc               ! Save old integrated fission source
+            Keo       = c % Keff         ! Save old keff
             flux_old  = c % flux          ! Save old flux
             fsrc_old  = c % fsrc          ! Save old fission source
-            erro       = errn             ! Save old fission source error/difference
+            erro      = errn             ! Save old fission source error/difference
             
             ! Inner iteration
             do g = 1, c % ng
                 call get_total_src(c, g, bs)
-                call linear_solver(c % m % mtx(g), c % m % ind, max_inner, bs, c % flux(:,g))
+                call linear_solver(c % m % mtx(g), c % m % ind, c % max_inner, bs, c % flux(:,g))
             end do
 
             call get_fission_src(c)                      !Update fission source
             errn = c % fsrc - fsrc_old
             e2 = norm2(errn)
-            if (MOD(i, extrp) == 0) then
+            if (MOD(i, c % extrp) == 0) then
                 call fsrc_extrp(e1, e2, erro, errn, c % fsrc, print_iter) ! Fission source extrapolation
             end if
             e1 = e2
@@ -260,7 +321,7 @@ module fdm
                 write(fid,'(I5,F13.6,2ES15.5)') i, c % Keff, c % fsrc_diff, c % flux_diff
                 write(output_unit,'(I5,F13.6,2ES15.5)')   i, c % Keff, c % fsrc_diff, c % flux_diff
             end if
-            if ((max_flux_err > c % flux_diff) .and. (max_fiss_err > c % fsrc_diff)) then
+            if ((c % max_flux_err > c % flux_diff) .and. (c % max_fiss_err > c % fsrc_diff)) then
                 is_converge = .true.
                 exit
             end if
@@ -274,14 +335,77 @@ module fdm
     end subroutine
 
     !===============================================================================================!
-    ! to perfom outer iteration
+    ! To perform transient fixed source outer iteration
     !===============================================================================================!
 
-    subroutine fixed_outer(c, max_outer, max_inner, extrp)
+    subroutine transient_outer(c, mod_sigr, is_converge)
 
-        class(core_rect)               :: c
-        integer, intent(in)            :: max_outer, max_inner
-        integer, intent(in)            :: extrp          ! extrapolation interval
+        class(fdm_rect)               :: c
+        real(dp), intent(in)           :: mod_sigr(:,:)  ! modified sigma removal for transient
+        logical, intent(out)           :: is_converge
+
+        integer  :: i, g
+        real(dp) :: flux_old(c % nnod, c % ng)
+        real(dp) :: fsrc_old(c % nnod)
+        real(dp) :: bs(c % nnod)
+        real(dp) :: e1, e2
+        real(dp) :: errn(c % nnod), erro(c % nnod)            ! current and past error vectors
+
+        call fdm_time % on
+
+        ! Build FDM matrix
+        call build_matrix(c, upd_fdm_coupling=.true., sigr=mod_sigr)
+
+        ! Init error vector
+        errn = 1._dp
+        e1 = integrate(c, errn)
+
+        call fdm_time % off
+    
+        !Start outer iteration
+        is_converge = .false.
+        do i = 1, c % max_outer
+
+            call fdm_time % on
+            flux_old  = c % flux          ! Save old flux
+            fsrc_old  = c % fsrc         ! Save old fission source
+            erro      = errn             ! Save old fission source error/difference
+            
+            ! Inner iteration
+            do g = 1, c % ng
+                call get_total_transient(c, g, bs)
+                call linear_solver(c % m % mtx(g), c % m % ind, c % max_inner, bs, c % flux(:,g))
+            end do
+
+            call get_fission_src(c)                      !Update fission source
+            errn = c % fsrc - fsrc_old
+            e2 = norm2(errn)
+            if (MOD(i, c % extrp) == 0) then
+                call fsrc_extrp(e1, e2, erro, errn, c % fsrc, .false.) ! Fission source extrapolation
+            end if
+            e1 = e2
+            call get_difference(c % flux, flux_old, c % fsrc, fsrc_old, c % flux_diff, c % fsrc_diff)
+            if ((c % max_flux_err > c % flux_diff) .AND. (c % max_fiss_err > c % fsrc_diff)) then
+                is_converge = .true.
+                exit
+            end if
+            call fdm_time % off
+
+            if (mod(i, c % nod_intv) == 0) then
+                call nodal_update(c, 'static', .false., sigr=mod_sigr)  ! Nodal coefficients update
+            end if
+        end do
+
+    end subroutine
+
+    !===============================================================================================!
+    ! to perfom outer iteration (for TH feedback)
+    ! Has fixed number of outer iterations
+    !===============================================================================================!
+
+    subroutine th_outer(c)
+
+        class(fdm_rect)               :: c
 
         integer  :: i, g
         real(dp) :: fc, fco                                  ! new and old integrated fission SOURCES
@@ -294,47 +418,41 @@ module fdm
 
         call fdm_time % on
 
-        ! Set matrix index only once
-        if (c % is_first) then
-            call setup_rectangular(c)
-            c % is_first = .false.
-        end if
-
         ! Build FDM matrix
         call build_matrix(c, upd_fdm_coupling=.true.)
 
-        c % nod_intv = ceiling(0.45 * real(max_outer))
+        c % nod_intv = ceiling(0.45 * real(c % max_outer))
 
         ! Initialize fission source
         call get_fission_src(c)
         fc = integrate(c, c % fsrc)
 
         ! Init error vector
-        errn = 1._DP
+        errn = 1._dp
         e1 = integrate(c, errn)
 
         call fdm_time % off
     
         !Start outer iteration
-        do i = 1, max_outer
+        do i = 1, c % max_outer
 
             call fdm_time % on
-            fco        = fc               ! Save old integrated fission source
-            Keo        = c % Keff         ! Save old keff
+            fco       = fc               ! Save old integrated fission source
+            Keo       = c % Keff         ! Save old keff
             flux_old  = c % flux          ! Save old flux
             fsrc_old  = c % fsrc          ! Save old fission source
-            erro       = errn             ! Save old fission source error/difference
+            erro      = errn             ! Save old fission source error/difference
             
             ! Inner iteration
             do g = 1, c % ng
                 call get_total_src(c, g, bs)
-                call linear_solver(c % m % mtx(g), c % m % ind, max_inner, bs, c % flux(:,g))
+                call linear_solver(c % m % mtx(g), c % m % ind, c % max_inner, bs, c % flux(:,g))
             end do
 
             call get_fission_src(c)                      !Update fission source
             errn = c % fsrc - fsrc_old
             e2 = norm2(errn)
-            if (MOD(i, extrp) == 0) then
+            if (MOD(i, c % extrp) == 0) then
                 call fsrc_extrp(e1, e2, erro, errn, c % fsrc, .false.) ! Fission source extrapolation
             end if
             e1 = e2
@@ -354,14 +472,9 @@ module fdm
     ! to perfom outer iteration  (fixed source)
     !===============================================================================================!
 
-    subroutine outer_fixed_src(c, max_flux_err, max_fiss_err, &
-        max_outer, max_inner, extrp, nod_intv, print_iter, is_converge)
+    subroutine outer_fixed_src(c, print_iter, is_converge)
     
-        class(core_rect)               :: c
-        real(dp), intent(in)           :: max_flux_err, max_fiss_err
-        integer, intent(in)            :: max_outer, max_inner
-        integer, intent(in)            :: extrp          ! extrapolation interval
-        integer, intent(in), optional  :: nod_intv   ! nodal coupling coefficients update interval
+        class(fdm_rect)               :: c
         logical, intent(in)            :: print_iter
         logical, intent(out)           :: is_converge
 
@@ -374,31 +487,21 @@ module fdm
 
         call fdm_time % on
 
-        ! Set matrix index only once
-        if (c % is_first) then
-            call setup_rectangular(c)
-            c % is_first = .false.
-        end if
-
         ! Build FDM matrix
         call build_matrix(c, upd_fdm_coupling=.true.)
-
-        if (present(nod_intv)) then
-            c % nod_intv = nod_intv
-        end if
     
         ! Initialize fission source
         call get_fission_src(c)
 
         ! Init error vector
-        errn = 1._DP
+        errn = 1._dp
         e1 = integrate(c, errn)
 
         call fdm_time % off
     
         !Start outer iteration
         is_converge = .false.
-        do i = 1, max_outer
+        do i = 1, c % max_outer
 
             call fdm_time % on
             flux_old  = c % flux          ! Save old flux
@@ -408,13 +511,13 @@ module fdm
             ! Inner iteration
             do g = 1, c % ng
                 call get_total_src(c, g, bs)
-                call linear_solver(c % m % mtx(g), c % m % ind, max_inner, bs, c % flux(:,g))
+                call linear_solver(c % m % mtx(g), c % m % ind, c % max_inner, bs, c % flux(:,g))
             end do
 
             call get_fission_src(c)                      !Update fission source
             errn = c % fsrc - fsrc_old
             e2 = norm2(errn)
-            if (MOD(i, extrp) == 0) then
+            if (MOD(i, c % extrp) == 0) then
                 call fsrc_extrp(e1, e2, erro, errn, c % fsrc, print_iter) ! Fission source extrapolation
             end if
             e1 = e2
@@ -423,7 +526,7 @@ module fdm
                 write(fid,'(I5,2ES15.5)') i, c % fsrc_diff, c % flux_diff
                 write(output_unit,'(I5,2ES15.5)')   i, c % fsrc_diff, c % flux_diff
             end if
-            if ((max_flux_err > c % flux_diff) .AND. (max_fiss_err > c % fsrc_diff)) then
+            if ((c % max_flux_err > c % flux_diff) .AND. (c % max_fiss_err > c % fsrc_diff)) then
                 is_converge = .true.
                 exit
             end if
@@ -440,14 +543,9 @@ module fdm
     ! to perfom outer iteration (adjoint)
     !===============================================================================================!
 
-    subroutine outer_adjoint(c, max_flux_err, max_fiss_err, &
-        max_outer, max_inner, extrp, nod_intv, print_iter, is_converge)
+    subroutine outer_adjoint(c, print_iter, is_converge)
     
-        class(core_rect)               :: c
-        real(dp), intent(in)           :: max_flux_err, max_fiss_err
-        integer, intent(in)            :: max_outer, max_inner
-        integer, intent(in)            :: extrp          ! extrapolation interval
-        integer, intent(in), optional  :: nod_intv   ! nodal coupling coefficients update interval
+        class(fdm_rect)               :: c
         logical, intent(in)            :: print_iter
         logical, intent(out)           :: is_converge
 
@@ -462,32 +560,22 @@ module fdm
 
         call fdm_time % on
 
-        ! Set matrix index only once
-        if (c % is_first) then
-            call setup_rectangular(c)
-            c % is_first = .false.
-        end if
-
         ! Build FDM matrix
         call build_matrix(c, upd_fdm_coupling=.true.)
-
-        if (present(nod_intv)) then
-            c % nod_intv = nod_intv
-        end if
     
         ! Initialize fission source
         call get_fission_adjoint(c)
         fc = integrate(c, c % fsrc)
 
         ! Init error vector
-        errn = 1._DP
+        errn = 1._dp
         e1   = integrate(c, errn)
 
         call fdm_time % off
     
         !Start outer iteration
         is_converge = .false.
-        do i = 1, max_outer
+        do i = 1, c % max_outer
 
             call fdm_time % on
             fco        = fc               ! Save old integrated fission source
@@ -499,13 +587,13 @@ module fdm
             ! Inner iteration
             do g = c % ng, 1, -1
                 call get_total_adjoint(c, g, bs)
-                call linear_solver(c % m % mtx(g), c % m % ind, max_inner, bs, c % flux(:,g))
+                call linear_solver(c % m % mtx(g), c % m % ind, c % max_inner, bs, c % flux(:,g))
             end do
 
             call get_fission_adjoint(c)                      !Update fission source
             errn = c % fsrc - fsrc_old
             e2 = norm2(errn)
-            if (MOD(i, extrp) == 0) then
+            if (MOD(i, c % extrp) == 0) then
                 call fsrc_extrp(e1, e2, erro, errn, c % fsrc, print_iter) ! Fission source extrapolation
             end if
             e1 = e2
@@ -516,7 +604,7 @@ module fdm
                 write(fid,'(I5,F13.6,2ES15.5)') i, c % Keff, c % fsrc_diff, c % flux_diff
                 write(output_unit,'(I5,F13.6,2ES15.5)')   i, c % Keff, c % fsrc_diff, c % flux_diff
             end if
-            if ((max_flux_err > c % flux_diff) .AND. (max_fiss_err > c % fsrc_diff)) then
+            if ((c % max_flux_err > c % flux_diff) .AND. (c % max_fiss_err > c % fsrc_diff)) then
                 is_converge = .true.
                 exit
             end if
@@ -533,11 +621,12 @@ module fdm
     ! To update nodal coupling coefficients (D hat)
     !===============================================================================================!
 
-    subroutine nodal_update(c, calc_mode, print_iter)
+    subroutine nodal_update(c, calc_mode, print_iter, sigr)
       
-        class(core_rect), intent(in)  :: c
+        class(fdm_rect), intent(in)   :: c
         character(*), intent(in)      :: calc_mode
         logical, intent(in)           :: print_iter
+        real(dp), optional            :: sigr(:,:)
 
         call nodal_time % on
       
@@ -551,7 +640,7 @@ module fdm
         end if
 
         ! Update CMFD matrix
-        call build_matrix(c, upd_fdm_coupling=.false.)
+        call build_matrix(c, upd_fdm_coupling=.false., sigr=sigr)
 
         if (print_iter) then
           write(fid,*) '    .....NODAL COUPLING UPDATED..... '
@@ -606,12 +695,11 @@ module fdm
 
     pure subroutine get_total_src(c, g, total_src)
 
-        class(core_rect), intent(inout)  :: c
+        class(fdm_rect), intent(inout)  :: c
         integer, intent(in)         :: g
         real(dp), intent(out)       :: total_src(:)
 
         integer                  :: n, h
-        real(dp)                 :: scat_src(c % nnod, c % ng)
         real(dp)                 :: tmp_sum(c % nnod, c % ng)
 
         tmp_sum = 0.0
@@ -627,11 +715,46 @@ module fdm
             end do
         end do
 
-        scat_src(:,g) = sum(tmp_sum, dim=2) 
+        c % scat(:,g) = sum(tmp_sum, dim=2) 
 
         do concurrent (n = 1:c % nnod)
             total_src(n) = c % xs % chi(n, g) * c % fsrc(n) / c % Keff &
-            + scat_src(n, g) + c % exsrc(n, g)
+            + c % scat(n, g) + c % exsrc(n, g)
+        end do
+    
+    end subroutine
+
+    !===============================================================================================!
+    ! calculate total source
+    !===============================================================================================!
+
+    pure subroutine get_total_transient(c, g, total_src)
+
+        class(fdm_rect), intent(inout)  :: c
+        integer, intent(in)         :: g
+        real(dp), intent(out)       :: total_src(:)
+
+        integer                  :: n, h
+        real(dp)                 :: tmp_sum(c % nnod, c % ng)
+
+        tmp_sum = 0.0
+        do h = 1, g-1
+            do concurrent (n = 1:c % nnod)
+                tmp_sum(n,h) = c % xs % sigs(n, h, g) * c % flux(n, h)
+            end do
+        end do
+
+        do h = g+1, c % ng
+            do concurrent (n = 1:c % nnod)
+                tmp_sum(n,h) = c % xs % sigs(n, h, g) * c % flux(n, h)
+            end do
+        end do
+
+        c % scat(:,g) = sum(tmp_sum, dim=2) 
+
+        do concurrent (n = 1:c % nnod)
+            total_src(n) = (1. - c % total_beta(c % ind_mat(n)) + c % dfis(n)) * c % xs % chi(n, g) * c % fsrc(n) &
+            + c % scat(n,g) + c % exsrc(n,g)
         end do
     
     end subroutine
@@ -642,12 +765,11 @@ module fdm
 
     pure subroutine get_total_adjoint(c, g, total_src)
 
-        class(core_rect), intent(inout)  :: c
+        class(fdm_rect), intent(inout)  :: c
         integer, intent(in)         :: g
         real(dp), intent(out)       :: total_src(:)
 
         integer                  :: n, h
-        real(dp)                 :: scat_src(c % nnod, c % ng)
         real(dp)                 :: tmp_sum(c % nnod, c % ng)
 
         tmp_sum = 0.0
@@ -663,11 +785,11 @@ module fdm
             end do
         end do
 
-        scat_src(:,g) = sum(tmp_sum, dim=2) 
+        c % scat(:,g) = sum(tmp_sum, dim=2)
 
         do concurrent (n = 1:c % nnod)
             total_src(n) = c % xs % nuf(n, g) * c % fsrc(n) / c % Keff &
-            + scat_src(n, g) + c % exsrc(n, g)
+            + c % scat(n, g) + c % exsrc(n, g)
         end do
     
     end subroutine
@@ -678,7 +800,7 @@ module fdm
 
     pure subroutine get_fission_src(c)
 
-        class(core_rect), intent(inout) :: c
+        class(fdm_rect), intent(inout) :: c
 
         integer                 :: g, n
         real(dp)                :: tmp_sum(c % nnod, c % ng)
@@ -700,7 +822,7 @@ module fdm
 
     pure subroutine get_fission_adjoint(c)
 
-        class(core_rect), intent(inout) :: c
+        class(fdm_rect), intent(inout) :: c
 
         integer                 :: g, n
         real(dp)                :: tmp_sum(c % nnod, c % ng)
@@ -732,7 +854,7 @@ module fdm
         domiR = e2 / e1            ! Dominance ratio
         mval = maxval(abs(erro))
         if (mval * mval < 0.0) domiR = -domiR
-        fsrc = fsrc + domiR / (1._DP - domiR) * errn
+        fsrc = fsrc + domiR / (1._dp - domiR) * errn
 
         if (print_iter) then
             write(fid,*) '    ...FISSION SOURCE EXTRAPOLATED...'
@@ -747,7 +869,7 @@ module fdm
 
     pure function integrate(c, a) result(res)
 
-        class(core_rect), intent(in) :: c
+        class(fdm_rect), intent(in) :: c
         real(dp), intent(in)    :: a(:)
         real(dp)                :: res
 
@@ -766,7 +888,7 @@ module fdm
 
     subroutine setup_rectangular(c)
 
-        class(core_rect)  :: c
+        class(fdm_rect)  :: c
 
         integer :: nnod
         integer :: nxx, nyy, nzz
@@ -788,6 +910,7 @@ module fdm
         ! Setup matrix
         call set_fdm_matrix(c)
 
+        ! set nodal update data
         if (c % kernel .ne. ' FDM') then
             allocate(c % d)
             
@@ -809,7 +932,7 @@ module fdm
 
     subroutine set_fdm_matrix(c)
 
-        class(core_rect)          :: c
+        class(fdm_rect)          :: c
 
         integer  :: n, i, j, k
         integer  :: n_non_zero
@@ -840,7 +963,7 @@ module fdm
 
     subroutine set_fdm_index(c)
 
-        class(core_rect)         :: c
+        class(fdm_rect)         :: c
 
         integer  :: nodp(c % nxx, c % nyy)  !radial node position
         integer  :: n, np, idx
@@ -926,21 +1049,29 @@ module fdm
     ! Setup sparse penta-diagonal matrix indexed in CSR                                             !
     !===============================================================================================!
 
-    subroutine build_matrix(c, upd_fdm_coupling)
+    subroutine build_matrix(c, upd_fdm_coupling, sigr)
 
-        class(core_rect), target   :: c
-        logical, intent(in)   :: upd_fdm_coupling
+        class(fdm_rect), target       :: c
+        logical, intent(in)            :: upd_fdm_coupling
+        real(dp), intent(in), optional :: sigr(:,:)
 
         integer                     :: n, g, idx
 
-        integer :: nnod, ng
-        integer :: i, j, k
+        real(dp) :: sigma_removal(c % nnod, c % ng)
+        integer  :: nnod, ng
+        integer  :: i, j, k
 
         nnod = c % nnod
         ng   = c % ng
     
         ! If need to calculate FDM coupling coefficients
         if (upd_fdm_coupling) call fdm_coupling_coef(c)
+
+        if (present(sigr)) then
+            sigma_removal = sigr
+        else
+            sigma_removal = c % xs % sigr
+        end if
     
         ! Setup CMFD linear system
         do g = 1, ng
@@ -974,7 +1105,7 @@ module fdm
                 (c % df(n, g, 1) + c % df(n, g, 2) - c % dn(n, g, 1) + c % dn(n, g, 2)) / c % xdel(i) + &
                 (c % df(n, g, 3) + c % df(n, g, 4) - c % dn(n, g, 3) + c % dn(n, g, 4)) / c % ydel(j) + &
                 (c % df(n, g, 5) + c % df(n, g, 6) - c % dn(n, g, 5) + c % dn(n, g, 6)) / c % zdel(k) + &
-                c % xs % sigr(n, g)
+                sigma_removal(n, g)
         
                  ! Upper diagonal matrix element for x-direction
                 if (i /= c % ystag(j) % smax) then
@@ -1005,7 +1136,7 @@ module fdm
 
     pure subroutine fdm_coupling_coef(c)
 
-        class(core_rect), intent(inout) :: c
+        class(fdm_rect), intent(inout) :: c
 
         real(dp), parameter :: big = 1.e30
         integer  :: g

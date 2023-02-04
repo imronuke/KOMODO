@@ -3,25 +3,23 @@ module data
 
     use iso_fortran_env, only: real64, output_unit
     use stagger
-    use fdm
-    use xsec
-    use th
-  
+
     implicit none
   
+    public
     save
 
     ! Some constants
-    integer, parameter    :: dp = real64
-    real(dp), parameter   :: pi = acos(-1.0)
-    integer , parameter   :: length_word = 30
-    integer , parameter   :: length_line = 200
-    integer , parameter   :: length_card = 4
-    integer, parameter    :: YES = 1
-    integer, parameter    :: NO = 0
-    integer, parameter    :: ZERO_FLUX = 0
-    integer, parameter    :: ZERO_INCOMING = 1
-    integer, parameter    :: REFLECTIVE = 2
+    integer, parameter, private  :: dp = real64
+    real(dp), parameter          :: pi = acos(-1.0)
+    integer , parameter          :: length_word = 30
+    integer , parameter          :: length_line = 200
+    integer , parameter          :: length_card = 4
+    integer, parameter           :: YES = 1
+    integer, parameter           :: NO = 0
+    integer, parameter           :: ZERO_FLUX = 0
+    integer, parameter           :: ZERO_INCOMING = 1
+    integer, parameter           :: REFLECTIVE = 2
 
     integer :: ounit                      ! output file unit number
 
@@ -33,11 +31,6 @@ module data
     integer :: boutp = NO
     
     character(len=length_word) :: mode    ! calculation mode
-
-    type(core_rect)            :: fdm            ! Finite Difference Object
-    type(th_type), allocatable :: th             ! Thermal-hydraulics Object
-    type(xs_change_type)       :: xsc            ! object fo xs changes due to a parameter change
-
 
     ! Flux and fission source
     real(dp), allocatable :: flux(:,:)           ! node-averaged flux
@@ -103,16 +96,16 @@ module data
     real(dp), allocatable :: flow_rate(:)           ! sub-channel coolant mass flow rate(Kg/s)
     
     ! Crod changes
-    integer :: nbank                                                         ! Number of CR banks
-    real(dp), allocatable :: bpos (:)                                        ! CR bank position
-    real(dp), allocatable :: fbpos(:)                                        ! Final CR bank position
-    real(dp), allocatable :: tmove (:)                                       ! Time when CR bank starts moving
-    real(dp), allocatable :: bspeed(:)                                       ! CR bank movement speed
-    integer,  allocatable :: mdir  (:)                                       ! To indicate CR movement direction (0=do not move, 1=down, 2 = up)
-    real(dp)              :: nstep                                           ! Number of steps
-    real(dp)              :: coreh                                           ! Core Height
-    integer, allocatable  :: fbmap(:,:)                                      ! Radial control rod bank map (node wise)
-    real(dp)              :: zero_pos, step_size                             ! Zero step position and step size
+    integer               :: nbank                  ! Number of CR banks
+    real(dp), allocatable :: bank_pos(:)            ! CR bank position
+    real(dp), allocatable :: bank_pos_final(:)      ! Final CR bank position
+    real(dp), allocatable :: t_move (:)             ! Time when CR bank starts moving
+    real(dp), allocatable :: bank_speed(:)          ! CR bank movement speed
+    integer,  allocatable :: direction(:)           ! To indicate CR movement direction (0=do not move, 1=down, 2 = up)
+    real(dp)              :: nstep                  ! Number of steps
+    real(dp)              :: coreh                  ! Core Height
+    integer, allocatable  :: fbmap(:,:)             ! Radial control rod bank map (node wise)
+    real(dp)              :: zero_pos, step_size    ! Zero step position and step size
   
     ! Iteration Control
     real(dp) :: max_flux_error = 1.e-5    ! Flux Error Criteria
@@ -137,10 +130,11 @@ module data
     
     ! Transient parameters
     integer, parameter    :: nf = 6                ! Number of delayed neutron precusor family
-    real(dp)              :: small_theta = 1._dp   ! Small theta and big theta for transient using theta method
-    real(dp)              :: big_theta = 0._dp     ! Small theta and big theta for transient using theta method
+    real(dp)              :: small_theta = 1._dp   ! Theta transient using theta method
     real(dp)              :: beta(nf)              ! beta (delayed neutron fraction)
     real(dp)              :: lambda(nf)            ! lambda (precusor decay constant)
+    real(dp), allocatable :: total_beta(:)         ! beta total for each material
+    real(dp), allocatable :: dfis(:)               
     real(dp)              :: core_beta             ! Core averaged beta
     real(dp), allocatable :: neutron_velo(:)       ! Neutron velocity
     real(dp)              :: total_time            ! TOTAL SIMULATION TIME

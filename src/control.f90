@@ -1,11 +1,12 @@
 module control
-    use iso_fortran_env, only: output_unit, error_unit
+    use iso_fortran_env, only: real64, output_unit, error_unit
     use data
     use print
     use fdm
     use xsec
     use time
     use th
+    use transient
     use utilities
 
     implicit none
@@ -14,11 +15,39 @@ module control
 
     save
 
+    integer, parameter                    :: dp = real64
+    type(fdm_rect), public               :: fdm            ! Finite Difference Object
+    type(th_type), allocatable, public    :: th             ! Thermal-hydraulics Object
+    type(trans_type), allocatable, public :: tr             ! Transient Object
+    type(xs_change_type), public          :: xsc            ! object for xs changes due to a parameter change
+
     real(dp), allocatable      :: mesh_temp(:,:) ! fuel mesh temperature[nzz, n_fuel]
 
-    public :: forward, adjoint, fixedsrc, cbsearch, cbsearch_th
+    public :: forward, adjoint, fixedsrc, cbc_search, rod_eject
 
     contains
+
+    !===============================================================================================!
+    ! Transient / Rod Ejection calculation
+    !===============================================================================================!
+
+    subroutine rod_eject()
+
+        real(dp) :: fn(nnod)
+
+        call calculation_init()
+
+        if (bther == NO) then
+            call rod_eject_no_th(tr)
+        ! else
+        !     call cbc_search_no_th()
+        end if
+
+        call power_dist_print(fdm, fn)
+        call print_power_map(fn)
+
+
+    end subroutine
 
     !===============================================================================================!
     ! forward calculation
@@ -31,21 +60,14 @@ module control
         logical  :: converge
 
         call calculation_init()
-        call xsec_update(fdm % xs, xsc, bcon, ftem, mtem, cden, bpos)
+        call xsec_update(fdm % xs, xsc, bcon, ftem, mtem, cden, bank_pos)
         
         call print_head()
-        call outer_iter(fdm, 1.e-5_dp, 1.e-5_dp, max_outer=1000, max_inner=2, &
-        extrp = 5, print_iter = .true., is_converge=converge)
 
+        call outer_iter(fdm, print_iter = .true., is_converge=converge)
         if (.not. converge) call print_fail_converge()
 
-        fn = 0
-        do g = 1, ng
-            do n = 1, nnod
-                fn(n) = fn(n) + fdm % xs % nuf(n,g) * flux(n,g)
-            end do
-        end do
-
+        call power_dist_print(fdm, fn)
         call print_power_map(fn)
 
 
@@ -62,21 +84,14 @@ module control
         logical  :: converge
 
         call calculation_init()
-        call xsec_update(fdm % xs, xsc, bcon, ftem, mtem, cden, bpos)
+        call xsec_update(fdm % xs, xsc, bcon, ftem, mtem, cden, bank_pos)
 
         call print_head()
-        call outer_fixed_src(fdm, 1.e-5_dp, 1.e-5_dp, max_outer=1000, max_inner=2, &
-        extrp = 5, print_iter = .true., is_converge=converge)
 
+        call outer_fixed_src(fdm, print_iter = .true., is_converge=converge)
         if (.not. converge) call print_fail_converge()
 
-        fn = 0
-        do g = 1, ng
-            do n = 1, nnod
-                fn(n) = fn(n) + fdm % xs % nuf(n,g) * flux(n,g)
-            end do
-        end do
-
+        call power_dist_print(fdm, fn)
         call print_power_map(fn)
 
 
@@ -93,21 +108,14 @@ module control
         logical  :: converge
 
         call calculation_init()
-        call xsec_update(fdm % xs, xsc, bcon, ftem, mtem, cden, bpos)
+        call xsec_update(fdm % xs, xsc, bcon, ftem, mtem, cden, bank_pos)
 
         call print_head()
-        call outer_adjoint(fdm, 1.e-5_dp, 1.e-5_dp, max_outer=1000, max_inner=2, &
-        extrp = 5, print_iter = .true., is_converge=converge)
 
+        call outer_adjoint(fdm, print_iter = .true., is_converge=converge)
         if (.not. converge) call print_fail_converge()
 
-        fn = 0
-        do g = 1, ng
-            do n = 1, nnod
-                fn(n) = fn(n) + fdm % xs % nuf(n,g) * flux(n,g)
-            end do
-        end do
-
+        call power_dist_print(fdm, fn)
         call print_power_map(fn)
 
     end subroutine
@@ -116,7 +124,26 @@ module control
     ! critical boron search calculation
     !===============================================================================================!
 
-    subroutine cbsearch()
+    subroutine cbc_search()
+
+        real(dp) :: fn(nnod)
+
+        if (bther == YES) then
+            call cbc_search_th()
+        else
+            call cbc_search_no_th()
+        end if
+
+        call power_dist_print(fdm, fn)
+        call print_power_map(fn)
+
+    end subroutine
+
+    !===============================================================================================!
+    ! critical boron search calculation without TH feedback
+    !===============================================================================================!
+
+    subroutine cbc_search_no_th()
 
         integer  :: n
         real(dp) :: K1, K2
@@ -129,9 +156,8 @@ module control
 
         ! First try
         bcon = xsc % bcon % ref
-        call xsec_update(fdm % xs, xsc, bcon, ftem, mtem, cden, bpos)
-        call outer_iter(fdm, 1.e-5_dp, 1.e-5_dp, max_outer=1000, max_inner=2, &
-        extrp = 5, print_iter = .false., is_converge=converge)
+        call xsec_update(fdm % xs, xsc, bcon, ftem, mtem, cden, bank_pos)
+        call outer_iter(fdm, print_iter = .false., is_converge=converge)
         if (.not. converge) call print_fail_converge()
         bc1 = bcon
         K1  = fdm % Keff
@@ -139,9 +165,8 @@ module control
 
         ! Second try
         bcon = bcon + (K1 - 1.) * bcon   ! Guess next critical boron concentration
-        call xsec_update(fdm % xs, xsc, bcon, ftem, mtem, cden, bpos)
-        call outer_iter(fdm, 1.e-5_dp, 1.e-5_dp, max_outer=1000, max_inner=2, &
-        extrp = 5, print_iter = .false., is_converge=converge)
+        call xsec_update(fdm % xs, xsc, bcon, ftem, mtem, cden, bank_pos)
+        call outer_iter(fdm, print_iter = .false., is_converge=converge)
         if (.not. converge) call print_fail_converge()
         bc2 = bcon
         K2  = fdm % Keff
@@ -151,9 +176,8 @@ module control
         do
             n = n + 1
             bcon = bc2 + (1. - K2) / (K1 - K2) * (bc1 - bc2)
-            call xsec_update(fdm % xs, xsc, bcon, ftem, mtem, cden, bpos)
-            call outer_iter(fdm, 1.e-5_dp, 1.e-5_dp, max_outer=1000, max_inner=2, &
-            extrp = 5, print_iter = .false., is_converge=converge)
+            call xsec_update(fdm % xs, xsc, bcon, ftem, mtem, cden, bank_pos)
+            call outer_iter(fdm, print_iter = .false., is_converge=converge)
             if (.not. converge) call print_fail_converge()
             bc1 = bc2
             bc2 = bcon
@@ -168,10 +192,10 @@ module control
     end subroutine
 
     !===============================================================================================!
-    ! critical boron search calculation
+    ! critical boron search calculation with TH feedback
     !===============================================================================================!
 
-    subroutine cbsearch_th()
+    subroutine cbc_search_th()
 
         integer   :: n
         real(dp)  :: K1, K2
@@ -209,7 +233,7 @@ module control
             if (abs(bc1-bc2) < 0.1) exit
         end do
 
-        call print_tail()
+        call print_tail(fdm)
 
         102 format(I3, F9.2, F14.5, ES14.5, ES13.5, ES17.5)
 
@@ -229,8 +253,8 @@ module control
 
         do i = 1, max_iter
             ftem_prev = ftem
-            call xsec_update(fdm % xs, xsc, bcon, ftem, mtem, cden, bpos)
-            call fixed_outer(fdm, max_outer=20, max_inner=2, extrp=5)
+            call xsec_update(fdm % xs, xsc, bcon, ftem, mtem, cden, bank_pos)
+            call th_outer(fdm)
             call th_solver(flux, ftem, mtem, cden)
             ftem_diff = maxval(abs(ftem - ftem_prev))
         end do
@@ -374,9 +398,11 @@ module control
             cden = 0.734  ! Initial guess (g/cm3)
         endif
 
-        if (calc_mode == 'transient') then
-            allocate(enthalpy(nnod))
-            allocate(flow_rate(nnod))
+        if (present(calc_mode)) then
+            if (calc_mode == 'transient') then
+                allocate(enthalpy(nnod))
+                allocate(flow_rate(nnod))
+            end if
         end if
 
     end subroutine
@@ -387,7 +413,7 @@ module control
 
     subroutine calculation_init()
 
-        call fdm_time % on
+        integer :: nodal_interval, max_outer
 
         allocate(flux(nnod, ng))
         allocate(fsrc(nnod))
@@ -401,41 +427,41 @@ module control
             dc = 1.0
         end if
 
-        call set_rect_data(fdm, kern, ng, nnod, nxx, nyy, nzz, nmat, &
-        east, west, north, south, top, bottom, ounit)
-        
-        call set_rect_pointer(fdm, flux, fsrc, exsrc, ind_mat, xdel, ydel, zdel, vdel, &
-        xstag, ystag, ix, iy, iz, xyz)
+        nodal_interval = ceiling((nxx + nyy + nzz) / 2.5)
+        if (allocated(th)) then
+            max_outer = 20
+        else
+            max_outer = 1000
+        end if
 
         call fdm_time % on
+        call set_fdm_data(fdm, ounit, kern, ng, nnod, nxx, nyy, nzz, nmat, &
+        east, west, north, south, top, bottom, nodal_interval, 1.e-5_dp, 1.e-5_dp, max_outer, 2, 5)
+        call set_fdm_pointer(fdm, flux, fsrc, exsrc, ind_mat, xdel, ydel, zdel, vdel, &
+        xstag, ystag, ix, iy, iz, xyz)
+        call fdm_time % off
 
         call xs_time % on
-
         call set_xs_data(nnod, ng, ind_mat)
         call xsec_setup(fdm % xs, sigtr, siga, nuf, sigf, sigs, chi, dc)
-
         call xs_time % off
 
         if (allocated(th)) then
-            call th_init()
-        else
-            return
+            if (allocated(tr)) then
+                call th_init('transient')
+            else
+                call th_init()
+            end if
         end if
 
-    end subroutine
-
-    !===============================================================================================!
-    ! Initialize calculation
-    !===============================================================================================!
-
-    subroutine print_fail_converge()
-
-        write(error_unit,*)
-        write(error_unit,*) '  MAXIMUM NUMBER OF OUTER ITERATION IS REACHED IN FORWARD CALCULATION.'
-        write(error_unit,*) '  CHECK PROBLEM SPECIFICATION OR CHANGE ITERATION CONTROL (%ITER).'
-        write(error_unit,*) '  PERHAPS BY MAKING FISSION SOURCE INTERPOLATION MORE FREQUENT'
-        write(error_unit,*) '  KOMODO IS STOPING...'
-        stop
+        if (allocated(tr)) then
+            allocate(total_beta(nmat))
+            allocate(dfis(nnod))
+            call set_fdm_transient(fdm, total_beta, dfis)
+            call set_transient_data(tr, ounit, nf, nnod, ng, nmat, total_time, time_step_1, time_step_2, &
+            time_mid, small_theta, bxtab, bextr)
+            call set_transient_pointer(tr, fdm, xsc, beta, lambda, neutron_velo,total_beta, dfis, ind_mat)
+        end if
 
     end subroutine
 
