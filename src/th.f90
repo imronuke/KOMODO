@@ -299,17 +299,17 @@ module th
     ! To update thermal parameters
     !===============================================================================================!
 
-    subroutine th_update(t, linear_pow, tfm, heat_flux, ftem, mtem, cden)
+    subroutine th_update(t, linear_pow, tfm, heat_flux, enthalpy, ftem, mtem, cden)
     
         class(th_type)          :: t
         real(dp), intent(in)    :: linear_pow(:) ! Linear Power Density (W/cm)
         real(dp), intent(inout) :: heat_flux(:)  ! heat flux
         real(dp), intent(inout) :: tfm(:,:)      ! Fuel pin mesh temperature (nzz, n_ring)
+        real(dp), intent(out)   :: enthalpy(:)   ! coolant enthalpy
         real(dp), intent(out)   :: ftem(:)       ! fuel temperature
         real(dp), intent(out)   :: mtem(:)       ! moderator temperature
         real(dp), intent(out)   :: cden(:)       ! moderator density
         
-        real(dp)  :: enthalpy(t % nzz)
         integer   :: i, k
         real(dp)  :: a(t % n_ring + 1)
         real(dp)  :: b(t % n_ring + 1)

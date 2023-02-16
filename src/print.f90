@@ -3,6 +3,7 @@ module print
     use data
     use fdm
     use utilities
+    use auxiliaries, only: par_ave, par_ave_out, print_fail_converge
 
     implicit none
   
@@ -13,29 +14,6 @@ module print
     integer, parameter, private  :: dp = real64
 
     contains
-
-    !===============================================================================================!
-    ! Initialize calculation
-    !===============================================================================================!
-
-    subroutine print_fail_converge()
-
-        write(error_unit,*)
-        write(error_unit,*) '  MAXIMUM NUMBER OF OUTER ITERATION IS REACHED IN FORWARD CALCULATION.'
-        write(error_unit,*) '  CHECK PROBLEM SPECIFICATION OR CHANGE ITERATION CONTROL (%ITER).'
-        write(error_unit,*) '   The two-node nonlinear iteration seems not stable. Try these:'
-        write(error_unit,*) '   1. Change iteration control using %ITER card, '
-        write(error_unit,*) '      Perhaps by making nodal update less frequent,'
-        write(error_unit,*) '      or increase number inner iteration per outer iteration.'
-        write(error_unit,*) '   2. Ensure the node sizes in all directions are as uniform as possible. '
-        write(error_unit,*) '      Also try smaller node size.'
-        write(error_unit,*) '   3. For transient problem, try to reduce time step size.'
-        write(error_unit,*) 
-        write(error_unit,*) '   If this error persists, contact me at makrus.imron@gmail.com'
-        write(error_unit,*) '  KOMODO is stoping'
-        stop
-
-    end subroutine
 
     !===============================================================================================!
     ! Initialize calculation
@@ -60,7 +38,7 @@ module print
         !     power_mult, tm-273.15, mtm-273.15, tf-273.15, mtf-273.15
         !   END IF
         ! else
-        WRITE(*,'(I4, F10.3, F10.4, ES15.4, 12F9.2)') i_step, t_next, rho, &
+        WRITE(output_unit,'(I4, F10.3, F10.4, ES15.4, 12F9.2)') i_step, t_next, rho, &
         power_mult, (bank_pos(n), n = 1, nbank)
       
         WRITE(ounit,'(I4, F10.3, F10.4, ES15.4)') i_step, t_next, rho, &
@@ -206,75 +184,6 @@ module print
         5007 FORMAT(2X, 'OUTLET MODERATOR DENSITY        : ', F7.1, ' kg/m3 (', F7.3, ' g/cc)')
     
     END SUBROUTINE print_tail
-
-    !===============================================================================================!
-    ! To calculate average fuel temp (only for active core)
-    !===============================================================================================!
-
-    SUBROUTINE par_ave(c, par, ave)
-        
-        class(fdm_base)      :: c
-        REAL(DP), INTENT(IN)  :: par(:)
-        REAL(DP), INTENT(OUT) :: ave
-        
-        REAL(DP) :: dum, dum2
-        INTEGER :: n
-        
-        dum = 0.; dum2 = 0.
-        DO n = 1, nnod
-           IF (c % xs % nuf(n,ng) > 0.) THEN
-              dum = dum + par(n) * vdel(n)
-              dum2 = dum2 + vdel(n)
-           END IF
-        END DO
-        
-        ave = dum / dum2
-        
-    END SUBROUTINE par_ave
-        
-    !===============================================================================================!
-    ! To calculate average outlet coolant temperature
-    !===============================================================================================!
-        
-    SUBROUTINE par_ave_out(c, par, ave)
-        
-        class(fdm_base)      :: c
-        REAL(DP), INTENT(IN)  :: par(:)
-        REAL(DP), INTENT(OUT) :: ave
- 
-        REAL(DP) :: dum, dum2
-        INTEGER, DIMENSION(nxx,nyy) :: zmax
-        INTEGER :: n, i, j, k
-        
-        ! get number of nodex in axial direction from bottom -> fuel
-        DO j = 1, nyy
-          DO i = ystag(j)%smin, ystag(j)%smax
-            zmax(i,j) = 0
-            DO k = 1, nzz/2
-              if (c % xs % nuf(xyz(i,j,k),ng) < 1.e-5_dp) zmax(i,j) = zmax(i,j) + 1
-            END DO
-          END DO
-        END DO
-        ! get number of nodex in axial direction from fuel -> top reflectors
-        DO j = 1, nyy
-          DO i = ystag(j)%smin, ystag(j)%smax
-            DO k = 1, nzz
-              if (c % xs % nuf(xyz(i,j,k),ng) > 1.e-5) zmax(i,j) = zmax(i,j) + 1
-            END DO
-          END DO
-        END DO
-        
-        dum = 0.; dum2 = 0.
-        DO n = 1, nnod
-           IF (iz(n) == zmax(ix(n),iy(n)) .AND. c % xs % nuf(n,ng) > 1.e-5) THEN
-              dum = dum + par(n) * vdel(n)
-              dum2 = dum2 + vdel(n)
-           END IF
-        END DO
-        
-        ave = dum / dum2
-        
-    END SUBROUTINE par_ave_out
 
     !===============================================================================================!
     ! To print axially averaged assembly-wise power distribution

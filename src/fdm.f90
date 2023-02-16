@@ -221,6 +221,10 @@ module fdm
         c % dfis => dfis
         c % total_beta => total_beta
 
+        if (c % kernel .ne. ' FDM') then
+            call set_nodal_transient(c % d, c % ind_mat, c % total_beta, c % dfis)
+        end if
+
     end subroutine
 
     !===============================================================================================!
@@ -233,7 +237,7 @@ module fdm
 
         deallocate(c % scat)
         deallocate(c % df, c % dn)
-        deallocate(c % d)
+        if (allocated(c % d)) deallocate(c % d)
 
         c % flux => null()
         c % fsrc => null()
@@ -297,8 +301,8 @@ module fdm
             call fdm_time % on
             fco       = fc               ! Save old integrated fission source
             Keo       = c % Keff         ! Save old keff
-            flux_old  = c % flux          ! Save old flux
-            fsrc_old  = c % fsrc          ! Save old fission source
+            flux_old  = c % flux         ! Save old flux
+            fsrc_old  = c % fsrc         ! Save old fission source
             erro      = errn             ! Save old fission source error/difference
             
             ! Inner iteration
@@ -310,7 +314,7 @@ module fdm
             call get_fission_src(c)                      !Update fission source
             errn = c % fsrc - fsrc_old
             e2 = norm2(errn)
-            if (MOD(i, c % extrp) == 0) then
+            if (mod(i, c % extrp) == 0) then
                 call fsrc_extrp(e1, e2, erro, errn, c % fsrc, print_iter) ! Fission source extrapolation
             end if
             e1 = e2
@@ -367,7 +371,7 @@ module fdm
         do i = 1, c % max_outer
 
             call fdm_time % on
-            flux_old  = c % flux          ! Save old flux
+            flux_old  = c % flux         ! Save old flux
             fsrc_old  = c % fsrc         ! Save old fission source
             erro      = errn             ! Save old fission source error/difference
             
@@ -380,7 +384,7 @@ module fdm
             call get_fission_src(c)                      !Update fission source
             errn = c % fsrc - fsrc_old
             e2 = norm2(errn)
-            if (MOD(i, c % extrp) == 0) then
+            if (mod(i, c % extrp) == 0) then
                 call fsrc_extrp(e1, e2, erro, errn, c % fsrc, .false.) ! Fission source extrapolation
             end if
             e1 = e2
@@ -392,7 +396,7 @@ module fdm
             call fdm_time % off
 
             if (mod(i, c % nod_intv) == 0) then
-                call nodal_update(c, 'static', .false., sigr=mod_sigr)  ! Nodal coefficients update
+                call nodal_update(c, 'transient', print_iter=.false., sigr=mod_sigr)  ! Nodal coefficients update
             end if
         end do
 
@@ -439,8 +443,8 @@ module fdm
             call fdm_time % on
             fco       = fc               ! Save old integrated fission source
             Keo       = c % Keff         ! Save old keff
-            flux_old  = c % flux          ! Save old flux
-            fsrc_old  = c % fsrc          ! Save old fission source
+            flux_old  = c % flux         ! Save old flux
+            fsrc_old  = c % fsrc         ! Save old fission source
             erro      = errn             ! Save old fission source error/difference
             
             ! Inner iteration
@@ -449,20 +453,26 @@ module fdm
                 call linear_solver(c % m % mtx(g), c % m % ind, c % max_inner, bs, c % flux(:,g))
             end do
 
-            call get_fission_src(c)                      !Update fission source
+            ! if (any(c % flux < 0.)) then
+            !     write(*,*) i
+            !     stop
+            ! end if
+
+            call get_fission_src(c)      !Update fission source
             errn = c % fsrc - fsrc_old
             e2 = norm2(errn)
-            if (MOD(i, c % extrp) == 0) then
+            if (mod(i, c % extrp) == 0) then
                 call fsrc_extrp(e1, e2, erro, errn, c % fsrc, .false.) ! Fission source extrapolation
             end if
             e1 = e2
             fc = integrate(c, c % fsrc)
-            c % Keff = Keo * fc / fco             ! Update Keff
+            c % Keff = Keo * fc / fco    ! Update Keff
+            write(*,*) c % Keff
             call get_difference(c % flux, flux_old, c % fsrc, fsrc_old, c % flux_diff, c % fsrc_diff)
             call fdm_time % off
 
             if (mod(i, c % nod_intv) == 0) then
-                call nodal_update(c, 'static', .false.)  ! Nodal coefficients update
+                call nodal_update(c, 'static', print_iter=.false.)  ! Nodal coefficients update
             end if
         end do
 
@@ -517,7 +527,7 @@ module fdm
             call get_fission_src(c)                      !Update fission source
             errn = c % fsrc - fsrc_old
             e2 = norm2(errn)
-            if (MOD(i, c % extrp) == 0) then
+            if (mod(i, c % extrp) == 0) then
                 call fsrc_extrp(e1, e2, erro, errn, c % fsrc, print_iter) ! Fission source extrapolation
             end if
             e1 = e2
@@ -593,7 +603,7 @@ module fdm
             call get_fission_adjoint(c)                      !Update fission source
             errn = c % fsrc - fsrc_old
             e2 = norm2(errn)
-            if (MOD(i, c % extrp) == 0) then
+            if (mod(i, c % extrp) == 0) then
                 call fsrc_extrp(e1, e2, erro, errn, c % fsrc, print_iter) ! Fission source extrapolation
             end if
             e1 = e2
@@ -640,11 +650,15 @@ module fdm
         end if
 
         ! Update CMFD matrix
-        call build_matrix(c, upd_fdm_coupling=.false., sigr=sigr)
+        if (present(sigr)) then
+            call build_matrix(c, upd_fdm_coupling=.false., sigr=sigr)
+        else
+            call build_matrix(c, upd_fdm_coupling=.false.)
+        end if
 
         if (print_iter) then
-          write(fid,*) '    .....NODAL COUPLING UPDATED..... '
-          write(output_unit,*) '    .....NODAL COUPLING UPDATED..... '
+            write(fid,*) '    .....NODAL COUPLING UPDATED..... '
+            write(output_unit,*) '    .....NODAL COUPLING UPDATED..... '
         end if
 
         call nodal_time % off
@@ -679,10 +693,9 @@ module fdm
 
         fsrc_diff = maxval(diff)
 
-
         do g = 1, ng
             do n = 1, nnod
-                if (flux(n,g) > 0.) diffx = abs(flux(n, g) - flux_last(n, g)) / flux(n, g)
+                if (flux(n,g) > 0.) diffx = abs(flux(n,g) - flux_last(n,g)) / flux(n,g)
                 flux_diff = max(flux_diff, diffx)
             end do
         end do
@@ -718,8 +731,8 @@ module fdm
         c % scat(:,g) = sum(tmp_sum, dim=2) 
 
         do concurrent (n = 1:c % nnod)
-            total_src(n) = c % xs % chi(n, g) * c % fsrc(n) / c % Keff &
-            + c % scat(n, g) + c % exsrc(n, g)
+            total_src(n) = c % xs % chi(n,g) * c % fsrc(n) / c % Keff &
+            + c % scat(n,g) + c % exsrc(n,g)
         end do
     
     end subroutine
@@ -753,7 +766,7 @@ module fdm
         c % scat(:,g) = sum(tmp_sum, dim=2) 
 
         do concurrent (n = 1:c % nnod)
-            total_src(n) = (1. - c % total_beta(c % ind_mat(n)) + c % dfis(n)) * c % xs % chi(n, g) * c % fsrc(n) &
+            total_src(n) = (1. - c % total_beta(c % ind_mat(n)) + c % dfis(n)) * c % xs % chi(n,g) * c % fsrc(n) &
             + c % scat(n,g) + c % exsrc(n,g)
         end do
     
@@ -775,21 +788,21 @@ module fdm
         tmp_sum = 0.0
         do h = 1, g-1
             do concurrent (n = 1:c % nnod)
-                tmp_sum(n,h) = c % xs % sigs(n, g, h) * c % flux(n, h)
+                tmp_sum(n,h) = c % xs % sigs(n,g,h) * c % flux(n, h)
             end do
         end do
 
         do h = g+1, c % ng
             do concurrent (n = 1:c % nnod)
-                tmp_sum(n,h) = c % xs % sigs(n, g, h) * c % flux(n, h)
+                tmp_sum(n,h) = c % xs % sigs(n,g,h) * c % flux(n, h)
             end do
         end do
 
         c % scat(:,g) = sum(tmp_sum, dim=2)
 
         do concurrent (n = 1:c % nnod)
-            total_src(n) = c % xs % nuf(n, g) * c % fsrc(n) / c % Keff &
-            + c % scat(n, g) + c % exsrc(n, g)
+            total_src(n) = c % xs % nuf(n,g) * c % fsrc(n) / c % Keff &
+            + c % scat(n,g) + c % exsrc(n,g)
         end do
     
     end subroutine
@@ -808,7 +821,7 @@ module fdm
         tmp_sum = 0.0
         do g = 1, c % ng
             do concurrent (n = 1:c % nnod)
-                tmp_sum(n,g) = c % flux(n, g) * c % xs % nuf(n, g)
+                tmp_sum(n,g) = c % flux(n,g) * c % xs % nuf(n,g)
             end do
         end do
         
@@ -830,7 +843,7 @@ module fdm
         tmp_sum = 0.0
         do g = 1, c % ng
             do concurrent (n = 1:c % nnod)
-                tmp_sum(n,g) = c % flux(n, g) * c % xs % chi(n, g)
+                tmp_sum(n,g) = c % flux(n,g) * c % xs % chi(n,g)
             end do
         end do
         
@@ -1084,45 +1097,45 @@ module fdm
                 ! Lower diagonal matrix element for z-direction
                 if (k /= 1) then
                     idx = idx + 1
-                    c % m % mtx(g) % elmn(idx) = -(c % df(n, g, 6) - c % dn(n, g, 6)) / c % zdel(k)
+                    c % m % mtx(g) % elmn(idx) = -(c % df(n,g,6) - c % dn(n,g,6)) / c % zdel(k)
                 end if
         
                 ! Lower diagonal matrix element for y-direction
                 if (j /= c % xstag(i) % smin) then
                     idx = idx + 1
-                    c % m % mtx(g) % elmn(idx) = -(c % df(n, g, 4) - c % dn(n, g, 4)) / c % ydel(j)
+                    c % m % mtx(g) % elmn(idx) = -(c % df(n,g,4) - c % dn(n,g,4)) / c % ydel(j)
                 end if
         
                 ! Lower diagonal matrix element for x-direction
                 if (i /= c % ystag(j) % smin) then
                     idx = idx + 1
-                    c % m % mtx(g) % elmn(idx) = -(c % df(n, g, 2) - c % dn(n, g, 2)) / c % xdel(i)
+                    c % m % mtx(g) % elmn(idx) = -(c % df(n,g,2) - c % dn(n,g,2)) / c % xdel(i)
                 end if
         
                 ! Diagonal matrix elementss
                 idx = idx + 1
                 c % m % mtx(g) % elmn(idx) = &
-                (c % df(n, g, 1) + c % df(n, g, 2) - c % dn(n, g, 1) + c % dn(n, g, 2)) / c % xdel(i) + &
-                (c % df(n, g, 3) + c % df(n, g, 4) - c % dn(n, g, 3) + c % dn(n, g, 4)) / c % ydel(j) + &
-                (c % df(n, g, 5) + c % df(n, g, 6) - c % dn(n, g, 5) + c % dn(n, g, 6)) / c % zdel(k) + &
-                sigma_removal(n, g)
+                (c % df(n,g,1) + c % df(n,g,2) - c % dn(n,g,1) + c % dn(n,g,2)) / c % xdel(i) + &
+                (c % df(n,g,3) + c % df(n,g,4) - c % dn(n,g,3) + c % dn(n,g,4)) / c % ydel(j) + &
+                (c % df(n,g,5) + c % df(n,g,6) - c % dn(n,g,5) + c % dn(n,g,6)) / c % zdel(k) + &
+                sigma_removal(n,g)
         
                  ! Upper diagonal matrix element for x-direction
                 if (i /= c % ystag(j) % smax) then
                     idx = idx + 1
-                    c % m % mtx(g) % elmn(idx) = -(c % df(n, g, 1) + c % dn(n, g, 1)) / c % xdel(i)
+                    c % m % mtx(g) % elmn(idx) = -(c % df(n,g,1) + c % dn(n,g,1)) / c % xdel(i)
                 end if
         
                 ! Upper diagonal matrix element for y-direction
                 if (j /= c % xstag(i) % smax) then
                     idx = idx + 1
-                    c % m % mtx(g) % elmn(idx) = -(c % df(n, g, 3) + c % dn(n, g, 3)) / c % ydel(j)
+                    c % m % mtx(g) % elmn(idx) = -(c % df(n,g,3) + c % dn(n,g,3)) / c % ydel(j)
                 end if
         
                 ! Upper diagonal matrix element for z-direction
                 if (k /= c % nzz) then
                     idx = idx + 1
-                    c % m % mtx(g) % elmn(idx) = -(c % df(n, g, 5) + c % dn(n, g, 5)) / c % zdel(k)
+                    c % m % mtx(g) % elmn(idx) = -(c % df(n,g,5) + c % dn(n,g,5)) / c % zdel(k)
                 end if
       
             end do
@@ -1152,7 +1165,7 @@ module fdm
                 ! Set i, j, k
                 i = c % ix(n); j = c % iy(n); k = c % iz(n)
     
-                D  = c % xs % D(n, g)
+                D  = c % xs % D(n,g)
                 xd = c % xdel(i)
                 yd = c % ydel(j)
                 zd = c % zdel(k)
@@ -1160,116 +1173,93 @@ module fdm
                 ! Set FDM coupling coefficients in x direction
                 if (i == c % ystag(j) % smax) then
                     if (xeast == zero_flux) then
-                        c % df(n, g, 1) = 2. * big * D / (2. * D + big * xd)
+                        c % df(n,g,1) = 2. * big * D / (2. * D + big * xd)
                     elseif (xeast == zero_incoming) then
-                        c % df(n, g, 1) =  D / (2. * D + 0.5 * xd)
+                        c % df(n,g,1) =  D / (2. * D + 0.5 * xd)
                     else
-                        c % df(n, g, 1) =  0.
+                        c % df(n,g,1) =  0.
                     end if
                 else
                     DN  = c % xs % D(c % xyz(i+1, j, k), g)
                     xdn = c % xdel(i+1)
-                    c % df(n, g, 1) =  2. * D * DN / (D * xdn +  DN * xd)
+                    c % df(n,g,1) =  2. * D * DN / (D * xdn +  DN * xd)
                 endif
     
                 if (i == c % ystag(j) % smin) then
                     if (xwest == zero_flux) then
-                        c % df(n, g, 2) = 2. * big * D / (2. * D + big * xd)
+                        c % df(n,g,2) = 2. * big * D / (2. * D + big * xd)
                     elseif (xwest == zero_incoming) then
-                        c % df(n, g, 2) =  D / (2. * D + 0.5 * xd)
+                        c % df(n,g,2) =  D / (2. * D + 0.5 * xd)
                     else
-                        c % df(n, g, 2) =  0.
+                        c % df(n,g,2) =  0.
                     end if
                 else
                     DN  = c % xs % D(c % xyz(i-1, j, k), g)
                     xdn = c % xdel(i-1)
-                    c % df(n, g, 2) =  2. * D * DN / (D * xdn +  DN * xd)
+                    c % df(n,g,2) =  2. * D * DN / (D * xdn +  DN * xd)
                 endif
     
                 ! Set FDM coupling coefficients in y direction
                 if (j == c % xstag(i) % smax) then
                     if (ynorth == zero_flux) then
-                        c % df(n, g, 3) = 2. * big * D / (2. * D + big * yd)
+                        c % df(n,g,3) = 2. * big * D / (2. * D + big * yd)
                     elseif (ynorth == zero_incoming) then
-                        c % df(n, g, 3) =  D / (2. * D + 0.5 * yd)
+                        c % df(n,g,3) =  D / (2. * D + 0.5 * yd)
                     else
-                        c % df(n, g, 3) =  0.
+                        c % df(n,g,3) =  0.
                     end if
                 else
                     DN  = c % xs % D(c % xyz(i, j+1, k), g)
                     ydn = c % ydel(j+1)
-                    c % df(n, g, 3) =  2. * D * DN / (D * ydn +  DN * yd)
+                    c % df(n,g,3) =  2. * D * DN / (D * ydn +  DN * yd)
                 endif
     
                 if (j == c % xstag(i) % smin) then
                     if (ysouth == 0) then
-                        c % df(n, g, 4) = 2. * big * D / (2. * D + big * yd)
+                        c % df(n,g,4) = 2. * big * D / (2. * D + big * yd)
                     elseif (ysouth == 1) then
-                        c % df(n, g, 4) =  D / (2. * D + 0.5 * yd)
+                        c % df(n,g,4) =  D / (2. * D + 0.5 * yd)
                     else
-                        c % df(n, g, 4) =  0.
+                        c % df(n,g,4) =  0.
                     end if
                 else
                     DN  = c % xs % D(c % xyz(i, j-1, k), g)
                     ydn = c % ydel(j-1)
-                    c % df(n, g, 4) =  2. * D * DN / (D * ydn +  DN * yd)
+                    c % df(n,g,4) =  2. * D * DN / (D * ydn +  DN * yd)
                 endif
     
                 ! Set FDM coupling coefficients in z direction
                 if (k == c % nzz) then
                     if (ztop == 0) then
-                        c % df(n, g, 5) = 2. * big * D / (2. * D + big * zd)
+                        c % df(n,g,5) = 2. * big * D / (2. * D + big * zd)
                     elseif (ztop == 1) then
-                        c % df(n, g, 5) =  D / (2. * D + 0.5 * zd)
+                        c % df(n,g,5) =  D / (2. * D + 0.5 * zd)
                     else
-                        c % df(n, g, 5) =  0.
+                        c % df(n,g,5) =  0.
                     end if
                 else
                     DN  = c % xs % D(c % xyz(i, j, k+1), g)
                     zdn = c % zdel(k+1)
-                    c % df(n, g, 5) =  2. * D * DN / (D * zdn +  DN * zd)
+                    c % df(n,g,5) =  2. * D * DN / (D * zdn +  DN * zd)
                 endif
         
                 if (k == 1) then
                     if (zbott == 0) then
-                        c % df(n, g, 6) = 2. * big * D / (2. * D + big * zd)
+                        c % df(n,g,6) = 2. * big * D / (2. * D + big * zd)
                     elseif (zbott == 1) then
-                        c % df(n, g, 6) =  D / (2. * D + 0.5 * zd)
+                        c % df(n,g,6) =  D / (2. * D + 0.5 * zd)
                     else
-                        c % df(n, g, 6) =  0.
+                        c % df(n,g,6) =  0.
                     end if
                 else
                     DN  = c % xs % D(c % xyz(i, j, k-1), g)
                     zdn = c % zdel(k-1)
-                    c % df(n, g, 6) =  2. * D * DN / (D * zdn +  DN * zd)
+                    c % df(n,g,6) =  2. * D * DN / (D * zdn +  DN * zd)
                 endif
             end do
         end do
 
     end subroutine
-
-
-
-
-        ! real(dp), allocatable :: fuel_temp         ! Fuel temperature
-        ! real(dp), allocatable :: mod_temp          ! Moderator temperature
-        ! real(dp), allocatable :: mod_dens          ! Moderator density
-        ! real(dp), allocatable :: node_power        ! nodes power (watt)
-        ! real(dp), allocatable :: tfm(:)            ! Fuel pin mesh temperature for each nodes
-        ! real(dp), allocatable :: ent               ! Coolant Enthalpy (J/Kg)
-        ! real(dp), allocatable :: heatf             ! Heat flux (W/m2
-        ! real(dp), allocatable :: frate             ! coolant mass flow rate
-
-        ! real(dp), allocatable :: prec_dens(:)      ! precusor_density
-        ! real(dp), allocatable :: trans_src(:)      ! source for transient mode
-        ! real(dp), allocatable :: exsrc(:)        ! external source
-        ! real(dp), allocatable :: omega(:)          ! Exponential transformation constant
-        ! real(dp), allocatable :: sigrp(:)          ! Initial removal cross sections before added by parameters required for transient
-        ! real(dp), allocatable :: L    (:)          ! Total leakages for node n and group g
-        ! real(dp), allocatable :: dfis               
-
-        ! integer               :: i_mat                ! material index
-
     
 end module
     

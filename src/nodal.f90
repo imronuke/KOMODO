@@ -12,7 +12,7 @@ module nodal
 
     use iso_fortran_env, only: real64, output_unit
     use stagger
-    use xsec
+    use xsec, only: xs_rect
     use utilities
 
     implicit none
@@ -62,12 +62,15 @@ module nodal
         type(staggered), pointer :: ystag(:)      ! Staggered mesh data
         real(dp), pointer        :: df(:,:,:)     ! FDM coupling coeff
         real(dp), pointer        :: dn(:,:,:)     ! Nodal coupling coeff
-        integer, pointer         :: ix(:) 
-        integer, pointer         :: iy(:) 
-        integer, pointer         :: iz(:) 
+        integer, pointer         :: ix(:)
+        integer, pointer         :: iy(:)
+        integer, pointer         :: iz(:)
+        integer, pointer         :: ind_mat(:) => null()
+        real(dp), pointer        :: total_beta(:) => null()
+        real(dp), pointer        :: dfis(:) => null()
     end type
 
-    public :: set_nodal_data, set_nodal_pointer
+    public :: set_nodal_data, set_nodal_pointer, set_nodal_transient
     public :: alloc_data
     public :: nodal_update_sanm, nodal_update_pnm
     public :: TLUpd0
@@ -115,11 +118,11 @@ module nodal
     end subroutine
 
     !===============================================================================================!
-     ! Aliasing pointer data necessary for higher order nodal coupling coeff (D hat)
+    ! Aliasing pointer data necessary for higher order nodal coupling coeff (D hat)
     !===============================================================================================!
 
     subroutine set_nodal_pointer(d, Keff, xs, flux, exsrc, xdel, ydel, zdel, xstag, ystag, &
-        ix, iy, iz, xyz, df, dn)
+        ix, iy, iz, xyz, df, dn, ind_mat, total_beta, dfis)
         
         class(nodal_type), intent(inout)       :: d
         real(dp), intent(in), target           :: Keff
@@ -133,6 +136,9 @@ module nodal
         integer, intent(in), target            :: iz(:)
         integer, intent(in), target            :: xyz(:,:,:)
         real(dp), intent(in), target           :: df(:,:,:), dn(:,:,:)
+        integer, intent(in), target, optional  :: ind_mat(:)
+        real(dp), intent(in), target, optional :: total_beta(:)
+        real(dp), intent(in), target, optional :: dfis(:)
 
         d % Ke    => Keff
         d % xs    => xs
@@ -162,6 +168,30 @@ module nodal
 
         d % df  => df
         d % dn  => dn
+
+        ! Followings only used for transient calculations
+        if (present(ind_mat)) d % ind_mat => ind_mat
+        if (present(total_beta)) d % total_beta => total_beta
+        if (present(dfis)) d % dfis => dfis
+
+    end subroutine
+
+    !===============================================================================================!
+    ! Aliasing pointer data necessary for higher order nodal coupling coeff (D hat)
+    ! This is used only for transient calculations
+    !===============================================================================================!
+
+    subroutine set_nodal_transient(d, ind_mat, total_beta, dfis)
+        
+        class(nodal_type), intent(inout)  :: d
+        integer, intent(in), target       :: ind_mat(:)
+        real(dp), intent(in), target      :: total_beta(:)
+        real(dp), intent(in), target      :: dfis(:)
+
+        ! Followings only used for transient calculations
+        d % ind_mat => ind_mat
+        d % total_beta => total_beta
+        d % dfis => dfis
 
     end subroutine
 
@@ -937,8 +967,8 @@ module nodal
         end if
 
         do gg = 1, d % ng
-            !Calculate alpha and othe parameters to calculate A,B,E,F,G,H
-            alpha  = 0.5 * sqrt(d % xs % sigr(n, gg) / d % xs % D(n, gg)) * dn
+            !Calculate alpha and other parameters to calculate A,B,E,F,G,H
+            alpha  = 0.5 * sqrt(d % xs % sigr(n,gg) / d % xs % D(n,gg)) * dn
             alpha2 = alpha**2
             m0c    = sinh(alpha) / alpha
             m1s    = 3. * (cosh(alpha)/alpha - sinh(alpha)/alpha2)
@@ -988,15 +1018,26 @@ module nodal
             do g = 1, d % ng
                 do h = 1, d % ng
                     if (g == h) then
-                        dum = d % xs % sigr(n, g) - d % xs % chi(n, g) * d % xs % nuf(n, h) / Ke
+                        dum = d % xs % sigr(n,g) - d % xs % chi(n,g) * d % xs % nuf(n, h) / Ke
                     else
-                        dum = -d % xs % sigs(n,h,g) - d % xs % chi(n, g) * d % xs % nuf(n, h) / Ke
+                        dum = -d % xs % sigs(n,h,g) - d % xs % chi(n,g) * d % xs % nuf(n, h) / Ke
                     end if
-                    B(g, h) = 0.25 * dn**2 / d % xs % D(n, g) * dum
+                    B(g, h) = 0.25 * dn**2 / d % xs % D(n,g) * dum
                 end do
             end do
         else if (d % calc_mode == 'transient') then
-            stop "transient not yet implemented"
+            do g = 1, d % ng
+                do h = 1, d % ng
+                    if (g == h) then
+                        dum = d % xs % sigr(n,g) - (1. - d % total_beta(d % ind_mat(n)) + d % dfis(n)) &
+                        * d % xs % chi(n,g) * d % xs % nuf(n,h)
+                    else
+                        dum = -d % xs % sigs(n,h,g) - (1. - d % total_beta(d % ind_mat(n)) + d % dfis(n)) &
+                        * d % xs % chi(n,g) * d % xs % nuf(n,h)
+                    end if
+                    B(g,h) = 0.25_dp * dn**2 / d % xs % D(n,g) * dum
+                end do
+              end do
         else  ! Adjoint calculation
             do g = 1, d % ng
                 do h = 1, d % ng
@@ -1020,23 +1061,20 @@ module nodal
 
         class(nodal_type), target, intent(inout) :: d
         
-        real(dp) :: Lx(d % nnod, d % ng)
-        real(dp) :: Ly(d % nnod, d % ng)
-        real(dp) :: Lz(d % nnod, d % ng)
+        real(dp) :: Lx, Ly, Lz
         integer  :: g, n
         
-        call TLUpd0(d, Lx, Ly, Lz)
-
         do g = 1, d % ng
             do n = 1, d % nnod
+                call TLUpd0(d, n, g, Lx, Ly, Lz)
                 if (d % calc_mode == 'transient') then
-                    d % Sx(n,g) =  Ly(n,g) + Lz(n,g) - d % exsrc(n,g)
-                    d % Sy(n,g) =  Lx(n,g) + Lz(n,g) - d % exsrc(n,g)
-                    d % Sz(n,g) =  Lx(n,g) + Ly(n,g) - d % exsrc(n,g)
+                    d % Sx(n,g) =  Ly + Lz - d % exsrc(n,g)
+                    d % Sy(n,g) =  Lx + Lz - d % exsrc(n,g)
+                    d % Sz(n,g) =  Lx + Ly - d % exsrc(n,g)
                 else
-                    d % Sx(n,g) =  Ly(n,g) + Lz(n,g)
-                    d % Sy(n,g) =  Lx(n,g) + Lz(n,g)
-                    d % Sz(n,g) =  Lx(n,g) + Ly(n,g)
+                    d % Sx(n,g) =  Ly + Lz
+                    d % Sy(n,g) =  Lx + Lz
+                    d % Sz(n,g) =  Lx + Ly
                 end if
             end do
         end do
@@ -1047,117 +1085,112 @@ module nodal
     ! To update zeroth transverse leakages (J_plus - J_minus) for group g and nod n
     !===============================================================================================!
 
-    subroutine TLUpd0(d, Lx, Ly, Lz)
+    subroutine TLUpd0(d, n, g, Lx, Ly, Lz)
         
-        class(nodal_type), target, intent(inout) :: d
-        real(dp), intent(out)                    :: Lx(d % nnod, d % ng)
-        real(dp), intent(out)                    :: Ly(d % nnod, d % ng)
-        real(dp), intent(out)                    :: Lz(d % nnod, d % ng)
+        class(nodal_type)        :: d
+        integer, intent(in)      :: n, g
+        real(dp), intent(out)    :: Lx
+        real(dp), intent(out)    :: Ly
+        real(dp), intent(out)    :: Lz
 
         real(dp) :: jp, jm
         integer  :: p, m
-        integer  :: n, g
         integer  :: i, j, k
 
-        do g = 1, d % ng
-            do n = 1, d % nnod
                 
-                ! set i, j, k
-                i = d % ix(n); j = d % iy(n); k = d % iz(n)
+        ! set i, j, k
+        i = d % ix(n); j = d % iy(n); k = d % iz(n)
         
-                ! x-direction zeroth transverse leakage
-                if (i /= d % ystag(j) % smax) p = d % xyz(i+1,j,k)
-                if (i /= d % ystag(j) % smin) m = d % xyz(i-1,j,k)
+        ! x-direction zeroth transverse leakage
+        if (i /= d % ystag(j) % smax) p = d % xyz(i+1,j,k)
+        if (i /= d % ystag(j) % smin) m = d % xyz(i-1,j,k)
 
-                ! west
-                if (i == d % ystag(j) % smax) then
-                    if (xeast == reflective) then
-                        jp = 0.0
-                    else
-                        jp = d % df(n,g,1) * d % flux(n,g) - d % dn(n,g,1) * d % flux(n,g)
-                    end if
-                else
-                    jp = - d % df(n,g,1) * (d % flux(p,g) - d % flux(n,g)) &
-                         - d % dn(n,g,1) * (d % flux(p,g) + d % flux(n,g))
-                end if
+        ! west
+        if (i == d % ystag(j) % smax) then
+            if (xeast == reflective) then
+                jp = 0.0
+            else
+                jp = d % df(n,g,1) * d % flux(n,g) - d % dn(n,g,1) * d % flux(n,g)
+            end if
+        else
+            jp = - d % df(n,g,1) * (d % flux(p,g) - d % flux(n,g)) &
+                 - d % dn(n,g,1) * (d % flux(p,g) + d % flux(n,g))
+        end if
 
-                ! east
-                if (i == d % ystag(j) % smin) then
-                    if (xwest == reflective) then
-                        jm = 0.0
-                    else
-                        jm = - d % df(n,g,2) * d % flux(n,g) - d % dn(n,g,2) * d % flux(n,g)
-                    end if
-                else
-                    jm = - d % df(n,g,2) * (d % flux(n,g) - d % flux(m,g)) &
-                         - d % dn(n,g,2) * (d % flux(n,g) + d % flux(m,g))
-                end if
+        ! east
+        if (i == d % ystag(j) % smin) then
+            if (xwest == reflective) then
+                jm = 0.0
+            else
+                jm = - d % df(n,g,2) * d % flux(n,g) - d % dn(n,g,2) * d % flux(n,g)
+            end if
+        else
+            jm = - d % df(n,g,2) * (d % flux(n,g) - d % flux(m,g)) &
+                 - d % dn(n,g,2) * (d % flux(n,g) + d % flux(m,g))
+        end if
+
+        Lx = (jp - jm)  / d % xdel(i)
+
+        ! y-direction zeroth transverse leakage
+        if (j /= d % xstag(i) % smax) p = d % xyz(i,j+1,k)
+        if (j /= d % xstag(i) % smin) m = d % xyz(i,j-1,k)
+
+        ! north
+        if (j == d % xstag(i) % smax) then
+            if (ynorth == reflective) then
+                jp = 0.0
+            else
+                jp = d % df(n,g,3) * d % flux(n,g) - d % dn(n,g,3) * d % flux(n,g)
+            end if
+        else
+            jp = - d % df(n,g,3) * (d % flux(p,g) - d % flux(n,g)) &
+                 - d % dn(n,g,3) * (d % flux(p,g) + d % flux(n,g))
+        end if
+
+        ! south
+        if (j == d % xstag(i) % smin) then
+            if (ysouth == reflective) then
+                jm = 0.0
+            else
+                jm = - d % df(n,g,4) * d % flux(n,g) - d % dn(n,g,4) * d % flux(n,g)
+            end if
+        else
+            jm = - d % df(n,g,4) * (d % flux(n,g) - d % flux(m,g)) &
+                 - d % dn(n,g,4) * (d % flux(n,g) + d % flux(m,g))
+        end if
+
+        Ly = (jp - jm)  / d % ydel(j)
         
-                Lx(n, g) = (jp - jm)  / d % xdel(i)
-        
-                ! y-direction zeroth transverse leakage
-                if (j /= d % xstag(i) % smax) p = d % xyz(i,j+1,k)
-                if (j /= d % xstag(i) % smin) m = d % xyz(i,j-1,k)
+        ! z-direction zeroth transverse leakage
+        if (k /= d % nzz) p = d % xyz(i,j,k+1)
+        if (k /= 1      ) m = d % xyz(i,j,k-1)
 
-                ! north
-                if (j == d % xstag(i) % smax) then
-                    if (ynorth == reflective) then
-                        jp = 0.0
-                    else
-                        jp = d % df(n,g,3) * d % flux(n,g) - d % dn(n,g,3) * d % flux(n,g)
-                    end if
-                else
-                    jp = - d % df(n,g,3) * (d % flux(p,g) - d % flux(n,g)) &
-                         - d % dn(n,g,3) * (d % flux(p,g) + d % flux(n,g))
-                end if
+        ! top
+        if (k == d % nzz) then
+            if (ztop == reflective) then
+                jp = 0.0
+            else
+                jp = d % df(n,g,5) * d % flux(n,g) - d % dn(n,g,5) * d % flux(n,g)
+            end if
+        else
+            jp = - d % df(n,g,5) * (d % flux(p,g) - d % flux(n,g)) &
+                 - d % dn(n,g,5) * (d % flux(p,g) + d % flux(n,g))
+        end if
 
-                ! south
-                if (j == d % xstag(i) % smin) then
-                    if (ysouth == reflective) then
-                        jm = 0.0
-                    else
-                        jm = - d % df(n,g,4) * d % flux(n,g) - d % dn(n,g,4) * d % flux(n,g)
-                    end if
-                else
-                    jm = - d % df(n,g,4) * (d % flux(n,g) - d % flux(m,g)) &
-                         - d % dn(n,g,4) * (d % flux(n,g) + d % flux(m,g))
-                end if
-        
-                Ly(n, g) = (jp - jm)  / d % ydel(j)
-        
-                ! z-direction zeroth transverse leakage
-                if (k /= d % nzz) p = d % xyz(i,j,k+1)
-                if (k /= 1      ) m = d % xyz(i,j,k-1)
+        ! bottom
+        if (k == 1) then
+            if (zbott == reflective) then
+                jm = 0.0
+            else
+                jm = - d % df(n,g,6) * d % flux(n,g) - d % dn(n,g,6) * d % flux(n,g)
+            end if
+        else
+            jm = - d % df(n,g,6) * (d % flux(n,g) - d % flux(m,g)) &
+                 - d % dn(n,g,6) * (d % flux(n,g) + d % flux(m,g))
+        end if
 
-                ! top
-                if (k == d % nzz) then
-                    if (ztop == reflective) then
-                        jp = 0.0
-                    else
-                        jp = d % df(n,g,5) * d % flux(n,g) - d % dn(n,g,5) * d % flux(n,g)
-                    end if
-                else
-                    jp = - d % df(n,g,5) * (d % flux(p,g) - d % flux(n,g)) &
-                         - d % dn(n,g,5) * (d % flux(p,g) + d % flux(n,g))
-                end if
-
-                ! bottom
-                if (k == 1) then
-                    if (zbott == reflective) then
-                        jm = 0.0
-                    else
-                        jm = - d % df(n,g,6) * d % flux(n,g) - d % dn(n,g,6) * d % flux(n,g)
-                    end if
-                else
-                    jm = - d % df(n,g,6) * (d % flux(n,g) - d % flux(m,g)) &
-                         - d % dn(n,g,6) * (d % flux(n,g) + d % flux(m,g))
-                end if
+        Lz = (jp - jm)  / d % zdel(k)
         
-                Lz(n, g) = (jp - jm)  / d % zdel(k)
-        
-            end do
-        end do
-
     end subroutine
 
     !===============================================================================================!
@@ -1472,8 +1505,7 @@ module nodal
 
         call LU_decompose(A, LU, err)
         if (err < 0) then
-            print *, "LU solve failed for node " // n2c(node)
-            stop
+            call fatal_error(fid, "LU solve failed for node " // n2c(node))
         end if
 
         x = LU_subst(LU, b)

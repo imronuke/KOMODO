@@ -144,6 +144,6 @@ module data
     logical :: transient_warning = .false.         ! To activate unconverged  outer iteration warning
     
     ! CMFD
-    character(len=4)                      :: kern = 'SANM'   ! Nodal kernel
+    character(len=4)                    :: kern = 'SANM'   ! Nodal kernel
 
 end module

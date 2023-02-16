@@ -7,6 +7,7 @@ module control
     use time
     use th
     use transient
+    use auxiliaries, only: set_aux_pointer, th_iteration, print_fail_converge
     use utilities
 
     implicit none
@@ -16,12 +17,10 @@ module control
     save
 
     integer, parameter                    :: dp = real64
-    type(fdm_rect), public               :: fdm            ! Finite Difference Object
+    type(fdm_rect), public                :: fdm            ! Finite Difference Object
     type(th_type), allocatable, public    :: th             ! Thermal-hydraulics Object
     type(trans_type), allocatable, public :: tr             ! Transient Object
     type(xs_change_type), public          :: xsc            ! object for xs changes due to a parameter change
-
-    real(dp), allocatable      :: mesh_temp(:,:) ! fuel mesh temperature[nzz, n_fuel]
 
     public :: forward, adjoint, fixedsrc, cbc_search, rod_eject
 
@@ -38,14 +37,13 @@ module control
         call calculation_init()
 
         if (bther == NO) then
-            call rod_eject_no_th(tr)
-        ! else
-        !     call cbc_search_no_th()
+            call rod_eject_transient(tr, is_th=.false.)
+        else
+            call rod_eject_transient(tr, is_th=.true.)
         end if
 
         call power_dist_print(fdm, fn)
         call print_power_map(fn)
-
 
     end subroutine
 
@@ -58,18 +56,27 @@ module control
         integer  :: g, n
         real(dp) :: fn(nnod)
         logical  :: converge
+        real(dp) :: ftemp_err
 
         call calculation_init()
-        call xsec_update(fdm % xs, xsc, bcon, ftem, mtem, cden, bank_pos)
         
         call print_head()
 
-        call outer_iter(fdm, print_iter = .true., is_converge=converge)
+        if (bther == NO) then
+            call xsec_update(fdm % xs, xsc, bcon, ftem, mtem, cden, bank_pos)
+            call outer_iter(fdm, print_iter = .true., is_converge=converge)
+        else
+            call th_iteration(10, ftemp_err, converge)
+            print *, fdm % Keff, ftemp_err
+            ! call th_iteration(10, ftemp_err, converge)
+            ! print *, fdm % Keff, ftemp_err
+            ! call th_iteration(10, ftemp_err, converge)
+            ! print *, fdm % Keff, ftemp_err
+        end if
         if (.not. converge) call print_fail_converge()
 
         call power_dist_print(fdm, fn)
         call print_power_map(fn)
-
 
     end subroutine
 
@@ -93,7 +100,6 @@ module control
 
         call power_dist_print(fdm, fn)
         call print_power_map(fn)
-
 
     end subroutine
 
@@ -184,7 +190,7 @@ module control
             K1  = K2
             K2  = fdm % Keff
             write(output_unit,101) n, bcon, K2, fdm % flux_diff, fdm % fsrc_diff
-            if (abs(bc1-bc2) < 0.1) exit
+            if ((fdm % max_flux_err > fdm % flux_diff) .and. (fdm % max_fiss_err > fdm % fsrc_diff)) exit
         end do
 
         101 format(I3, F10.2, F14.5, ES14.5, ES13.5)
@@ -201,21 +207,31 @@ module control
         real(dp)  :: K1, K2
         real(dp)  :: bc1, bc2
         real(dp)  :: ftem_diff
+        logical   :: converge
 
         call calculation_init()
 
         call print_head()
 
         ! First try
-        bcon = xsc % bcon % ref
-        call th_iteration(2, ftem_diff)
+        if (allocated(xsc % bcon)) then
+            bcon = xsc % bcon % ref
+        else
+            bcon = 0.0              ! if tabular xs used, set initial boron conc. to 0.0 ppm
+        end if
+        call th_iteration(2, ftem_diff, converge)
         bc1 = bcon
         K1  = fdm % Keff
         write(output_unit,102) 1, bcon, K1, fdm % flux_diff, fdm % fsrc_diff, ftem_diff
 
         ! Second try
-        bcon = bcon + (K1 - 1.) * bcon   ! Guess next critical boron concentration
-        call th_iteration(2, ftem_diff)
+        ! Guess next critical boron concentration
+        if (allocated(xsc % bcon)) then
+            bcon = bcon + (K1 - 1.) * bcon
+        else
+            bcon = 500.0              ! if tabular xs used, set initial boron conc. to 0.0 ppm
+        end if
+        call th_iteration(2, ftem_diff, converge)
         bc2 = bcon
         K2  = fdm % Keff
         write(output_unit,102) 2, bcon, K2, fdm % flux_diff, fdm % fsrc_diff, ftem_diff
@@ -224,13 +240,13 @@ module control
         do
             n = n + 1
             bcon = bc2 + (1. - K2) / (K1 - K2) * (bc1 - bc2)
-            call th_iteration(2, ftem_diff)
+            call th_iteration(2, ftem_diff, converge)
             bc1 = bc2
             bc2 = bcon
             K1  = K2
             K2  = fdm % Keff
             write(output_unit,102) n, bcon, K2, fdm % flux_diff, fdm % fsrc_diff, ftem_diff
-            if (abs(bc1-bc2) < 0.1) exit
+            if (converge) exit
         end do
 
         call print_tail(fdm)
@@ -240,146 +256,16 @@ module control
     end subroutine
 
     !===============================================================================================!
-    ! thermal-hydraulics iteration
-    !===============================================================================================!
-
-    subroutine th_iteration(max_iter, ftem_diff)
-
-        integer, intent(in)    :: max_iter
-        real(dp), intent(out)  :: ftem_diff
-        
-        integer  :: i
-        real(dp) :: ftem_prev(nnod)
-
-        do i = 1, max_iter
-            ftem_prev = ftem
-            call xsec_update(fdm % xs, xsc, bcon, ftem, mtem, cden, bank_pos)
-            call th_outer(fdm)
-            call th_solver(flux, ftem, mtem, cden)
-            ftem_diff = maxval(abs(ftem - ftem_prev))
-        end do
-
-    end subroutine
-
-    !===============================================================================================!
-    ! thermal-hydraulics solver
-    !===============================================================================================!
-
-    subroutine th_solver(f0, fuel_temp, mod_temp, cool_dens)
-
-        real(dp), intent(in)   :: f0(:,:)  ! Flux
-        real(dp), intent(out)  :: fuel_temp(:)
-        real(dp), intent(out)  :: mod_temp(:)
-        real(dp), intent(out)  :: cool_dens(:)
-
-        real(dp)  :: linear_pow(nnod)          ! node-wise inear Power
-        real(dp)  :: lin_power(nzz)            ! sub-channel axial power
-        real(dp)  :: heatf(nzz)
-        real(dp)  :: ft(nzz)
-        real(dp)  :: mt(nzz)
-        real(dp)  :: cd(nzz)
-        
-        integer :: i, j, k, n
-
-        if (.not. allocated(th)) return
-
-        call th_time % on
-
-        call get_lin_power(f0, linear_pow)
-
-        do j = 1, nyy
-            do i = ystag(j) % smin, ystag(j) % smax
-
-                do k = 1, nzz
-                    n = xyz(i, j, k)
-                    lin_power(k)    = linear_pow(n)
-                    heatf(k)        = heat_flux(n)
-                    mesh_temp(k, :) = tfm(n, :)
-                end do
-
-                call th_update(th, lin_power, mesh_temp, heatf, ft, mt, cd)
-
-                do k = 1, nzz
-                    n = xyz(i, j, k)
-                    heat_flux(n) = heatf(k)
-                    tfm(n, :)    = mesh_temp(k, :)
-                    fuel_temp(n) = ft(k)
-                    mod_temp(n)  = mt(k)
-                    cool_dens(n) = cd(k)
-                end do
-
-            end do
-        end do
-
-        call th_time % off
-
-    end subroutine
-
-    !===============================================================================================!
-    ! calculate linear power density
-    !===============================================================================================!
-
-    subroutine get_lin_power(f0, lin_power)
-
-        real(dp), intent(in)  :: f0(:,:)  ! Flux
-        real(dp), intent(out) :: lin_power(:)
-
-        real(dp) :: pdist(nnod)
-        integer  :: n
-
-        call get_power_dist(f0, pdist)
-
-        do n = 1, nnod
-            lin_power(n) = pdist(n) * power * percent_pow * 0.01 &
-            / (node_nf(ix(n),iy(n)) * zdel(iz(n)))
-        end do   
-
-    end subroutine
-
-    !===============================================================================================!
-    ! calculate power distribution (normalize to 1.0)
-    !===============================================================================================!
-
-    subroutine get_power_dist(f0, pdist)
-
-        real(dp), intent(in) :: f0(:,:)  ! Flux
-        real(dp), intent(out) :: pdist(:)
-
-        integer :: g, n
-        real(dp) :: pow, powtot
-        
-        pdist = 0._dp
-        do g= 1, ng
-            do n= 1, nnod
-              pow = f0(n,g) * fdm % xs % sigf(n,g)
-              if (pow < 0.) pow = 0.
-              pdist(n) = pdist(n) + pow*vdel(n)
-            end do
-        end do
-        
-        ! Normalize to 1.0
-        powtot = sum(pdist)
-        do n = 1, nnod
-            pdist(n) = pdist(n) / powtot
-        end do
-
-    end subroutine
-
-    !===============================================================================================!
     ! Initialize thermal-hydraulics solver
     !===============================================================================================!
 
-    subroutine th_init(calc_mode)
+    subroutine th_init()
 
-        character(*), optional :: calc_mode
-
-        if (.not. allocated(th)) return
-        
         ! set data in the th object
         call set_th_data(th, ounit, nzz, zdel, rf, tg, tc, ppitch, cflow, cf, t_inlet)
 
         ! Allocate necessary data
-        allocate(mesh_temp(nzz, th % n_ring+1))
+        allocate(enthalpy(nnod))
         allocate(tfm(nnod, th % n_ring+1))
         tfm = 565.0  ! Initial guess (Kelvin)
         allocate(heat_flux(nnod))
@@ -398,12 +284,12 @@ module control
             cden = 0.734  ! Initial guess (g/cm3)
         endif
 
-        if (present(calc_mode)) then
-            if (calc_mode == 'transient') then
-                allocate(enthalpy(nnod))
-                allocate(flow_rate(nnod))
-            end if
+        if (allocated(tr)) then
+            allocate(flow_rate(nnod))
+            flow_rate = cflow         ! initialize sub channel flow rate
         end if
+
+        call set_aux_pointer(fdm, th, xsc)
 
     end subroutine
 
@@ -413,7 +299,9 @@ module control
 
     subroutine calculation_init()
 
-        integer :: nodal_interval, max_outer
+        integer  :: nodal_interval, max_outer, i_mat
+        real(dp), dimension(nmat,nf) :: lambda_tmp, beta_tmp
+        real(dp), dimension(nmat,ng) :: neut_velo_tmp
 
         allocate(flux(nnod, ng))
         allocate(fsrc(nnod))
@@ -443,15 +331,11 @@ module control
 
         call xs_time % on
         call set_xs_data(nnod, ng, ind_mat)
-        call xsec_setup(fdm % xs, sigtr, siga, nuf, sigf, sigs, chi, dc)
+        call xsec_setup(fdm % xs, sigtr, siga, nuf, sigf, sigs, chi, dc, bxtab, bcrod)
         call xs_time % off
 
         if (allocated(th)) then
-            if (allocated(tr)) then
-                call th_init('transient')
-            else
-                call th_init()
-            end if
+            call th_init()
         end if
 
         if (allocated(tr)) then
@@ -459,8 +343,22 @@ module control
             allocate(dfis(nnod))
             call set_fdm_transient(fdm, total_beta, dfis)
             call set_transient_data(tr, ounit, nf, nnod, ng, nmat, total_time, time_step_1, time_step_2, &
-            time_mid, small_theta, bxtab, bextr)
-            call set_transient_pointer(tr, fdm, xsc, beta, lambda, neutron_velo,total_beta, dfis, ind_mat)
+            time_mid, small_theta, bextr, bxtab)
+            if (bxtab == NO) then
+                do i_mat = 1, nmat
+                    lambda_tmp   (i_mat,:) = lambda
+                    beta_tmp     (i_mat,:) = beta
+                    neut_velo_tmp(i_mat,:) = neutron_velo
+                end do
+            else
+                do i_mat = 1, nmat
+                    lambda_tmp   (i_mat,:) = m(i_mat) % lambda
+                    beta_tmp     (i_mat,:) = m(i_mat) % beta
+                    neut_velo_tmp(i_mat,:) = m(i_mat) % velo
+                end do
+            end if
+
+            call set_transient_pointer(tr, fdm, xsc, beta_tmp, lambda_tmp, neut_velo_tmp,total_beta, dfis, ind_mat)
         end if
 
     end subroutine

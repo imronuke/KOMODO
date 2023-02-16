@@ -74,9 +74,9 @@ module read
     
         N = command_argument_count()
         if (N < 1) then
-        stop "ERROR: no input. Run KOMODO followed by the input"
+            call fatal_error(ounit, "ERROR: no input. Run KOMODO followed by the input")
         else
-        call get_command_argument(1,iname) !Grab the first command line argument
+            call get_command_argument(1,iname) !Grab the first command line argument
         endif
         
         iname = trim(iname)
@@ -108,16 +108,16 @@ module read
         uextr =  open_file ('scratch')
         uthet =  open_file ('scratch')
         uoutp =  open_file ('scratch')
+
+        ! Array of buffer unit number
         allocate(unit_array(ncard))
-        unit_array = &             ! Array of buffer unit number
-        (/umode, uxsec, ugeom, ucase, uesrc, uiter, uprnt, uadf,  ucrod, ubcon, &
-        uftem, umtem, ucden, ucbcs, uejct, uther, uxtab, ukern, uextr, uthet, &
-        uoutp /)
+        unit_array = (/umode, uxsec, ugeom, ucase, uesrc, uiter, uprnt, uadf,  ucrod, ubcon, &
+        uftem, umtem, ucden, ucbcs, uejct, uther, uxtab, ukern, uextr, uthet, uoutp /)
+
+        ! Array of card name
         allocate(card_array(ncard))
-        card_array(:) = &    ! Array of card name
-        (/'MODE', 'XSEC', 'GEOM', 'case', 'ESRC', 'ITER', 'PRNT', 'ADF ', 'CROD', 'BCON', &
-        'FTEM', 'MTEM', 'CDEN', 'CBCS', 'EJCT', 'THER', 'XTAB', 'KERN', 'EXTR', 'THET', &
-        'OUTP' /)
+        card_array(:) = (/'MODE', 'XSEC', 'GEOM', 'case', 'ESRC', 'ITER', 'PRNT', 'ADF ', 'CROD', 'BCON', &
+        'FTEM', 'MTEM', 'CDEN', 'CBCS', 'EJCT', 'THER', 'XTAB', 'KERN', 'EXTR', 'THET', 'OUTP' /)
         
         ! By default, card file names are the input file name
         allocate (file_array(ncard))
@@ -166,12 +166,10 @@ module read
         ! Card XSEC
         if (bxsec == YES) then
             call inp_xsec(uxsec)
-        ! else if (bxtab == YES) then
-        !     call inp_xtab(uxtab)
+        else if (bxtab == YES) then
+            call inp_xtab(uxtab)
         else
-            write(ounit,1021) '%XSEC OR %XTAB'
-            write(output_unit,1021) '%XSEC OR %XTAB'
-            stop
+            call input_error(ounit, msg='CARD %XSEC OR %XTAB DO NOT PRESENT. EITHER CARD IS MANDATORY')
         end if
         
         ! Card GEOM
@@ -179,9 +177,7 @@ module read
             call inp_geom1(ugeom)
             call inp_geom2(ugeom)
         else
-            write(ounit,1021) '%GEOM'
-            write(output_unit,1021) '%GEOM'
-            stop
+            call input_error(ounit, msg='CARD %GEOM DOES NOT PRESENT. THIS CARD IS MANDATORY')
         end if
         
         ! ! Card PRNT
@@ -377,7 +373,6 @@ module read
         write(output_unit, *)
         write(output_unit, *)
         write(output_unit, *)
-        
         
         write(ounit,*) '  =============================INPUT DATA STARTS HERE==========================='
         
@@ -2855,6 +2850,438 @@ module read
     
     
     end subroutine
+
+    !===============================================================================================!
+    !  To read tabular xsec file
+    !===============================================================================================!
+    
+    subroutine inp_xtab(xbunit)
+    
+        integer, intent(in) :: xbunit
+        
+        integer :: ln !Line number
+        integer :: iost  ! IOSTAT status
+        
+        integer :: precf(nf)
+        integer :: i, j, g, h, s,t,u,v
+        
+        ! XTAB type
+        type :: XFILE
+            character(LEN=100) :: fname             ! XTAB File name
+            integer :: cnum                        ! Composition number in the XTAB Files
+        end type
+        type(XFILE), allocatable :: xtab(:)
+        
+        logical, allocatable :: noty(:)   !to check if this buffer was read or not?
+        integer              :: xunit     !XTAB file unit number
+        integer              :: tunit     !XTAB Buffer unit number
+        integer              :: comm      ! Position of comment mark
+        integer              :: popt
+        integer, allocatable :: group(:)
+        integer              :: nskip  !Number of lines to skip
+
+        write(ounit,*)
+        write(ounit,*)
+        write(ounit,*) '           >>>> READING TABULAR XSEC FILE <<<<'
+        write(ounit,*) '           --------------------------------------------'
+        
+        read(xbunit, *, IOSTAT=iost) ind, ln, ng, nmat  !read numbef of group and material
+        message = ' error in material number'
+        call input_error(ounit, iost, ln, message)
+        
+        allocate(chi(nmat,ng))
+        allocate(xtab(nmat), noty(nmat), m(nmat))
+        noty = .TRUE.
+        
+        ! READING input file for XTAB file names and composition number
+        do i= 1, nmat
+            read(xbunit, '(A2,I5,A200)', IOSTAT=iost) ind, ln, iline
+            message = ' error in READING XTAB files'
+            call input_error(ounit, iost, ln, message)
+            iline = adjustl(iline)                !Adjust to left
+            comm = index(iline, ' ')              ! Get space position
+            xtab(i)%fname = iline(1:comm-1)       !Get xtab file name
+            xtab(i)%cnum = int(c2n(iline(comm:100)))  ! Get composition number (convert to integer)
+        end do
+        
+        ! Starting to read XTAB File, remove comments and write to buffer file
+        do i = 1, nmat
+            if (noty(i)) then  !if this composition was not written in buffer
+                ! open XTAB File
+                xunit = open_file('read', xtab(i)%fname)
+            
+                ! Start removing comments and rewrite into one input XTAB buffer
+                call remove_comments(xunit, '*', tunit)
+            
+                !This loop to read another composition in the same XTAB file
+                do j = i, nmat
+                    ! if next material has the same file name
+                    if (trim(adjustl(xtab(i)%fname)) == trim(adjustl(xtab(j)%fname))) then
+              
+                        !read buffer file and saved the xsec and transient data
+                        rewind(tunit)
+                        read(tunit, *,IOSTAT=iost) ind, ln, m(j)%tadf, m(j)%trod     ! read input control
+                        message = ' ERROR IN XTAB FILE ' // trim(adjustl(xtab(j)%fname)) &
+                        // ': CANNOT READ CONTROL parameterS'
+                        call input_error(ounit, iost, ln, message, XTAB=j)
+                
+                        read(tunit, *, IOSTAT=iost) ind, ln, m(j) % n_den, m(j) % n_boron, m(j) % n_fuel, m(j) % n_mod    ! read number of branch
+                        message = ' ERROR IN XTAB FILE '// trim(adjustl(xtab(j)%fname)) &
+                         // ': CANNOT READ BRANCH DIMENSION'
+                        call input_error(ounit, iost, ln, message)
+                
+                        ! Check branch dimension
+                        if (m(j) % n_den < 1 .OR. m(j) % n_boron < 1 .OR. m(j) % n_fuel < 1 .OR. m(j) % n_mod < 1) then
+                          write(ounit, *) ' ERROR: MINIMUM NUMBER OF BRANCH IS 1'
+                          write(error_unit, *) ' ERROR: MINIMUM NUMBER OF BRANCH IS 1'
+                          stop
+                        end if
+                
+                        ! allocate and read branch paramaters
+                        call branch_param(tunit, m(j) % n_den, j, m(j)%pd, xtab(j)%fname, 'COOLANT DENSITY')        ! allocate and read coolant dens. branc paramaters
+                        call branch_param(tunit, m(j) % n_boron, j, m(j)%pb, xtab(j)%fname, 'BORON CONCENTRATION')  ! allocate and read Boron conc. branc paramaters
+                        call branch_param(tunit, m(j) % n_fuel, j, m(j)%pf, xtab(j)%fname, 'FUEL TEMPERATURE')      ! allocate and read fule temp. branc paramaters
+                        call branch_param(tunit, m(j) % n_mod, j, m(j)%pm, xtab(j)%fname, 'MODERATOR TEMPERATURE')  ! allocate and read moderator temp. branc paramaters
+                
+                        ! allocate XSEC DATA
+                        allocate(m(j)%beta(nf))
+                        allocate(m(j)%lambda(nf))
+                        allocate(m(j)%velo(ng))
+                        allocate(m(j)%xsec(m(j) % n_den, m(j) % n_boron, m(j) % n_fuel, m(j) % n_mod))
+                        if (m(j)%trod == YES) allocate(m(j)%rxsec(m(j) % n_den, m(j) % n_boron, m(j) % n_fuel, m(j) % n_mod))
+                        do s = 1, m(j) % n_den
+                            do t = 1, m(j) % n_boron
+                                do u = 1, m(j) % n_fuel
+                                    do v = 1, m(j) % n_mod
+                                        allocate(m(j)%xsec(s,t,u,v)%sigtr(ng))
+                                        allocate(m(j)%xsec(s,t,u,v)%siga(ng))
+                                        allocate(m(j)%xsec(s,t,u,v)%sigf(ng))
+                                        allocate(m(j)%xsec(s,t,u,v)%nuf(ng))
+                                        allocate(m(j)%xsec(s,t,u,v)%dc(ng,6))
+                                        allocate(m(j)%xsec(s,t,u,v)%sigs(ng,ng))
+                                        if (m(j)%trod == YES) then
+                                            allocate(m(j)%rxsec(s,t,u,v)%sigtr(ng))
+                                            allocate(m(j)%rxsec(s,t,u,v)%siga(ng))
+                                            allocate(m(j)%rxsec(s,t,u,v)%sigf(ng))
+                                            allocate(m(j)%rxsec(s,t,u,v)%nuf(ng))
+                                            allocate(m(j)%rxsec(s,t,u,v)%dc(ng,6))
+                                            allocate(m(j)%rxsec(s,t,u,v)%sigs(ng,ng))
+                                        end if
+                                    end do
+                                end do
+                            end do
+                        end do
+                
+                        ! Skip lines to read desired composition in the xtab file
+                        nskip = ng*m(j) % n_boron*m(j) % n_fuel*m(j) % n_mod
+                        if (m(j)%tadf  == YES) then  ! if dc present
+                            if (m(j)%trod  == YES) then
+                                call skipread(tunit, j, (xtab(j)%cnum-1)*(10*nskip+2*ng*nskip+4))
+                            else
+                                call skipread(tunit, j, (xtab(j)%cnum-1)*(5*nskip+ng*nskip+4))
+                            end if
+                        else if (m(j)%tadf  == 2) then
+                            if (m(j)%trod  == YES) then
+                                call skipread(tunit, j, (xtab(j)%cnum-1)*(20*nskip+2*ng*nskip+4))
+                            else
+                                call skipread(tunit, j, (xtab(j)%cnum-1)*(10*nskip+ng*nskip+4))
+                            end if
+                        else
+                            if (m(j)%trod  == YES) then
+                                call skipread(tunit, j, (xtab(j)%cnum-1)*(8*nskip+2*ng*nskip+4))
+                            else
+                                call skipread(tunit, j, (xtab(j)%cnum-1)*(4*nskip+ng*nskip+4))
+                            end if
+                        end if
+                
+                        ! read unrodded XSEC
+                        call readXS (tunit, j, 0, m(j)%xsec)
+                        ! read rodded XSEC
+                        if (m(j)%trod == YES) call readXS (tunit, j, 1, m(j)%rxsec)
+                        !read fission spectrum
+                        read(tunit, *, IOSTAT=iost) ind, ln, (chi(j,g), g = 1, ng)
+                        message = ' ERROR IN XTAB FILE: CANNOT READ FISSION SPECTRUM'
+                        call input_error(ounit, iost, ln, message, XTAB=j)
+                        !read neutron Inverse velocity
+                        read(tunit, *, IOSTAT=iost) ind, ln, (m(j)%velo(g), g = 1, ng)
+                        message = ' ERROR IN XTAB FILE: CANNOT READ Inverse Velocity'
+                        call input_error(ounit, iost, ln, message, XTAB=j)
+                        do g = 1, ng
+                            m(j)%velo(g) = 1._DP/m(j)%velo(g)  !COnvert to velocity
+                        end do
+                        ! read decay constant
+                        read(tunit, *, IOSTAT=iost) ind, ln, (m(j)%lambda(t), t = 1, nf)
+                        message = ' ERROR IN XTAB FILE: CANNOT READ DECAY CONSTANT'
+                        call input_error(ounit, iost, ln, message, XTAB=j)
+                        ! read beta
+                        read(tunit, *, IOSTAT=iost) ind, ln, (m(j)%beta(t), t = 1, nf)
+                        message = ' ERROR IN XTAB FILE: CANNOT READ DELAYED NEUTRON FRACTION'
+                        call input_error(ounit, iost, ln, message, XTAB=j)
+                
+                        ! if read, indicate that it has been read
+                        noty(j) = .FALSE.
+                    end if
+                end do
+            
+                ! close XTAB File and buffer file
+                close(UNIT=xunit); close(UNIT=tunit)
+            end if
+        end do
+        
+        ! XTAB PRINT OPTION
+        read(xbunit, *, IOSTAT=iost) ind, ln, popt
+        if (iost == 0 .AND. popt > 0) then
+            s = 1; t = 1; u = 1; v = 1
+            allocate(group(ng))
+            do g = 1, ng
+                group(g) = g
+            end do
+            do j = 1, nf
+                precf(j) = j
+            end do
+            do i= 1, nmat
+                write(ounit,*)
+                write(ounit,1709) i
+                write(ounit,'(A,I3)') '     XTAB FILE '// trim(adjustl(xtab(i)%fname)) &
+                // '. COMPOSITION NUMBER', xtab(i)%cnum
+                write(ounit,1707)'GROUP', 'TRANSPORT', 'DifFUSION', 'absORPTION', &
+                'NU*FISS', 'KAP*FIS','FISS. SPCTR', 'NEUTRON VELOCITY'
+                do g= 1, ng
+                    write(ounit,1706) g, m(i)%xsec(s,t,u,v)%sigtr(g), &
+                    1./(3.*m(i)%xsec(s,t,u,v)%sigtr(g)), m(i)%xsec(s,t,u,v)%siga(g), &
+                     m(i)%xsec(s,t,u,v)%nuf(g), m(i)%xsec(s,t,u,v)%sigf(g), chi(i,g), &
+                     m(i)%velo(g), m(i)%xsec(s,t,u,v)%dc(g,1)
+                end do
+                write(ounit,*)'  --SCATTERING MATRIX--'
+                write(ounit,'(4X, A5, 20I11)') "G/G'", (group(g), g=1,ng)
+                do g= 1, ng
+                    write(ounit,1015)g, (m(i)%xsec(s,t,u,v)%sigs(g,h), h=1,ng)
+                end do
+                write(ounit,*)'  --BETA AND LAMBDA--'
+                write(ounit,'(6X, A5, I9, 20I13)') "GROUP", (precf(j), j=1,nf)
+                write(ounit,1016)'BETA ', (m(i)%beta(j), j = 1, nf)
+                write(ounit,1016)'LAMBDA ', (m(i)%lambda(j), j = 1, nf)
+            end do
+        end if
+        
+        write(ounit,*)
+        write(ounit,*) ' ...XTAB FILE Card is successfully read...'
+        
+        1709 format(5X, 'MATERIAL', I3)
+        1707 format(2X, A7, A12, A13, A12, A11, A13, A15, A18)
+        1706 format(2X, I6, F13.6, 2F12.6, F13.6, ES14.5, F12.6, 2ES16.5)
+        1015 format(4X, I3, F16.6, 20F12.6)
+        1016 format(4X, A9, 20ES13.5)
+        
+        deallocate(xtab, noty)
+    
+    end subroutine inp_xtab
+    
+    !===============================================================================================!
+    !  To allocate and read branch paramaters
+    !===============================================================================================!
+    
+    subroutine branch_param (tunit, dim, matnum, param, fname, messPar)
+    
+        integer, intent(in)                  :: tunit, dim, matnum
+        character(LEN=*), intent(in)         :: messPar, fname
+        real(dp), allocatable, intent(inout) :: param(:)
+        
+        integer :: k
+        integer :: ln, iost
+        
+        if (dim > 1) then                         ! if branch DIMENSION > 1
+            allocate(param(dim))
+            read(tunit, *, IOSTAT=iost) ind, ln, param(1:dim)
+            message = ' ERROR IN XTAB FILE '// trim(adjustl(fname))&
+             // ': CANNOT READ BRANCH parameterS ' // messPar
+            call input_error(ounit, iost, ln, message, XTAB=matnum)
+            do k = 2, dim
+                if (param(k-1) > param(k)) then
+                    write(ounit,*) "  ERROR IN XTAB FILE  ", fname
+                    write(ounit,*) "  ", messPar, " parameter SHALL BE IN ORDER, SMALL to BIG"
+                    write(error_unit,*) "  ERROR IN XTAB FILE  ", fname
+                    write(error_unit,*) "  ", messPar, " parameter SHALL BE IN ORDER, SMALL to BIG"
+                    stop
+                end if
+            end do
+        else
+            allocate(param(1))
+            param(1) = 0.0    !Arbitrary
+        end if
+    
+    end subroutine branch_param
+    
+    !===============================================================================================!
+    !  To read xsec in XTAB file
+    !===============================================================================================!
+    
+    subroutine readXS (tunit, mat_map, rod, xs)
+    
+        integer, intent(in)            :: tunit, mat_map, rod  ! file unit number, material number, and rod indicator
+        type(branch_xs), intent(inout) :: xs(:,:,:,:)
+        
+        integer                        :: iost, ln
+        integer                        :: g, h, s, t, u, v, k
+        
+        !read sigtr
+        do g = 1, ng
+            do v = 1, m(mat_map) % n_mod
+                do u = 1, m(mat_map) % n_fuel
+                    do t = 1, m(mat_map) % n_boron
+                        read(tunit, *, IOSTAT=iost) ind, ln, &
+                        (xs(s,t,u,v)%sigtr(g), s = 1, m(mat_map) % n_den)
+                        if (rod == 0) then
+                            message = ' ERROR IN XTAB FILE: CANNOT READ TRANSPORT XSEC'
+                        else
+                            message = ' ERROR IN XTAB FILE: CANNOT READ RODDED TRANSPORT XSEC'
+                        end if
+                      call input_error(ounit, iost, ln, message, XTAB=mat_map)
+                    end do
+                end do
+            end do
+        end do
+        !read siga
+        do g = 1, ng
+            do v = 1, m(mat_map) % n_mod
+                do u = 1, m(mat_map) % n_fuel
+                    do t = 1, m(mat_map) % n_boron
+                        read(tunit, *, IOSTAT=iost) ind, ln, &
+                        (xs(s,t,u,v)%siga(g), s = 1, m(mat_map) % n_den)
+                        if (rod == 0) then
+                            message = ' ERROR IN XTAB FILE: CANNOT READ ABSORPTION XSEC'
+                        else
+                            message = ' ERROR IN XTAB FILE: CANNOT READ RODDED absORPTION XSEC'
+                        end if
+                        call input_error(ounit, iost, ln, message, XTAB=mat_map)
+                    end do
+                end do
+            end do
+        end do
+        !read nu*sigf
+        do g = 1, ng
+            do v = 1, m(mat_map) % n_mod
+                do u = 1, m(mat_map) % n_fuel
+                    do t = 1, m(mat_map) % n_boron
+                        read(tunit, *, IOSTAT=iost) ind, ln, &
+                        (xs(s,t,u,v)%nuf(g), s = 1, m(mat_map) % n_den)
+                        if (rod == 0) then
+                            message = ' ERROR IN XTAB FILE: CANNOT READ NU*SIGF XSEC'
+                        else
+                            message = ' ERROR IN XTAB FILE: CANNOT READ RODDED NU*SIGF XSEC'
+                        end if
+                        call input_error(ounit, iost, ln, message, XTAB=mat_map)
+                    end do
+                end do
+            end do
+        end do
+        !read kappa*sigf
+        do g = 1, ng
+            do v = 1, m(mat_map) % n_mod
+                do u = 1, m(mat_map) % n_fuel
+                    do t = 1, m(mat_map) % n_boron
+                        read(tunit, *, IOSTAT=iost) ind, ln, &
+                        (xs(s,t,u,v)%sigf(g), s = 1, m(mat_map) % n_den)
+                        if (rod == 0) then
+                            message = ' ERROR IN XTAB FILE: CANNOT READ KAPPA*SIGF XSEC'
+                        else
+                            message = ' ERROR IN XTAB FILE: CANNOT READ RODDED KAPPA*SIGF XSEC'
+                        end if
+                        call input_error(ounit, iost, ln, message, XTAB=mat_map)
+                    end do
+                end do
+            end do
+        end do
+        !read sigs
+        do g = 1, ng
+            do h = 1, ng
+                do v = 1, m(mat_map) % n_mod
+                    do u = 1, m(mat_map) % n_fuel
+                        do t = 1, m(mat_map) % n_boron
+                            read(tunit, *, IOSTAT=iost) ind, ln, &
+                            (xs(s,t,u,v)%sigs(g,h), s = 1, m(mat_map) % n_den)
+                            if (rod == 0) then
+                                message = ' ERROR IN XTAB FILE: CANNOT READ SCATTERING XSEC'
+                            else
+                                message = ' ERROR IN XTAB FILE: CANNOT READ RODDED SCATTERING XSEC'
+                            end if
+                            call input_error(ounit, iost, ln, message, XTAB=mat_map)
+                        end do
+                    end do
+                end do
+            end do
+        end do
+        !read dc
+        if (m(mat_map)%tadf  == YES) then  ! if dc present
+            do g = 1, ng
+                do v = 1, m(mat_map) % n_mod
+                    do u = 1, m(mat_map) % n_fuel
+                        do t = 1, m(mat_map) % n_boron
+                            read(tunit, *, IOSTAT=iost) ind, ln, &
+                            (xs(s,t,u,v)%dc(g,1), s = 1, m(mat_map) % n_den)
+                            do k = 1, 6
+                                do s = 1, m(mat_map) % n_den
+                                    xs(s,t,u,v)%dc(g,k) = xs(s,t,u,v)%dc(g,1)
+                                end do
+                            end do
+                            if (rod == 0) then
+                                message = ' ERROR IN XTAB FILE: CANNOT READ ADFs'
+                            else
+                                message = ' ERROR IN XTAB FILE: CANNOT READ RODDED ADFs'
+                            end if
+                            call input_error(ounit, iost, ln, message, XTAB=mat_map)
+                        end do
+                    end do
+                end do
+            end do
+        else if (m(mat_map)%tadf  == 2) then
+            do g = 1, ng
+                do k = 1, 6
+                    do v = 1, m(mat_map) % n_mod
+                        do u = 1, m(mat_map) % n_fuel
+                            do t = 1, m(mat_map) % n_boron
+                                read(tunit, *, IOSTAT=iost) ind, ln, &
+                                (xs(s,t,u,v)%dc(g,k), s = 1, m(mat_map) % n_den)
+                                if (rod == 0) then
+                                    message = ' ERROR IN XTAB FILE: CANNOT READ ADFs'
+                                else
+                                    message = ' ERROR IN XTAB FILE: CANNOT READ RODDED TRANSPORT ADFs'
+                                end if
+                                call input_error(ounit, iost, ln, message, XTAB=mat_map)
+                            end do
+                        end do
+                    end do
+                end do
+            end do
+        end if
+    
+    
+    end subroutine readXS
+    
+    !===============================================================================================!
+    !  To skip reading lines
+    !===============================================================================================!
+    
+    subroutine skipread (iunit,matnum, nskip)
+    
+    integer, intent(in) :: iunit, matnum, nskip
+    integer :: i, eof
+    
+    do i = 1, nskip
+        read (iunit, *, IOSTAT=eof)
+        if (eof < 0) then              !Check end of file
+            write(ounit,1131) matnum
+            write(ounit,1132)
+            write(error_unit,1131) matnum
+            write(error_unit,1132)
+            stop
+        end if
+    end do
+    
+    1131 format(2X, 'ERROR: end OF FILE REACHED FOR XTAB FILE IN MATERIAL NUMBER ', I3)
+    1132 format(2X, 'KOMODO IS STOPPING')
+    
+    end subroutine skipread
     
     ! !******************************************************************************!
     
@@ -3380,448 +3807,5 @@ module read
     ! end do
     
     ! end subroutine flux_atpower
-    
-    ! !******************************************************************************!
-    
-    ! subroutine inp_xtab(xbunit)
-    
-    ! !
-    ! ! Purpose:
-    ! !    To read tabular xsec file
-    ! !
-    
-    ! USE data, ONLY: ng, nmat, nf, m, chi
-    
-    ! IMPLICIT NONE
-    
-    ! integer, intent(in) :: xbunit
-    
-    ! integer :: ln !Line number
-    ! integer :: iost  ! IOSTAT status
-    
-    ! integer, dimension(nf) :: precf
-    ! integer :: i, j, g, h, s,t,u,v
-    
-    ! ! XTAB type
-    ! type :: XFILE
-    !     character(LEN=100) :: fname             ! XTAB File name
-    !     integer :: cnum                        ! Composition number in the XTAB Files
-    ! end type
-    ! type(XFILE), dimension(:), allocatable :: xtab
-    
-    ! logical, dimension(:), allocatable :: noty   !to check if this buffer was read or not?
-    ! integer, parameter :: xunit = 998  !XTAB file unit number
-    ! integer, parameter :: tunit = 999  !XTAB Buffer unit number
-    ! integer :: comm  ! Position of comment mark
-    ! integer :: popt
-    ! integer, dimension(:), allocatable :: group
-    ! integer :: nskip  !Number of lines to skip
-    
-    ! write(ounit,*)
-    ! write(ounit,*)
-    ! write(ounit,*) '           >>>> READING TABULAR XSEC FILE <<<<'
-    ! write(ounit,*) '           --------------------------------------------'
-    
-    ! read(xbunit, *, IOSTAT=iost) ind, ln, ng, nmat  !read numbef of group and material
-    ! message = ' error in material number'
-    ! call input_error(ounit, iost, ln, message)
-    
-    ! allocate(chi(nmat,ng))
-    ! allocate(xtab(nmat), noty(nmat), m(nmat))
-    ! noty = .TRUE.
-    
-    ! ! READING input file for XTAB file names and composition number
-    ! do i= 1, nmat
-    !     read(xbunit, '(A2,I5,A200)', IOSTAT=iost) ind, ln, iline
-    !     iline = adjustl(iline)                !Adjust to left
-    !     comm = index(iline, ' ')              ! Get space position
-    !     xtab(i)%fname = iline(1:comm-1)       !Get xtab file name
-    !     read(iline(comm:100),*) xtab(i)%cnum  ! Get composition number (convert to integer)
-    !     message = ' error in READING XTAB files'
-    !     call input_error(ounit, iost, ln, message)
-    ! end do
-    
-    ! ! Starting to read XTAB File, remove comments and write to buffer file
-    ! do i = 1, nmat
-    !   if (noty(i)) then  !if this composition was not written in buffer
-    !     ! open XTAB File
-    !     call open_file(xunit, xtab(i)%fname, 'XTAB', 'XTAB File open Failed--status')
-    
-    !     ! Start removing comments and rewrite into one input XTAB buffer
-    !     call remove_comments(xunit, '*', tunit)
-    
-    !     !This loop to read another composition in the same XTAB file
-    !     do j = i, nmat
-    !       ! if next material has the same file name
-    !       if (trim(adjustl(xtab(i)%fname)) == trim(adjustl(xtab(j)%fname))) then
-    
-    !         !read buffer file and saved the xsec and transient data
-    !         rewind(tunit)
-    !         read(tunit, *,IOSTAT=iost) ind, ln, m(j)%tadf, m(j)%trod     ! read input control
-    !         message = ' ERROR IN XTAB FILE ' // trim(adjustl(xtab(j)%fname)) &
-    !         // ': CANNOT read CONTROL parameterS'
-    !         call input_error(ounit, iost, ln, message, XTAB=j)
-    
-    !         read(tunit, *, IOSTAT=iost) ind, ln, m(j)%nd, m(j)%nb, m(j)%nf, m(j)%nm    ! read number of branch
-    !         message = ' ERROR IN XTAB FILE '// trim(adjustl(xtab(j)%fname))&
-    !          // ': CANNOT read BRANCH DIMENSION'
-    !         call input_error(ounit, iost, ln, message)
-    
-    !         ! Check branch dimension
-    !         if (m(j)%nd < 1 .OR. m(j)%nb < 1 .OR. m(j)%nf < 1 .OR. m(j)%nm < 1) then
-    !           write(ounit, *) ' ERROR: MINIMUM NUMBER OF BRANCH IS 1'
-    !           write(error_unit, *) ' ERROR: MINIMUM NUMBER OF BRANCH IS 1'
-    !           stop
-    !         end if
-    
-    !         ! allocate and read branch paramaters
-    !         call branchPar(tunit, m(j)%nd, j, m(j)%pd, xtab(j)%fname, 'COOLANT DENSITY')  ! allocate and read coolant dens. branc paramaters
-    !         call branchPar(tunit, m(j)%nb, j, m(j)%pb, xtab(j)%fname, 'BORON CONCENTRATION')  ! allocate and read Boron conc. branc paramaters
-    !         call branchPar(tunit, m(j)%nf, j, m(j)%pf, xtab(j)%fname, 'FUEL TEMPERATURE')  ! allocate and read fule temp. branc paramaters
-    !         call branchPar(tunit, m(j)%nm, j, m(j)%pm, xtab(j)%fname, 'MODERATOR TEMPERATURE')  ! allocate and read moderator temp. branc paramaters
-    
-    !         ! allocate XSEC DATA
-    !         allocate(m(j)%velo(ng))
-    !         allocate(m(j)%xsec(m(j)%nd, m(j)%nb, m(j)%nf, m(j)%nm))
-    !         if (m(j)%trod == YES) allocate(m(j)%rxsec(m(j)%nd, m(j)%nb, m(j)%nf, m(j)%nm))
-    !         do s = 1, m(j)%nd
-    !           do t = 1, m(j)%nb
-    !             do u = 1, m(j)%nf
-    !               do v = 1, m(j)%nm
-    !                 allocate(m(j)%xsec(s,t,u,v)%sigtr(ng))
-    !                 allocate(m(j)%xsec(s,t,u,v)%siga(ng))
-    !                 allocate(m(j)%xsec(s,t,u,v)%sigf(ng))
-    !                 allocate(m(j)%xsec(s,t,u,v)%nuf(ng))
-    !                 allocate(m(j)%xsec(s,t,u,v)%dc(ng,6))
-    !                 allocate(m(j)%xsec(s,t,u,v)%sigs(ng,ng))
-    !                 if (m(j)%trod == YES) then
-    !                   allocate(m(j)%rxsec(s,t,u,v)%sigtr(ng))
-    !                   allocate(m(j)%rxsec(s,t,u,v)%siga(ng))
-    !                   allocate(m(j)%rxsec(s,t,u,v)%sigf(ng))
-    !                   allocate(m(j)%rxsec(s,t,u,v)%nuf(ng))
-    !                   allocate(m(j)%rxsec(s,t,u,v)%dc(ng,6))
-    !                   allocate(m(j)%rxsec(s,t,u,v)%sigs(ng,ng))
-    !                 end if
-    !               end do
-    !             end do
-    !           end do
-    !         end do
-    
-    !         ! Skip lines to read desired composition in the xtab file
-    !         nskip = ng*m(j)%nb*m(j)%nf*m(j)%nm
-    !         if (m(j)%tadf  == YES) then  ! if dc present
-    !           if (m(j)%trod  == YES) then
-    !             call skipread(tunit, j, (xtab(j)%cnum-1)*(10*nskip+2*ng*nskip+4))
-    !           else
-    !             call skipread(tunit, j, (xtab(j)%cnum-1)*(5*nskip+ng*nskip+4))
-    !           end if
-    !         else if (m(j)%tadf  == 2) then
-    !           if (m(j)%trod  == YES) then
-    !             call skipread(tunit, j, (xtab(j)%cnum-1)*(20*nskip+2*ng*nskip+4))
-    !           else
-    !             call skipread(tunit, j, (xtab(j)%cnum-1)*(10*nskip+ng*nskip+4))
-    !           end if
-    !         else
-    !           if (m(j)%trod  == YES) then
-    !             call skipread(tunit, j, (xtab(j)%cnum-1)*(8*nskip+2*ng*nskip+4))
-    !           else
-    !             call skipread(tunit, j, (xtab(j)%cnum-1)*(4*nskip+ng*nskip+4))
-    !           end if
-    !         end if
-    
-    !         ! read unrodded XSEC
-    !         call readXS (tunit, j, 0, m(j)%xsec)
-    !         ! read rodded XSEC
-    !         if (m(j)%trod == YES) call readXS (tunit, j, 1, m(j)%rxsec)
-    !         !read fission spectrum
-    !         read(tunit, *, IOSTAT=iost) ind, ln, (chi(j,g), g = 1, ng)
-    !         message = ' ERROR IN XTAB FILE: CANNOT read FISSION SPECTRUM'
-    !         call input_error(ounit, iost, ln, message, XTAB=j)
-    !         !read neutron Inverse velocity
-    !         read(tunit, *, IOSTAT=iost) ind, ln, (m(j)%velo(g), g = 1, ng)
-    !         message = ' ERROR IN XTAB FILE: CANNOT read Inverse Velocity'
-    !         call input_error(ounit, iost, ln, message, XTAB=j)
-    !         do g = 1, ng
-    !           m(j)%velo(g) = 1._DP/m(j)%velo(g)  !COnvert to velocity
-    !         end do
-    !         ! read decay constant
-    !         read(tunit, *, IOSTAT=iost) ind, ln, (m(j)%lamb(t), t = 1, nf)
-    !         message = ' ERROR IN XTAB FILE: CANNOT read DECAY CONSTANT'
-    !         call input_error(ounit, iost, ln, message, XTAB=j)
-    !         ! read beta
-    !         read(tunit, *, IOSTAT=iost) ind, ln, (m(j)%iBeta(t), t = 1, nf)
-    !         message = ' ERROR IN XTAB FILE: CANNOT read DELAYED NEUTRON FRACTION'
-    !         call input_error(ounit, iost, ln, message, XTAB=j)
-    
-    !         ! if read, indicate that it has been read
-    !         noty(j) = .FALSE.
-    !       end if
-    !     end do
-    
-    !     ! close XTAB File and buffer file
-    !     close(UNIT=xunit); close(UNIT=tunit)
-    !   end if
-    ! end do
-    
-    ! ! XTAB PRINT OPTION
-    ! read(xbunit, *, IOSTAT=iost) ind, ln, popt
-    ! if (iost == 0 .AND. popt > 0) then
-    !   s = 1; t = 1; u = 1; v = 1
-    !   allocate(group(ng))
-    !   do g = 1, ng
-    !     group(g) = g
-    !   end do
-    !   do j = 1, nf
-    !     precf(j) = j
-    !   end do
-    !   do i= 1, nmat
-    !       write(ounit,*)
-    !       write(ounit,1709) i
-    !       write(ounit,'(A,I3)') '     XTAB FILE '// trim(adjustl(xtab(i)%fname)) &
-    !       // '. COMPOSITION NUMBER', xtab(i)%cnum
-    !       write(ounit,1707)'GROUP', 'TRANSPORT', 'DifFUSION', 'absORPTION', &
-    !       'NU*FISS', 'KAP*FIS','FISS. SPCTR', 'NEUTRON VELOCITY'
-    !       do g= 1, ng
-    !           write(ounit,1706) g, m(i)%xsec(s,t,u,v)%sigtr(g), &
-    !           1./(3.*m(i)%xsec(s,t,u,v)%sigtr(g)), m(i)%xsec(s,t,u,v)%siga(g), &
-    !            m(i)%xsec(s,t,u,v)%nuf(g), m(i)%xsec(s,t,u,v)%sigf(g), chi(i,g), &
-    !            m(i)%velo(g), m(i)%xsec(s,t,u,v)%dc(g,1)
-    !       end do
-    !       write(ounit,*)'  --SCATTERING MATRIX--'
-    !       write(ounit,'(4X, A5, 20I11)') "G/G'", (group(g), g=1,ng)
-    !       do g= 1, ng
-    !           write(ounit,1015)g, (m(i)%xsec(s,t,u,v)%sigs(g,h), h=1,ng)
-    !       end do
-    !       write(ounit,*)'  --BETA AND LAMBDA--'
-    !       write(ounit,'(6X, A5, I9, 20I13)') "GROUP", (precf(j), j=1,nf)
-    !       write(ounit,1016)'BETA ', (m(i)%ibeta(j), j = 1, nf)
-    !       write(ounit,1016)'LAMBDA ', (m(i)%lamb(j), j = 1, nf)
-    !   end do
-    ! end if
-    
-    ! write(ounit,*)
-    ! write(ounit,*) ' ...XTAB FILE Card is successfully read...'
-    
-    ! 1709 format(5X, 'MATERIAL', I3)
-    ! 1707 format(2X, A7, A12, A13, A12, A11, A13, A15, A18)
-    ! 1706 format(2X, I6, F13.6, 2F12.6, F13.6, ES14.5, F12.6, 2ES16.5)
-    ! 1015 format(4X, I3, F16.6, 20F12.6)
-    ! 1016 format(4X, A9, 20ES13.5)
-    
-    ! deallocate(xtab, noty)
-    
-    ! end subroutine inp_xtab
-    
-    ! !******************************************************************************!
-    
-    ! subroutine branchPar (tunit, dim, matnum, par, fname, messPar)
-    
-    ! !Purpose: To allocate and read branch paramaters
-    
-    ! IMPLICIT NONE
-    
-    ! integer, intent(in) :: tunit, dim, matnum
-    ! character(LEN=*), intent(in) :: messPar, fname
-    ! real(dp), dimension(:), allocatable, intent(inout) :: par
-    
-    ! integer :: k
-    ! integer :: ln, iost
-    
-    ! if (dim > 1) then                         ! if branch DIMENSION > 1
-    !   allocate(par(dim))
-    !   read(tunit, *, IOSTAT=iost) ind, ln, par(1:dim)
-    !   message = ' ERROR IN XTAB FILE '// trim(adjustl(fname))&
-    !    // ': CANNOT read BRANCH parameterS ' // messPar
-    !   call input_error(ounit, iost, ln, message, XTAB=matnum)
-    !   do k = 2, dim
-    !     if (par(k-1) > par(k)) then
-    !       write(ounit,*) "  ERROR IN XTAB FILE  ", fname
-    !       write(ounit,*) "  ", messPar, " parameter SHALL BE IN ORDER, SMALL to BIG"
-    !       write(error_unit,*) "  ERROR IN XTAB FILE  ", fname
-    !       write(error_unit,*) "  ", messPar, " parameter SHALL BE IN ORDER, SMALL to BIG"
-    !       stop
-    !     end if
-    !   end do
-    ! else
-    !   allocate(par(1))
-    !   par(1) = 0.0    !Arbitrary
-    ! end if
-    
-    ! end subroutine branchPar
-    
-    ! !******************************************************************************!
-    
-    ! subroutine readXS (tunit, mat_map, rod, xsec)
-    ! !Purpose: To read xsec in XTAB file
-    
-    ! USE data, ONLY: m, ng, XBRANCH
-    ! IMPLICIT NONE
-    
-    ! integer, intent(in) :: tunit, mat_map, rod  ! file unit number, material number, and rod indicator
-    ! type(XBRANCH), dimension(:,:,:,:), intent(inout) :: xsec  !Set inout, see: http://www.cs.rpi.edu/~szymansk/OOF90/bugs.html#2
-    ! integer :: iost, ln
-    ! integer :: g, h, s, t, u, v, k
-    
-    ! !read sigtr
-    ! do g = 1, ng
-    !   do v = 1, m(mat_map)%nm
-    !     do u = 1, m(mat_map)%nf
-    !       do t = 1, m(mat_map)%nb
-    !         read(tunit, *, IOSTAT=iost) ind, ln, &
-    !         (xsec(s,t,u,v)%sigtr(g), s = 1, m(mat_map)%nd)
-    !         if (rod == 0) then
-    !           message = ' ERROR IN XTAB FILE: CANNOT read TRANSPORT XSEC'
-    !         else
-    !           message = ' ERROR IN XTAB FILE: CANNOT read RODDED TRANSPORT XSEC'
-    !         end if
-    !         call input_error(ounit, iost, ln, message, XTAB=mat_map)
-    !       end do
-    !     end do
-    !   end do
-    ! end do
-    ! !read siga
-    ! do g = 1, ng
-    !   do v = 1, m(mat_map)%nm
-    !     do u = 1, m(mat_map)%nf
-    !       do t = 1, m(mat_map)%nb
-    !         read(tunit, *, IOSTAT=iost) ind, ln, &
-    !         (xsec(s,t,u,v)%siga(g), s = 1, m(mat_map)%nd)
-    !         if (rod == 0) then
-    !           message = ' ERROR IN XTAB FILE: CANNOT read absORPTION XSEC'
-    !         else
-    !           message = ' ERROR IN XTAB FILE: CANNOT read RODDED absORPTION XSEC'
-    !         end if
-    !         call input_error(ounit, iost, ln, message, XTAB=mat_map)
-    !       end do
-    !     end do
-    !   end do
-    ! end do
-    ! !read nu*sigf
-    ! do g = 1, ng
-    !   do v = 1, m(mat_map)%nm
-    !     do u = 1, m(mat_map)%nf
-    !       do t = 1, m(mat_map)%nb
-    !         read(tunit, *, IOSTAT=iost) ind, ln, &
-    !         (xsec(s,t,u,v)%nuf(g), s = 1, m(mat_map)%nd)
-    !         if (rod == 0) then
-    !           message = ' ERROR IN XTAB FILE: CANNOT read NU*SIGF XSEC'
-    !         else
-    !           message = ' ERROR IN XTAB FILE: CANNOT read RODDED NU*SIGF XSEC'
-    !         end if
-    !         call input_error(ounit, iost, ln, message, XTAB=mat_map)
-    !       end do
-    !     end do
-    !   end do
-    ! end do
-    ! !read kappa*sigf
-    ! do g = 1, ng
-    !   do v = 1, m(mat_map)%nm
-    !     do u = 1, m(mat_map)%nf
-    !       do t = 1, m(mat_map)%nb
-    !         read(tunit, *, IOSTAT=iost) ind, ln, &
-    !         (xsec(s,t,u,v)%sigf(g), s = 1, m(mat_map)%nd)
-    !         if (rod == 0) then
-    !           message = ' ERROR IN XTAB FILE: CANNOT read KAPPA*SIGF XSEC'
-    !         else
-    !           message = ' ERROR IN XTAB FILE: CANNOT read RODDED KAPPA*SIGF XSEC'
-    !         end if
-    !         call input_error(ounit, iost, ln, message, XTAB=mat_map)
-    !       end do
-    !     end do
-    !   end do
-    ! end do
-    ! !read sigs
-    ! do g = 1, ng
-    !   do h = 1, ng
-    !     do v = 1, m(mat_map)%nm
-    !       do u = 1, m(mat_map)%nf
-    !         do t = 1, m(mat_map)%nb
-    !           read(tunit, *, IOSTAT=iost) ind, ln, &
-    !           (xsec(s,t,u,v)%sigs(g,h), s = 1, m(mat_map)%nd)
-    !           if (rod == 0) then
-    !             message = ' ERROR IN XTAB FILE: CANNOT read SCATTERING XSEC'
-    !           else
-    !             message = ' ERROR IN XTAB FILE: CANNOT read RODDED SCATTERING XSEC'
-    !           end if
-    !           call input_error(ounit, iost, ln, message, XTAB=mat_map)
-    !         end do
-    !       end do
-    !     end do
-    !   end do
-    ! end do
-    ! !read dc
-    ! if (m(mat_map)%tadf  == YES) then  ! if dc present
-    !   do g = 1, ng
-    !     do v = 1, m(mat_map)%nm
-    !       do u = 1, m(mat_map)%nf
-    !         do t = 1, m(mat_map)%nb
-    !           read(tunit, *, IOSTAT=iost) ind, ln, &
-    !           (xsec(s,t,u,v)%dc(g,1), s = 1, m(mat_map)%nd)
-    !           do k = 1, 6
-    !             do s = 1, m(mat_map)%nd
-    !               xsec(s,t,u,v)%dc(g,k) = xsec(s,t,u,v)%dc(g,1)
-    !             end do
-    !           end do
-    !           if (rod == 0) then
-    !             message = ' ERROR IN XTAB FILE: CANNOT read ADFs'
-    !           else
-    !             message = ' ERROR IN XTAB FILE: CANNOT read RODDED ADFs'
-    !           end if
-    !           call input_error(ounit, iost, ln, message, XTAB=mat_map)
-    !         end do
-    !       end do
-    !     end do
-    !   end domat_map
-    ! else if (m(mat_map)%tadf  == 2) then
-    !   do g = 1, ng
-    !     do k = 1, 6
-    !       do v = 1, m(mat_map)%nm
-    !         do u = 1, m(mat_map)%nf
-    !           do t = 1, m(mat_map)%nb
-    !             read(tunit, *, IOSTAT=iost) ind, ln, &
-    !             (xsec(s,t,u,v)%dc(g,k), s = 1, m(mat_map)%nd)
-    !             if (rod == 0) then
-    !               message = ' ERROR IN XTAB FILE: CANNOT read ADFs'
-    !             else
-    !               message = ' ERROR IN XTAB FILE: CANNOT read RODDED TRANSPORT ADFs'
-    !             end if
-    !             call input_error(ounit, iost, ln, message, XTAB=mat_map)
-    !           end do
-    !         end do
-    !       end do
-    !     end do
-    !   end do
-    ! else
-    !   continue
-    ! end if
-    
-    
-    ! end subroutine readXS
-    
-    ! !******************************************************************************!
-    
-    ! subroutine skipread (iunit,matnum, nskip)
-    ! !Purpose: To allocate and read branch paramaters
-    
-    ! IMPLICIT NONE
-    
-    ! integer, intent(in) :: iunit, matnum, nskip
-    ! integer :: i, eof
-    
-    ! do i = 1, nskip
-    !   read (iunit, *, IOSTAT=eof)
-    !   if (eof < 0) then              !Check end of file
-    !     write(ounit,1131) matnum
-    !     write(ounit,1132)
-    !     write(output_unit,1131) matnum
-    !     write(output_unit,1132)
-    !     stop
-    !   end if
-    ! end do
-    
-    ! 1131 format(2X, 'ERROR: end OF FILE REACHED FOR XTAB FILE IN MATERIAL NUMBER ', I3)
-    ! 1132 format(2X, 'KOMODO IS STOPPING')
-    
-    ! end subroutine skipread
 
 end module
