@@ -18,7 +18,7 @@ module auxiliaries
 
     integer, parameter  :: dp = real64
 
-    type(fdm_rect), pointer          :: fdm
+    type(fdm_rect), public, pointer          :: fdm
     type(th_type), pointer           :: th
     type(xs_change_type), pointer    :: xsc
 
@@ -79,13 +79,12 @@ module auxiliaries
         type(fdm_rect), allocatable :: fdm_adj
         real(dp)                     :: flux_tmp(nnod, ng), fsrc_tmp(nnod)
         logical                      :: converge
-        integer                      :: nodal_interval
 
         allocate(fdm_adj)
 
-        nodal_interval = ceiling((nxx + nyy + nzz) / 2.5)
         call set_fdm_data(fdm_adj, ounit, kern, ng, nnod, nxx, nyy, nzz, nmat, &
-        east, west, north, south, top, bottom, 40, 1.e-5_dp, 1.e-5_dp, 1000, 2, 10)
+        east, west, north, south, top, bottom, nodal_interval, max_flux_error, max_fsrc_error, &
+        max_outer, max_outer_th, max_inner, extrp_interval)
 
         call set_fdm_pointer(fdm_adj, flux_tmp, fsrc_tmp, exsrc, ind_mat, xdel, ydel, zdel, vdel, &
         xstag, ystag, ix, iy, iz, xyz)
@@ -290,11 +289,12 @@ module auxiliaries
     ! thermal-hydraulics iteration
     !===============================================================================================!
 
-    subroutine th_iteration(max_iter, fuel_temp_err, converge)
+    subroutine th_iteration(max_iter, print_iter, fuel_temp_err, converge)
 
         integer, intent(in)    :: max_iter
+        logical, intent(in)    :: print_iter
         real(dp), intent(out)  :: fuel_temp_err
-        logical, intent(out)  :: converge
+        logical, intent(out)   :: converge
         
         integer  :: i
         real(dp) :: ftem_prev(nnod)
@@ -306,11 +306,14 @@ module auxiliaries
             call th_outer(fdm)
             call th_solver(enthalpy, ftem, mtem, cden)
             fuel_temp_err = maxval(abs(ftem - ftem_prev))
+            if (print_iter) then
+                write(output_unit,'(I5,F13.5,3ES15.5)') i, fdm % Keff, fdm % fsrc_diff, fdm % flux_diff, fuel_temp_err
+                write(ounit,'(I5,F13.5,3ES15.5)') i, fdm % Keff, fdm % fsrc_diff, fdm % flux_diff, fuel_temp_err
+            end if
             if ((fdm % max_flux_err > fdm % flux_diff) .and. (fdm % max_fiss_err > fdm % fsrc_diff)) then
                 converge = .true.
                 exit
             end if
-            write(*,*) fdm % Keff, fuel_temp_err
         end do
 
     end subroutine
@@ -373,15 +376,13 @@ module auxiliaries
 
     !===============================================================================================!
     ! thermal-hydraulics transient solver
+    ! This routine updates ftem, mtem and cden implicitly
     !===============================================================================================!
 
     subroutine th_solver_transient(power_level, t_step)
 
         real(dp), intent(in)       :: power_level
         real(dp), intent(in)       :: t_step
-        ! real(dp), intent(out)      :: fuel_temp(:)
-        ! real(dp), intent(out)      :: mod_temp(:)
-        ! real(dp), intent(out)      :: cool_dens(:)
 
         real(dp)  :: linear_pow(nnod)          ! node-wise inear Power
         real(dp)  :: lin_power(nzz)            ! sub-channel axial power
@@ -389,6 +390,7 @@ module auxiliaries
         real(dp)  :: ft(nzz)
         real(dp)  :: mt(nzz)
         real(dp)  :: cd(nzz)
+        real(dp)  :: ent(nzz)
         real(dp)  :: mesh_temp(nzz, th % n_ring+1) ! fuel mesh temperature[nzz, n_fuel]
         
         integer :: i, j, k, n
@@ -404,18 +406,22 @@ module auxiliaries
                     n = xyz(i, j, k)
                     lin_power(k)    = linear_pow(n)
                     heatf(k)        = heat_flux(n)
+                    ent(k)          = enthalpy(n)
+                    ft(k)           = ftem(n)
+                    mt(k)           = mtem(n)
+                    cd(k)           = cden(n)
                     mesh_temp(k, :) = tfm(n, :)
                 end do
 
-                call th_transient(th, t_step, lin_power, flow_rate, enthalpy, mesh_temp, heatf, ft, mt, cd)
+                call th_transient(th, t_step, lin_power, flow_rate, ent, mesh_temp, heatf, ft, mt, cd)
 
                 do k = 1, nzz
                     n = xyz(i, j, k)
                     heat_flux(n) = heatf(k)
                     tfm(n, :)    = mesh_temp(k, :)
-                    ! fuel_temp(n) = ft(k)
-                    ! mod_temp(n)  = mt(k)
-                    ! cool_dens(n) = cd(k)
+                    ftem(n)      = ft(k)
+                    mtem(n)      = mt(k)
+                    cden(n)      = cd(k)
                 end do
 
             end do
@@ -492,10 +498,10 @@ module auxiliaries
         
         dum = 0.; dum2 = 0.
         do n = 1, nnod
-           IF (c % xs % nuf(n,ng) > 0.) THEN
+           if (c % xs % nuf(n,ng) > 0.) then
               dum = dum + par(n) * vdel(n)
               dum2 = dum2 + vdel(n)
-           end IF
+           end if
         end do
         
         ave = dum / dum2

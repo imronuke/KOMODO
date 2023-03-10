@@ -177,13 +177,13 @@ module th
 
     subroutine gettd(ent,temp,rho,prx,kvx,tcx,Rx)
         
-        real(dp), intent(in) :: ent
-        real(dp), intent(out) :: temp   ! Temperature
-        real(dp), intent(out) :: rho    ! coolant densisty
-        real(dp), intent(out) :: prx    ! Prandtl number
-        real(dp), intent(out) :: kvx    ! kinematic viscosity
-        real(dp), intent(out) :: tcx    ! coolant thermal conductivity
-        real(dp), intent(out), OPTIONAL :: Rx
+        real(dp), intent(in)            :: ent
+        real(dp), intent(out)           :: temp   ! Temperature
+        real(dp), intent(out)           :: rho    ! coolant densisty
+        real(dp), intent(out)           :: prx    ! Prandtl number
+        real(dp), intent(out)           :: kvx    ! kinematic viscosity
+        real(dp), intent(out)           :: tcx    ! coolant thermal conductivity
+        real(dp), intent(out), optional :: Rx
         real(dp) :: ratx
         
         integer :: i, i1, i2
@@ -217,7 +217,7 @@ module th
         kvx  = stab(i1,5) + ratx * (stab(i2,5) - stab(i1,5))
         tcx  = stab(i1,6) + ratx * (stab(i2,6) - stab(i1,6))
         if (present(Rx)) then
-          Rx = 1000._DP * (stab(i2,2) - stab(i1,2)) / (stab(i2,3) - stab(i1,3))
+          Rx = 1000. * (stab(i2,2) - stab(i1,2)) / (stab(i2,3) - stab(i1,3))
         end if
         
     end subroutine gettd
@@ -420,10 +420,10 @@ module th
         tfm, heat_flux, ftem, mtem, cden)
         
         class(th_type)          :: t
-        real(dp), intent(in)    :: h             ! Time step
+        real(dp), intent(in)    :: h             ! Time step (s)
         real(dp), intent(in)    :: lin_power(:)  ! Linear Power Density (W/cm)
         real(dp), intent(inout) :: flow_rate(:)  ! coolant mass flow rate (kg/s)
-        real(dp), intent(inout) :: enthalpy(:)   ! updated enthalpy
+        real(dp), intent(inout) :: enthalpy(:)   ! updated enthalpy (J/kg)
         real(dp), intent(inout) :: heat_flux(:)  ! heat flux
         real(dp), intent(inout) :: tfm(:,:)      ! Fuel pin mesh temperature (nzz, n_ring)
         real(dp), intent(out)   :: ftem(:)       ! fuel temperature
@@ -447,8 +447,9 @@ module th
         real(dp)  :: cpline                                ! Coolant Linear power densisty (W/m)
         real(dp)  :: Pr, kv, tcon                          ! Coolant Prandtl Number, Kinematic viscosity, and thermal conductivity
         real(dp)  :: R
-        real(dp)  :: sq_rdel
+        real(dp)  :: rdel_sq
         real(dp)  :: ent_bound                             ! enthalpy at the node boundary
+        real(dp)  :: flow_bound                             ! flow rate the node boundary
         integer   :: error_flag
         
         !set initial tridiagonal matrix element a, b
@@ -459,71 +460,74 @@ module th
         ent_prev = enthalpy
         
         do k = 1, t % nzz
-            mdens  = cden(k) * 1000._DP                                                 ! Coolant density (kg/m3)
-            cpline = heat_flux(k) * pi * t % dia + t % cf * lin_power(k) * 100._DP      ! Coolant Linear power densisty (W/m)
-            vol    = t % s_area * t % zdel(k) * 0.01_DP                                 ! channel node volume
+            mdens  = cden(k) * 1000.                                                    ! Coolant density (kg/m3)
+            cpline = heat_flux(k) * pi * t % dia + t % cf * lin_power(k) * 100.         ! Coolant Linear power densisty (W/m)
+            vol    = t % s_area * t % zdel(k) * 0.01                                    ! channel node volume
             eps    = mdens * vol / h
         
             ! Calculate coolant enthalpy
+            ! to do: zdel multiply by 0.01 once
             if (k == 1) then
-                enthalpy(k)   = (cpline * t % zdel(k) * 0.01_DP + 2._DP * flow_rate(k) &
-                * ent_inlet + eps * ent_prev(k)) / (eps + 2._DP * flow_rate(k))          ! Calculate enthalpy
+                enthalpy(k)   = (cpline * t % zdel(k) * 0.01 + 2. * flow_rate(k) &
+                * ent_inlet + eps * ent_prev(k)) / (eps + 2. * flow_rate(k))             ! Calculate enthalpy
+                call gettd(enthalpy(k), mtem(k), cden(k), Pr, kv, tcon, R)               ! Get corresponding temp and density
                 ent_bound     = 2. * enthalpy(k) - ent_inlet
-                flow_rate(k)  = t % cflow - 0.5_dp * vol / h * R * (enthalpy(k) - ent_prev(k))
+                flow_rate(k)  = t % cflow - 0.5 * vol / h * R * (enthalpy(k) - ent_prev(k))
+                flow_bound    = 2. * flow_rate(k) - t % cflow
             else
-                enthalpy(k)  = (cpline * t % zdel(k) * 0.01_DP + 2._DP * flow_rate(k) &
-                * ent_bound + eps * ent_prev(k)) / (eps + 2._DP * flow_rate(k))
+                enthalpy(k)  = (cpline * t % zdel(k) * 0.01 + 2. * flow_rate(k) &
+                * ent_bound + eps * ent_prev(k)) / (eps + 2. * flow_rate(k))
+                call gettd(enthalpy(k), mtem(k), cden(k), Pr, kv, tcon, R)               ! Get corresponding temp and density
                 ent_bound    = 2. * enthalpy(k) - ent_bound
-                flow_rate(k) = flow_rate(k-1) - 0.5_dp * vol / h * R * (enthalpy(k) - ent_prev(k))
+                flow_rate(k) = flow_bound - 0.5 * vol / h * R * (enthalpy(k) - ent_prev(k))
+                flow_bound    = 2. * flow_rate(k) - flow_bound
             end if
-
-            call gettd(enthalpy(k), mtem(k), cden(k), Pr, kv, tcon, R)                   ! Get corresponding temp and density
         
-            hs = geths(t, cden(k), Pr, kv, tcon)                                         ! Calculate heat transfer coef
-            pdens = (1._DP - t % cf) * 100._DP * lin_power(k) / (pi * t % rf**2)         ! Fuel pin Power Density (W/m3)
+            hs = geths(t, cden(k), Pr, kv, tcon)                                   ! Calculate heat transfer coef
+            pdens = (1. - t % cf) * 100. * lin_power(k) / (pi * t % rf**2)         ! Fuel pin Power Density (W/m3)
         
             ! Calculate tridiagonal matrix: a, b, c and source: d
             ! For nt=1 [FUEL CENTERLINE]
             kt1  = getkf(tfm(k,1))                                                     ! Get thermal conductivity
             kt2  = getkf(tfm(k,2))
-            kt   = 2._DP * kt1 * kt2 / (kt1 + kt2)
+            kt   = 2. * kt1 * kt2 / (kt1 + kt2)
             cp   = getcpf(tfm(k,1))                                                     ! Get specific heat capacity
-            eta  = fdens * cp * t % rpos(1)**2 / (2._DP * h)
+            eta  = fdens * cp * t % rpos(1)**2 / (2. * h)
             xc   = kt * t % rpos(1) / t % rdel(1)
             b(1) = xc + eta
             c(1) = -xc
-            d(1) = pdens * 0.5_DP * t % rpos(1)**2 + eta * tfm(k,1)
+            d(1) = pdens * 0.5 * t % rpos(1)**2 + eta * tfm(k,1)
         
             do i = 2, t % n_ring-2
                 kt1     = kt2
                 kt2     = getkf(tfm(k,i+1))
-                kt      = 2._DP * kt1 * kt2 / (kt1 + kt2)
+                kt      = 2. * kt1 * kt2 / (kt1 + kt2)
                 cp      = getcpf(tfm(k,i))
-                sq_rdel = t % rpos(i)**2 - t % rpos(i-1)**2
-                eta     = fdens * cp * sq_rdel / (2. * h)
+                rdel_sq = t % rpos(i)**2 - t % rpos(i-1)**2
+                eta     = fdens * cp * rdel_sq / (2. * h)
                 xa      = xc
                 xc      = kt * t % rpos(i) / t % rdel(i)
                 a(i)    = -xa
                 b(i)    =  xa + xc + eta
                 c(i)    = -xc
-                d(i)    = pdens * 0.5_DP * sq_rdel + eta * tfm(k,i)
+                d(i)    = pdens * 0.5 * rdel_sq + eta * tfm(k,i)
             end do
         
             ! For nt-1 [FUEL-GAP INTERFACE]
             cp              = getcpf(tfm(k,t % n_ring-1))
-            sq_rdel         = t % rf**2 - t % rpos(t % n_ring-2)**2
-            eta             = fdens * cp * sq_rdel / (2. * h)
+            rdel_sq         = t % rf**2 - t % rpos(t % n_ring-2)**2
+            eta             = fdens * cp * rdel_sq / (2. * h)
             xa              = xc
             xc              = t % rg * hg
             a(t % n_ring-1) = -xa
             b(t % n_ring-1) =  xa + xc + eta
             c(t % n_ring-1) = -xc
-            d(t % n_ring-1) = pdens * 0.5_DP * sq_rdel + eta * tfm(k,t % n_ring-1)
+            d(t % n_ring-1) = pdens * 0.5 * rdel_sq + eta * tfm(k,t % n_ring-1)
         
             ! For nt [GAP-CLADDING INTERFACE]
             kt1           = getkc(tfm(k,t % n_ring))
             kt2           = getkc(tfm(k,t % n_ring+1))
-            kt            = 2._DP * kt1 * kt2 / (kt1 + kt2)     ! For cladding
+            kt            = 2. * kt1 * kt2 / (kt1 + kt2)     ! For cladding
             cp            = getcpc(tfm(k,t % n_ring))
             eta           = cdens * cp * (t % rpos(t % n_ring)**2 - t % rg**2) / (2. * h)
             xa            = xc
@@ -542,7 +546,6 @@ module th
             b(t % n_ring+1) =  xa + xc + eta
             d(t % n_ring+1) = t % rc * hs * mtem(k) + eta * tfm(k,t % n_ring+1)
         
-            ! Solve tridiagonal matrix
             call TridiaSolve(a, b, c, d, tfm(k, :), error_flag)
             if(error_flag .ne. 0) then
                 write(error_unit,*) "Error: TridiaSolve routine failed"
@@ -555,7 +558,7 @@ module th
             ! Calculate heat flux
             heat_flux(k) = hs * (tfm(k, t % n_ring+1) - mtem(k))
         end do
-        
+
     end subroutine
     
 end module

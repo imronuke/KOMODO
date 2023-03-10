@@ -10,27 +10,27 @@ NEACRP Critical Boron Concentration Search - Case A1
 
 ! XSEC CARD
 %XSEC
-FILE /home/travis/build/imronuke/KOMODO/smpl/static/NEACRP/neacrp_xsec
+FILE ../smpl/static/NEACRP/neacrp_xsec
 
 ! GEOMETRY CARD
 %GEOM
-FILE /home/travis/build/imronuke/KOMODO/smpl/static/NEACRP/neacrp_geom
+FILE ../smpl/static/NEACRP/neacrp_geom
 
 ! CRITICAL BORON SEARCH CARD
 %CBCS
-FILE /home/travis/build/imronuke/KOMODO/smpl/static/NEACRP/neacrp_cbcs
+FILE ../smpl/static/NEACRP/neacrp_cbcs
 
 ! FUEL TEMPERATURE CARD
 %FTEM
-FILE /home/travis/build/imronuke/KOMODO/smpl/static/NEACRP/neacrp_ftem
+FILE ../smpl/static/NEACRP/neacrp_ftem
 
 ! MODERATOR TEMPERATURE CARD
 %MTEM
-FILE /home/travis/build/imronuke/KOMODO/smpl/static/NEACRP/neacrp_mtem
+FILE ../smpl/static/NEACRP/neacrp_mtem
 
 ! COOLANT DENSITY CARD
 %CDEN
-FILE /home/travis/build/imronuke/KOMODO/smpl/static/NEACRP/neacrp_cden
+FILE ../smpl/static/NEACRP/neacrp_cden
 
 ! CONTROL ROD CARD
 %CROD

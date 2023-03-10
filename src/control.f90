@@ -59,19 +59,14 @@ module control
         real(dp) :: ftemp_err
 
         call calculation_init()
-        
         call print_head()
-
+        
         if (bther == NO) then
             call xsec_update(fdm % xs, xsc, bcon, ftem, mtem, cden, bank_pos)
             call outer_iter(fdm, print_iter = .true., is_converge=converge)
         else
-            call th_iteration(10, ftemp_err, converge)
-            print *, fdm % Keff, ftemp_err
-            ! call th_iteration(10, ftemp_err, converge)
-            ! print *, fdm % Keff, ftemp_err
-            ! call th_iteration(10, ftemp_err, converge)
-            ! print *, fdm % Keff, ftemp_err
+            call th_iteration(25, .true., ftemp_err, converge)
+            call print_tail(fdm)
         end if
         if (.not. converge) call print_fail_converge()
 
@@ -151,7 +146,7 @@ module control
 
     subroutine cbc_search_no_th()
 
-        integer  :: n
+        integer  :: n, n_iter
         real(dp) :: K1, K2
         real(dp) :: bc1, bc2
         logical  :: converge
@@ -160,11 +155,12 @@ module control
 
         call print_head()
 
+        n_iter = 2 * nodal_interval
+
         ! First try
         bcon = xsc % bcon % ref
         call xsec_update(fdm % xs, xsc, bcon, ftem, mtem, cden, bank_pos)
-        call outer_iter(fdm, print_iter = .false., is_converge=converge)
-        if (.not. converge) call print_fail_converge()
+        call outer_iter(fdm, print_iter = .false., max_iter=n_iter, is_converge=converge)
         bc1 = bcon
         K1  = fdm % Keff
         write(output_unit,101) 1, bcon, K1, fdm % flux_diff, fdm % fsrc_diff
@@ -172,8 +168,7 @@ module control
         ! Second try
         bcon = bcon + (K1 - 1.) * bcon   ! Guess next critical boron concentration
         call xsec_update(fdm % xs, xsc, bcon, ftem, mtem, cden, bank_pos)
-        call outer_iter(fdm, print_iter = .false., is_converge=converge)
-        if (.not. converge) call print_fail_converge()
+        call outer_iter(fdm, print_iter = .false.,  max_iter=n_iter, is_converge=converge)
         bc2 = bcon
         K2  = fdm % Keff
         write(output_unit,101) 2, bcon, K2, fdm % flux_diff, fdm % fsrc_diff
@@ -183,14 +178,13 @@ module control
             n = n + 1
             bcon = bc2 + (1. - K2) / (K1 - K2) * (bc1 - bc2)
             call xsec_update(fdm % xs, xsc, bcon, ftem, mtem, cden, bank_pos)
-            call outer_iter(fdm, print_iter = .false., is_converge=converge)
-            if (.not. converge) call print_fail_converge()
+            call outer_iter(fdm, print_iter = .false.,  max_iter=n_iter, is_converge=converge)
             bc1 = bc2
             bc2 = bcon
             K1  = K2
             K2  = fdm % Keff
             write(output_unit,101) n, bcon, K2, fdm % flux_diff, fdm % fsrc_diff
-            if ((fdm % max_flux_err > fdm % flux_diff) .and. (fdm % max_fiss_err > fdm % fsrc_diff)) exit
+            if (converge .and. abs(K2-K1) < 1.e-5) exit
         end do
 
         101 format(I3, F10.2, F14.5, ES14.5, ES13.5)
@@ -219,7 +213,7 @@ module control
         else
             bcon = 0.0              ! if tabular xs used, set initial boron conc. to 0.0 ppm
         end if
-        call th_iteration(2, ftem_diff, converge)
+        call th_iteration(n_th_iter, .false., ftem_diff, converge)
         bc1 = bcon
         K1  = fdm % Keff
         write(output_unit,102) 1, bcon, K1, fdm % flux_diff, fdm % fsrc_diff, ftem_diff
@@ -231,7 +225,7 @@ module control
         else
             bcon = 500.0              ! if tabular xs used, set initial boron conc. to 0.0 ppm
         end if
-        call th_iteration(2, ftem_diff, converge)
+        call th_iteration(n_th_iter, .false., ftem_diff, converge)
         bc2 = bcon
         K2  = fdm % Keff
         write(output_unit,102) 2, bcon, K2, fdm % flux_diff, fdm % fsrc_diff, ftem_diff
@@ -240,13 +234,13 @@ module control
         do
             n = n + 1
             bcon = bc2 + (1. - K2) / (K1 - K2) * (bc1 - bc2)
-            call th_iteration(2, ftem_diff, converge)
+            call th_iteration(n_th_iter, .false., ftem_diff, converge)
             bc1 = bc2
             bc2 = bcon
             K1  = K2
             K2  = fdm % Keff
             write(output_unit,102) n, bcon, K2, fdm % flux_diff, fdm % fsrc_diff, ftem_diff
-            if (converge) exit
+            if (converge .and. abs(K2-K1) < 1.e-5) exit
         end do
 
         call print_tail(fdm)
@@ -299,7 +293,7 @@ module control
 
     subroutine calculation_init()
 
-        integer  :: nodal_interval, max_outer, i_mat
+        integer  :: i_mat
         real(dp), dimension(nmat,nf) :: lambda_tmp, beta_tmp
         real(dp), dimension(nmat,ng) :: neut_velo_tmp
 
@@ -315,16 +309,10 @@ module control
             dc = 1.0
         end if
 
-        nodal_interval = ceiling((nxx + nyy + nzz) / 2.5)
-        if (allocated(th)) then
-            max_outer = 20
-        else
-            max_outer = 1000
-        end if
-
         call fdm_time % on
         call set_fdm_data(fdm, ounit, kern, ng, nnod, nxx, nyy, nzz, nmat, &
-        east, west, north, south, top, bottom, nodal_interval, 1.e-5_dp, 1.e-5_dp, max_outer, 2, 5)
+        east, west, north, south, top, bottom, nodal_interval, 1.e-5_dp, 1.e-5_dp, &
+        max_outer, max_outer_th, max_inner, extrp_interval)
         call set_fdm_pointer(fdm, flux, fsrc, exsrc, ind_mat, xdel, ydel, zdel, vdel, &
         xstag, ystag, ix, iy, iz, xyz)
         call fdm_time % off

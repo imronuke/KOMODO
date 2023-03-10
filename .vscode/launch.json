@@ -8,7 +8,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceRoot}/build/komodo",
-            "args": ["${workspaceRoot}/smpl/transient/LMW"],
+            "args": ["${workspaceRoot}/smpl/transient/NEACRP/A1t"],
             "stopAtEntry": false,
             "cwd": "${workspaceRoot}",
             "externalConsole": false,

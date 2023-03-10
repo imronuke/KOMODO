@@ -5,7 +5,7 @@ RODEJECT
 LMW  TRANSIENT
 20 CM NODE SIZE
 
-%   XSEC
+%XSEC
 2  3    ! Number of groups and number of materials
 !  sigtr      siga      nu*sigf    sigf    chi sigs_g1  sigs_g2
 0.2340967  0.01040206  0.006478  0.006478  1.0  0.0  0.017556

@@ -112,21 +112,15 @@ module data
     real(dp) :: max_fsrc_error = 1.e-5    ! Fission source Error CRITERIA
     real(dp) :: flux_error                ! Flux and Fission source error in BCSEARCH calcs.
     real(dp) :: fsrc_error                ! Flux and Fission source error in BCSEARCH calcs.
-    integer  :: n_inner = 2               ! Maximum inner iteration
-    integer  :: n_outer = 500             ! Maximum outer iteration
+    integer  :: max_inner = 2             ! Maximum inner iteration
+    integer  :: max_outer = 1000          ! Maximum outer iteration
     integer  :: extrp_interval = 5        ! Fission source extrapolation interval
-    integer  :: n_th_iter = 30            ! Maximum number of thermal-hydraulics iteration
-    integer  :: n_outer_th = 20           ! Maximum number of outer iterations per thermal-hydraulics iteration
-    integer  :: upd_interval              ! Nodal update interval
+    integer  :: n_th_iter = 2            ! Maximum number of thermal-hydraulics iteration
+    integer  :: max_outer_th = 20         ! Maximum number of outer iterations per thermal-hydraulics iteration
+    integer  :: nodal_interval            ! Nodal update interval
     
     ! Output print option
     integer :: print_rad_pow=YES, print_axi_pow=YES, print_flux=YES
-    
-    ! parameter references for TH feedback
-    ! real(dp) :: fuel_temp_ref      ! Fuel temperature Reference in Kelvin
-    ! real(dp) :: mod_temp_ref       ! Moderator temperature Reference in Kelvin
-    ! real(dp) :: mod_dens_ref       ! Coolant Density Reference in g/cm3
-
     
     ! Transient parameters
     integer, parameter    :: nf = 6                ! Number of delayed neutron precusor family

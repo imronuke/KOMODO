@@ -186,7 +186,7 @@ module read
         ! Card CBCS
         if (mode == 'BCSEARCH' .AND. bcbcs == YES) then
             call inp_cbcs(ucbcs)
-        else if (mode == 'BCSEARCH' .AND. bcbcs == 0 .AND. bxtab == 0) then
+        else if (mode == 'BCSEARCH' .AND. bcbcs == 0 .AND. bxtab == NO) then
             write(ounit,*) '   ERROR: CALCULATION MODE IS CRITICAL BORON CONCENTRATION SEARCH'
             write(ounit,1041) 'CBCS', 'CRITICAL BORON CONCENTRATION SEARCH'
             write(error_unit,*) '   ERROR: CALCULATION MODE IS CRITICAL BORON CONCENTRATION SEARCH'
@@ -233,10 +233,13 @@ module read
             stop
         end if
         
-        ! if (boutp == YES) call inp_outp(uoutp)
-        
-        ! ! Card ITER
-        ! if (biter == YES) call inp_iter(uiter)
+        ! Card ITER
+        if (bther == NO) then
+            nodal_interval = ceiling((nxx + nyy + nzz) / 2.5)
+        else
+            nodal_interval = ceiling(0.5*max_outer_th)
+        end if
+        if (biter == YES) call inp_iter(uiter)
         
         ! Card THET
         if (bthet == YES) call inp_thet(uthet)
@@ -266,20 +269,20 @@ module read
         end if
         
         !CARD BCON
-        if (bbcon == YES .AND. bxtab == 0) call inp_bcon (ubcon)
+        if (bbcon == YES .AND. bxtab == NO) call inp_bcon (ubcon)
         if (bbcon == YES .AND. bxtab == YES .AND. mode == 'RODEJECT') call inp_bcon (ubcon)
         
         !CARD FTEM
-        if (bftem == YES .AND. bxtab == 0) call inp_ftem (uftem)
+        if (bftem == YES .AND. bxtab == NO) call inp_ftem (uftem)
         
         !CARD MTEM
-        if (bmtem == YES .AND. bxtab == 0) call inp_mtem (umtem)
+        if (bmtem == YES .AND. bxtab == NO) call inp_mtem (umtem)
         
         !CARD CDEN
-        if (bcden == YES .AND. bxtab == 0) call inp_cden (ucden)
+        if (bcden == YES .AND. bxtab == NO) call inp_cden (ucden)
         
         !CARD ADF
-        if (badf == YES .AND. bxtab == 0) then
+        if (badf == YES .AND. bxtab == NO) then
             call inp_adf (uadf)
         else if (badf == YES .AND. bxtab == YES) then
             message = '  BOTH %ADF AND %XTAB CARDS CANNOT PRESENT TOGETHER'
@@ -1777,7 +1780,7 @@ module read
         if (ios == 0 .AND. popt > 0) then
         
             write(ounit,1422) rbcon
-            if (bxtab == 0) then  ! if XTAB File does not present
+            if (bxtab == NO) then  ! if XTAB File does not present
                 write(ounit,*)
                 write(ounit,*) ' MATERIAL CX CHANGES PER PPM BORON CHANGES : '
                 do i= 1, nmat
@@ -1842,7 +1845,7 @@ module read
         message = ' error in READING boron concentration and boron concentration reference'
         call input_error(ounit, ios, ln, message, buf=xbunit)
         
-        if (bxtab == 0) then  ! if xtab file present
+        if (bxtab == NO) then  ! if xtab file present
             ! read CX changes per ppm born change
             do i = 1, nmat
                 do g= 1, ng
@@ -1865,7 +1868,7 @@ module read
             write(ounit,1221) bcon
             write(ounit,1222) rbcon
         
-            if (bxtab == 0) then  ! if xtab file present
+            if (bxtab == NO) then  ! if xtab file present
               write(ounit,*)
               write(ounit,*) ' MATERIAL CX CHANGES PER PPM BORON CHANGES : '
                 do i= 1, nmat
@@ -1935,7 +1938,7 @@ module read
         allocate (ftem(nnod))
         ftem = cftem   !Initial guess for fuel temperature
         
-        if (bxtab == 0) then  ! if XTAB File does not present
+        if (bxtab == NO) then  ! if XTAB File does not present
             ! read CX changes fuel temperature change
             do i = 1, nmat
                 do g= 1, ng
@@ -1962,7 +1965,7 @@ module read
             end if
             write(ounit,1242) rftem
         
-            if (bxtab == 0) then  ! if XTAB File does not present
+            if (bxtab == NO) then  ! if XTAB File does not present
                 write(ounit,*)
                 write(ounit,*) ' MATERIAL CX CHANGES PER FUEL TEMPERATURE CHANGES : '
                 do i= 1, nmat
@@ -2033,7 +2036,7 @@ module read
         allocate (mtem(nnod))
         mtem = cmtem
         
-        if (bxtab == 0) then  ! if XTAB File does not present
+        if (bxtab == NO) then  ! if XTAB File does not present
             ! read CX changes per moderator temperature change
             do i = 1, nmat
                 do g= 1, ng
@@ -2059,7 +2062,7 @@ module read
                 write(ounit,1276) cmtem
             end if
             write(ounit,1262) rmtem
-            if (bxtab == 0) then  ! if XTAB File does not present
+            if (bxtab == NO) then  ! if XTAB File does not present
                 write(ounit,*)
                 write(ounit,*) ' MATERIAL CX CHANGES PER MODERATOR TEMPERATURE CHANGES : '
                 do i= 1, nmat
@@ -2130,7 +2133,7 @@ module read
         allocate (cden(nnod))
         cden = ccden
         
-        if (bxtab == 0) then  ! if XTAB File does not present
+        if (bxtab == NO) then  ! if XTAB File does not present
             ! read CX changes per Coolant Density change
             do i = 1, nmat
                 do g= 1, ng
@@ -2156,7 +2159,7 @@ module read
                 write(ounit,1376) ccden
             end if
             write(ounit,1362) rcden
-            if (bxtab == 0) then  ! if XTAB File does not present
+            if (bxtab == NO) then  ! if XTAB File does not present
                 write(ounit,*)
                 write(ounit,*) ' MATERIAL CX CHANGES PER COOLANT DENSITY CHANGES : '
                 do i= 1, nmat
@@ -2436,7 +2439,7 @@ module read
                 write(ounit,'(100I3)' ) (bmap(i,j), i = 1, nx)
             end do
         
-            if (bxtab == 0) then  ! if xtab file present
+            if (bxtab == NO) then  ! if xtab file present
               write(ounit,*)
               write(ounit,*) ' MATERIAL CX INCREMENT OR DECREMENT DUE TO CR INSERTION : '
               do i= 1, nmat
@@ -2721,7 +2724,7 @@ module read
         message = ' error in time parameters'
         call input_error(ounit, ios, ln, message, buf=xbunit)
         
-        if (bxtab == 0) then  ! if XTAB File does not present
+        if (bxtab == NO) then  ! if XTAB File does not present
             ! read beta (delayed neutron fraction)
             read(xbunit, *, IOSTAT=ios) ind, ln, (beta(i), i = 1, nf)
             message = ' error in READING delayed netron fraction (beta)'
@@ -2758,7 +2761,7 @@ module read
             write(ounit,1299) time_step_2
             write(ounit,1300) time_mid
         
-            if (bxtab == 0) then  ! if XTAB File does not present
+            if (bxtab == NO) then  ! if XTAB File does not present
                 write(ounit,*)
                 write(ounit,*) ' DELAYED NEUTRON FRACTION : '
                 write(ounit,'(100F11.5)') (beta(i), i = 1, nf)
@@ -3283,76 +3286,65 @@ module read
     
     end subroutine skipread
     
-    ! !******************************************************************************!
+    !===============================================================================================!
+    !  To control iteration
+    !===============================================================================================!
     
-    ! subroutine inp_iter (xbunit)
+    subroutine inp_iter (xbunit)
+     
+        integer, intent(in) :: xbunit
+        
+        integer :: ln   !Line number
+        integer :: ios  ! IOSTAT status
+        
+        read(xbunit, *, IOSTAT=ios) ind, ln, max_outer, max_inner, max_fsrc_error, max_flux_error, extrp_interval, nodal_interval, &
+        n_th_iter, max_outer_th
+        message = ' error in READING iteration control'
+        call input_error(ounit, ios, ln, message, buf=xbunit)
+        
+        write(ounit,*)
+        write(ounit,*)
+        write(ounit,*) '           >>>>>READING ITERATION CONTROL<<<<<'
+        write(ounit,*) '           ------------------------------------'
+        
+        write(ounit,'(A,I5)') '  MAXIMUM NUMBER OF OUTER ITERATION                     : ', max_outer
+        write(ounit,'(A,I5)') '  MAXIMUM NUMBER OF INNER ITERATION                     : ', max_inner
+        write(ounit,'(A,ES12.3)') '  FISSION SOURCE ERROR CRITERIA                     : ', max_fsrc_error
+        write(ounit,'(A,ES12.3)') '  FLUX ERROR CRITERIA                               : ', max_flux_error
+        write(ounit,'(A,I5)') '  OUTER ITERATION FISSION SOURCE EXTRAPOLATION INTERVAL : ', extrp_interval
+        write(ounit,'(A,I5)') '  NODAL UPDATE INTERVAL                                 : ', nodal_interval
+        write(ounit,'(A,I5)') '  MAX. NUMBER OF T-H ITERATION                          : ', n_th_iter
+        write(ounit,'(A,I5)') '  MAX. NUMBER OF OUTER ITERATION PER T-H ITERATION      : ', max_outer_th
+        
+        if (max_outer < nodal_interval .and. kern .ne. ' FDM') then
+          write(error_unit,*) "ERROR: MAX. NUMBER OF OUTER ITERATION SHOULD BE BIGGER THAN NODAL UPDATE INTERVAL"
+          write(ounit,*) "ERROR: MAX. NUMBER OF OUTER ITERATION SHOULD BE BIGGER THAN NODAL UPDATE INTERVAL"
+          stop
+        end if
+        
+        ! if (max_outer_th < nodal_interval .and. kern .ne. ' FDM' .and. bther == YES) then
+        !   write(error_unit,*) "ERROR: MAX. NUMBER OF OUTER ITERATION PER T-H ITERATION SHOULD BE BIGGER THAN NODAL UPDATE INTERVAL"
+        !   write(ounit,*) "ERROR: MAX. NUMBER OF OUTER ITERATION PER T-H ITERATION SHOULD BE BIGGER THAN NODAL UPDATE INTERVAL"
+        !   stop
+        ! end if
     
-    ! !
-    ! ! Purpose:
-    ! !    To read iteration control if any
+    end subroutine inp_iter
     
-    ! USE data, ONLY: n_outer, n_inner, max_fsrc_error, max_flux_error, extrp_interval, upd_interval, n_th_iter, n_outer_th, kern
+    !===============================================================================================!
+    !  To tell user the flux transformation is active
+    !===============================================================================================!
     
-    ! IMPLICIT NONE
+    subroutine inp_extr ()
     
-    ! integer, intent(in) :: xbunit
+        write(ounit,*)
+        write(ounit,*)
+        write(ounit,*) '           >>>>>READING FLUX TRANSFORMATION<<<<<'
+        write(ounit,*) '           -------------------------------------'
+        write(ounit,1571)
     
-    ! integer :: ln   !Line number
-    ! integer :: ios  ! IOSTAT status
+        1571 format (2X, 'EXPONENTIAL FLUX TRANSFORMATION IS ACTIVE')
     
-    ! read(xbunit, *, IOSTAT=ios) ind, ln, n_outer, n_inner, max_fsrc_error, max_flux_error, extrp_interval, upd_interval, &
-    ! n_th_iter, n_outer_th
-    ! message = ' error in READING iteration control'
-    ! call input_error(ounit, ios, ln, message, buf=xbunit)
-    
-    ! write(ounit,*)
-    ! write(ounit,*)
-    ! write(ounit,*) '           >>>>>READING ITERATION CONTROL<<<<<'
-    ! write(ounit,*) '           ------------------------------------'
-    
-    ! write(ounit,'(A,I5)') '  MAXIMUM NUMBER OF OUTER ITERATION                     : ', n_outer
-    ! write(ounit,'(A,I5)') '  MAXIMUM NUMBER OF INNER ITERATION                     : ', n_inner
-    ! write(ounit,'(A,ES12.3)') '  FISSION SOURCE ERROR CRITERIA                     : ', max_fsrc_error
-    ! write(ounit,'(A,ES12.3)') '  FLUX ERROR CRITERIA                               : ', max_flux_error
-    ! write(ounit,'(A,I5)') '  OUTER ITERATION FISSION SOURCE EXTRAPOLATION INTERVAL : ', extrp_interval
-    ! write(ounit,'(A,I5)') '  NODAL UPDATE INTERVAL                                 : ', upd_interval
-    ! write(ounit,'(A,I5)') '  MAX. NUMBER OF T-H ITERATION                          : ', n_th_iter
-    ! write(ounit,'(A,I5)') '  MAX. NUMBER OF OUTER ITERATION PER T-H ITERATION      : ', n_outer_th
-    
-    ! if (n_outer < upd_interval .and. kern /= ' FDM') then
-    !   write(error_unit,*) "ERROR: MAX. NUMBER OF OUTER ITERATION SHOULD BE BIGGER THAN NODAL UPDATE INTERVAL"
-    !   write(ounit,*) "ERROR: MAX. NUMBER OF OUTER ITERATION SHOULD BE BIGGER THAN NODAL UPDATE INTERVAL"
-    !   stop
-    ! end if
-    
-    ! if (n_outer_th < upd_interval .and. kern /= ' FDM' .and. bther == YES) then
-    !   write(error_unit,*) "ERROR: MAX. NUMBER OF OUTER ITERATION PER T-H ITERATION SHOULD BE BIGGER THAN NODAL UPDATE INTERVAL"
-    !   write(ounit,*) "ERROR: MAX. NUMBER OF OUTER ITERATION PER T-H ITERATION SHOULD BE BIGGER THAN NODAL UPDATE INTERVAL"
-    !   stop
-    ! end if
-    
-    
-    ! end subroutine inp_iter
-    
-    ! !******************************************************************************!
-    
-    ! subroutine inp_extr ()
-    
-    ! !
-    ! ! Purpose:
-    ! !    To tell user the flux transformation is active
-    
-    ! IMPLICIT NONE
-    
-    ! write(ounit,*)
-    ! write(ounit,*)
-    ! write(ounit,*) '           >>>>>READING FLUX TRANSformatION<<<<<'
-    ! write(ounit,*) '           -------------------------------------'
-    ! write(ounit,1571)
-    
-    ! 1571 format (2X, 'EXPONENTIAL FLUX TRANSformatION IS ACTIVE')
-    
-    ! end subroutine inp_extr
+    end subroutine inp_extr
     
     ! !******************************************************************************!
     

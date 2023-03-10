@@ -3,7 +3,7 @@ module print
     use data
     use fdm
     use utilities
-    use auxiliaries, only: par_ave, par_ave_out, print_fail_converge
+    use auxiliaries, only: par_ave, par_ave_out, print_fail_converge, fd=>fdm
 
     implicit none
   
@@ -19,31 +19,41 @@ module print
     ! Initialize calculation
     !===============================================================================================!
 
-    subroutine print_transient_step(i_step, t_next, rho, power_mult)
+    subroutine print_transient_step(i_step, t_next, rho, power_mult, converge)
 
         integer, intent(in)  :: i_step
         real(dp), intent(in) :: t_next, rho, power_mult
+        logical, intent(in)  :: converge
+
+        real(dp) :: tf, mtf, tm, mtm
 
         integer :: n
 
-       ! if (bther == 1) then
-        !   WRITE(*,'(I4, F10.3, F10.4, ES15.4, 12F9.2)') i_step, t_next, rho/ctbeta, &
-        !   power_mult, (bank_pos(n), n = 1, nb)
+       if (bther == 1) then
+            call par_ave(fd, ftem, tf)
+            mtf = maxval(tfm(:,1))
+            call par_ave(fd, mtem, tm)
+            mtm = maxval(mtem)
+            write(output_unit,'(I4, F10.3, F10.4, ES15.4, 12F9.2)') i_step, t_next, rho, &
+            power_mult, (bank_pos(n), n = 1, nbank)
         
-        !   IF (maxi) THEN
-        !     WRITE(ounit,'(I4, F10.3, F10.4, ES15.4, 4F10.2, A35)') i_step, t_next, rho/ctbeta, &
-        !     power_mult, tm-273.15, mtm-273.15, tf-273.15, mtf-273.15, 'OUTER ITERATION DID NOT CONVERGE'
-        !   ELSE
-        !     WRITE(ounit,'(I4, F10.3, F10.4, ES15.4, 4F10.2)') i_step, t_next, rho/ctbeta, &
-        !     power_mult, tm-273.15, mtm-273.15, tf-273.15, mtf-273.15
-        !   END IF
-        ! else
-        WRITE(output_unit,'(I4, F10.3, F10.4, ES15.4, 12F9.2)') i_step, t_next, rho, &
-        power_mult, (bank_pos(n), n = 1, nbank)
-      
-        WRITE(ounit,'(I4, F10.3, F10.4, ES15.4)') i_step, t_next, rho, &
-        power_mult
-      ! end if
+            if (converge) then
+                write(ounit,'(I4, F10.3, F10.4, ES15.4, 4F10.2)') i_step, t_next, rho, &
+                power_mult, tm-273.15, mtm-273.15, tf-273.15, mtf-273.15
+            else
+                write(ounit,'(I4, F10.3, F10.4, ES15.4, 4F10.2, A35)') i_step, t_next, rho, &
+                power_mult, tm-273.15, mtm-273.15, tf-273.15, mtf-273.15, 'OUTER ITERATION DID NOT CONVERGE'
+            end if
+        else
+            write(output_unit,'(I4, F10.3, F10.4, ES15.4, 12F9.2)') i_step, t_next, rho, &
+            power_mult, (bank_pos(n), n = 1, nbank)
+
+            if (converge) then
+                write(ounit,'(I4, F10.3, F10.4, ES15.4)') i_step, t_next, rho, power_mult
+            else
+                write(ounit,'(I4, F10.3, F10.4, ES15.4, A35)') i_step, t_next, rho, power_mult, 'OUTER ITERATION DID NOT CONVERGE'
+            end if
+        end if
 
     end subroutine
 

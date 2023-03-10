@@ -26,7 +26,7 @@ module utilities
     ! To solve Tridiagonal matrix
     !================================================================!
 
-    pure subroutine TridiaSolve(a,b,c,d,x,error_flag)
+    subroutine TridiaSolve(a,b,c,d,x,error_flag)
 
         ! a vector is upper diagnal, b vector is diagonal, and c vector is lower diagonal
         ! d vector is the RHS
@@ -39,6 +39,7 @@ module utilities
         real(dp) :: pivot
         
         n = size(d)
+        error_flag = 0
         
         ! Gauss Elimination
         c(1) = c(1)/b(1)
@@ -46,7 +47,7 @@ module utilities
         do i = 2, n
             pivot = (b(i) - a(i) * c(i-1))
             c(i) = c(i) / pivot
-            if (abs(pivot) < 1.e-5) then
+            if (abs(pivot) < 1.e-20) then
                 error_flag = 1
                 return
             end if
@@ -60,6 +61,63 @@ module utilities
         end do
         
     end subroutine
+
+    !===============================================================================================!
+    ! To solve LU
+    !===============================================================================================!
+
+    function mat_solve(msize,mat,b) result(x)
+  
+        implicit none
+  
+        integer, intent(in)                  :: msize  ! node and and matrix size
+        real(dp), dimension(:,:), intent(in) :: mat           ! the matrix A
+        real(dp), dimension(:), intent(in)   :: b            ! the vector b
+        real(dp), dimension(msize)           :: x            ! the vector b
+  
+        real(dp), dimension(msize,msize) :: L, U
+        real(dp), dimension(msize) :: y
+        real(dp) :: piv, isum
+        integer :: i, j, k
+  
+        U = mat
+        L = 0._dp
+  
+        ! Start matrix decomposition
+        do i= 1, msize
+            if (ABS(mat(i,i)) < 10e-5) stop "fail"
+            L(i,i) = 1._DP
+            do j= i+1, msize
+                piv = U(j,i)/U(i,i)
+                L(j,i) = piv
+                do k= i, msize
+                    U(j,k) = U(j,k) - piv*U(i,k)
+                end do
+                U(j,i) = 0._dp
+            end do
+        end do  
+  
+        !Solve y in Ly = b (Forward substitution)
+        y(1) = b(1)
+        do i=2,msize
+            isum = 0._dp
+            do k =1, i-1
+                isum = isum + L(i,k)*y(k)
+            end do
+            y(i) = b(i)-isum
+        end do
+  
+        ! Solve x in Ux=y(Backward substitution)
+        x(msize) = y(msize)/U(msize,msize)
+        do i = msize-1,1,-1
+            isum = 0._dp
+            do k =i+1,msize
+                isum = isum + U(i,k)*x(k)
+            end do
+            x(i) = (y(i)-isum) / U(i,i)
+        end do
+  
+    end function
 
     !===============================================================================================!
     ! To factorize A to L, U. L and U matrices combined into LU

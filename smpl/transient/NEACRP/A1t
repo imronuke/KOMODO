@@ -121,7 +121,7 @@ NEACRP Problem
 
 ! BORON CONCENTRATION
 %BCON
-560.53  1200.2  ! Boron concentration ref. in ppm
+560.52  1200.2  ! Boron concentration ref. in ppm
 ! CX change per unit ppm change of Boron concentration
 !  sigtr          siga         nu*sigf    kappa*sigf  sigs_g1   sigs_g2
  6.11833E-08  1.87731E-07   0.00000E+00   0.00000E+00  0.0   7.91457E-10
@@ -259,7 +259,10 @@ NEACRP Problem
 
 ! Iteration control card (see manual or output file for description)
 %ITER
-1200 3 1.e-5 1.e-5 15 20 20 80
+1200 2 1.e-5 1.e-5 10 100 10 20
 
 ! Flux Exponential extrapolation card
 %EXTR
+
+%KERN
+FDM

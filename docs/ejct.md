@@ -17,8 +17,8 @@ This card is used for transient problems due to control rods insertion or withdr
 |   | TSTEP1 | First time step (seconds) |
 |   | TDIV | When to start second time step (seconds) |
 |   | TSTEP2 | Second time step (seconds) |
-| LINE 3 | IBETA(1:6) | 6-groups delayed neutron fraction | **Not necessary if `%XTAB` card present** |
-| LINE 4 | LAMB(1:6) | 6-groups precursor decay constant | **Not necessary if `%XTAB` card present** |
+| LINE 3 | beta(1:6) | 6-groups delayed neutron fraction | **Not necessary if `%XTAB` card present** |
+| LINE 4 | lambda(1:6) | 6-groups precursor decay constant | **Not necessary if `%XTAB` card present** |
 | LINE 5 | VELO(1:NG) | Neutron velocity | **Not necessary if `%XTAB` card present** |
 
 ## Note

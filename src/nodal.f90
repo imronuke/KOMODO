@@ -1510,6 +1510,8 @@ module nodal
 
         x = LU_subst(LU, b)
 
+        ! x = mat_solve(nsize, A, b)
+
     end function
 
     

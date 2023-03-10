@@ -1,4 +1,4 @@
-1200.2  ! Boron concentration ref. in ppm
+1156.12 1200.2  ! Boron concentration ref. in ppm
 ! CX change per unit ppm change of Boron concentration
 !  sigtr          siga         nu*sigf    kappa*sigf  sigs_g1   sigs_g2
  6.11833E-08  1.87731E-07   0.00000E+00   0.00000E+00  0.0   7.91457E-10

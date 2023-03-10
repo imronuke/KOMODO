@@ -60,6 +60,7 @@ module fdm
         real(dp)            :: max_flux_err  ! max flux error
         real(dp)            :: max_fiss_err  ! max fission source error
         integer             :: max_outer     ! max number of outer iteration
+        integer             :: max_outer_th  ! max number of outer iteration for th feedback
         integer             :: max_inner     ! max number of outer iteration
         integer             :: extrp         ! interval for fission source extrapolation
     end type
@@ -103,7 +104,7 @@ module fdm
 
     subroutine set_fdm_data(c, output_fid, kernel, ng, nnod, nxx, nyy, nzz, &
         nmat, east, west, north, south, top, bottom, nod_intv, max_flux_err, &
-        max_fiss_err, max_outer, max_inner, extrp)
+        max_fiss_err, max_outer, max_outer_th, max_inner, extrp)
 
         class(fdm_rect)              :: c
         integer, intent(in)           :: output_fid                               ! output file unit number
@@ -117,6 +118,7 @@ module fdm
         real(dp), intent(in)          :: max_flux_err  ! max flux error
         real(dp), intent(in)          :: max_fiss_err  ! max fission source error
         integer, intent(in)           :: max_outer     ! max number of outer iteration
+        integer, intent(in)           :: max_outer_th  ! max number of outer iteration for th feedback
         integer, intent(in)           :: max_inner     ! max number of outer iteration
         integer, intent(in)           :: extrp         ! interval for fission source extrapolation
 
@@ -148,8 +150,9 @@ module fdm
         c % nod_intv     = nod_intv
         c % max_flux_err = max_flux_err
         c % max_fiss_err = max_fiss_err
-        c % max_outer    = max_outer   
-        c % max_inner    = max_inner   
+        c % max_outer    = max_outer
+        c % max_outer_th = max_outer_th
+        c % max_inner    = max_inner
         c % extrp        = extrp
         
         ! allocate scattering source
@@ -235,6 +238,10 @@ module fdm
 
         class(fdm_rect) :: c
 
+        deallocate(c % xs % sigtr, c % xs % siga, c % xs % nuf)
+        deallocate(c % xs % sigf, c % xs % sigs, c % xs % chi)
+        deallocate(c % xs % D, c % xs % sigr)
+
         deallocate(c % scat)
         deallocate(c % df, c % dn)
         if (allocated(c % d)) deallocate(c % d)
@@ -264,13 +271,15 @@ module fdm
     ! to perfom forward outer iteration
     !===============================================================================================!
 
-    subroutine outer_iter(c, print_iter, is_converge)
+    subroutine outer_iter(c, print_iter, max_iter, is_converge)
 
         class(fdm_rect)               :: c
-        logical, intent(in)            :: print_iter
-        logical, intent(out)           :: is_converge
+        logical, intent(in)           :: print_iter
+        integer, intent(in), optional :: max_iter
+        logical, intent(out)          :: is_converge
 
         integer  :: i, g
+        integer  :: max_outer
         real(dp) :: fc, fco                                  ! new and old integrated fission SOURCES
         real(dp) :: Keo
         real(dp) :: flux_old(c % nnod, c % ng)
@@ -293,10 +302,17 @@ module fdm
         e1 = integrate(c, errn)
 
         call fdm_time % off
+
+        ! set max outer iteration
+        if (present(max_iter)) then
+            max_outer = max_iter
+        else
+            max_outer = c % max_outer
+        end if
     
         !Start outer iteration
         is_converge    = .false.
-        do i = 1, c % max_outer
+        do i = 1, max_outer
 
             call fdm_time % on
             fco       = fc               ! Save old integrated fission source
@@ -425,7 +441,7 @@ module fdm
         ! Build FDM matrix
         call build_matrix(c, upd_fdm_coupling=.true.)
 
-        c % nod_intv = ceiling(0.45 * real(c % max_outer))
+        c % nod_intv = ceiling(0.45 * real(c % max_outer_th))
 
         ! Initialize fission source
         call get_fission_src(c)
@@ -438,7 +454,8 @@ module fdm
         call fdm_time % off
     
         !Start outer iteration
-        do i = 1, c % max_outer
+        c % nod_intv = ceiling(0.5 * c % max_outer_th)
+        do i = 1, c % max_outer_th
 
             call fdm_time % on
             fco       = fc               ! Save old integrated fission source
@@ -453,11 +470,6 @@ module fdm
                 call linear_solver(c % m % mtx(g), c % m % ind, c % max_inner, bs, c % flux(:,g))
             end do
 
-            ! if (any(c % flux < 0.)) then
-            !     write(*,*) i
-            !     stop
-            ! end if
-
             call get_fission_src(c)      !Update fission source
             errn = c % fsrc - fsrc_old
             e2 = norm2(errn)
@@ -467,7 +479,6 @@ module fdm
             e1 = e2
             fc = integrate(c, c % fsrc)
             c % Keff = Keo * fc / fco    ! Update Keff
-            write(*,*) c % Keff
             call get_difference(c % flux, flux_old, c % fsrc, fsrc_old, c % flux_diff, c % fsrc_diff)
             call fdm_time % off
 
@@ -610,10 +621,10 @@ module fdm
             fc = integrate(c, c % fsrc)
             c % Keff = Keo * fc / fco             ! Update Keff
             call get_difference(c % flux, flux_old, c % fsrc, fsrc_old, c % flux_diff, c % fsrc_diff)
-            if (print_iter) then
+            ! if (print_iter) then
                 write(fid,'(I5,F13.6,2ES15.5)') i, c % Keff, c % fsrc_diff, c % flux_diff
                 write(output_unit,'(I5,F13.6,2ES15.5)')   i, c % Keff, c % fsrc_diff, c % flux_diff
-            end if
+            ! end if
             if ((c % max_flux_err > c % flux_diff) .AND. (c % max_fiss_err > c % fsrc_diff)) then
                 is_converge = .true.
                 exit
@@ -683,8 +694,8 @@ module fdm
         fsrc_diff = 0.
         flux_diff = 0.
 
-        nnod      = size(flux, dim=1)
-        ng        = size(flux, dim=2)
+        nnod = size(flux, dim=1)
+        ng   = size(flux, dim=2)
 
         do n= 1, nnod
             diff(n) = 0.

@@ -143,7 +143,7 @@ module transient
     end subroutine
 
     !===============================================================================================!
-    ! To perform rod ejection simulation without TH feedback
+    ! To perform rod ejection simulation
     !===============================================================================================!
 
     subroutine rod_eject_transient(tr, is_th)
@@ -165,7 +165,7 @@ module transient
         write(output_unit,*)
         write(output_unit,'(A)', advance='no') '  steady state calculation starts ... '
         if (is_th) then
-            call th_iteration(100, ftemp_err, converge)
+            call th_iteration(100, .false., ftemp_err, converge)
         else
             call outer_iter(tr % f, print_iter = .false., is_converge=converge)
             if (.not. converge) call print_fail_converge()
@@ -211,7 +211,7 @@ module transient
         
         ! File output
         call print_head()
-        call print_transient_step(0, 0._dp, rho / tr % core_beta, 1._dp)
+        call print_transient_step(0, 0._dp, rho / tr % core_beta, 1._dp, converge=.true.)
         
         ! Start transient calculation
         i_step = 0
@@ -309,7 +309,6 @@ module transient
         
         ! Transient calculation
         call transient_outer(tr % f, tr % mod_sigr, converge)
-        if (.not. converge) call print_fail_converge()
         
         ! Update precursor density
         call precursor_update(tr, t_step)
@@ -323,14 +322,9 @@ module transient
         
         if (is_th) then
             call th_solver_transient(power_mult, t_step)
-        
-            ! call par_ave(ftem, tf)
-            ! call par_max(tfm(:,1), mtf)
-            ! call par_ave(mtem, tm)
-            ! call par_max(mtem, mtm)
         end if
 
-        call print_transient_step(i_step, t_next, rho / tr % core_beta, power_mult)
+        call print_transient_step(i_step, t_next, rho / tr % core_beta, power_mult, converge)
         
         
     end subroutine trans_calc
