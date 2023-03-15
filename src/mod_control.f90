@@ -20,7 +20,7 @@ contains
     use io,    only: AsmPow, AxiPow, AsmFlux, inp_read, bther, boutp, print_outp
     use xsec,  only: XS_updt
     use cmfd,  only: outer,print_keff
-    use th,  only: th_iter, powdis
+    use th,  only: th_iter
 
     IMPLICIT NONE
 
@@ -44,7 +44,7 @@ contains
 
     IF (aprad == 1 .OR. apaxi == 1) THEN
         ALLOCATE(pow(nnod))
-        CALL PowDis(pow)
+        CALL get_power_dist(pow)
     END IF
 
     IF (aprad == 1) CALL AsmPow(pow)
@@ -71,7 +71,6 @@ contains
     use io,    only: AsmPow, AxiPow, AsmFlux, inp_read
     use xsec,  only: XS_updt
     use cmfd,  only: outer_ad,print_keff
-    use th,    only: powdis
 
     IMPLICIT NONE
 
@@ -89,7 +88,7 @@ contains
 
     IF (aprad == 1 .OR. apaxi == 1) THEN
         ALLOCATE(pow(nnod))
-        CALL PowDis(pow)
+        CALL get_power_dist(pow)
     END IF
 
     IF (aprad == 1) CALL AsmPow(pow)
@@ -113,7 +112,6 @@ contains
     use io,    only: AsmPow, AxiPow, AsmFlux, inp_read
     use xsec,  only: XS_updt
     use cmfd,  only: outer_fs
-    use th,    only: powdis
 
     IMPLICIT NONE
 
@@ -129,7 +127,7 @@ contains
 
     IF (aprad == 1 .OR. apaxi == 1) THEN
         ALLOCATE(pow(nnod))
-        CALL PowDis(pow)
+        CALL get_power_dist(pow)
     END IF
 
     IF (powtot > 0.0) THEN
@@ -155,7 +153,6 @@ contains
   USE io, ONLY: ounit, AsmFlux, AsmPow, AxiPow
   USE cmfd, ONLY: outer
   USE xsec, ONLY: XS_updt
-  use th,    only: powdis
 
   IMPLICIT NONE
 
@@ -201,7 +198,7 @@ contains
 
   ALLOCATE(npow(nnod))
   IF (aprad == 1 .OR. apaxi == 1) THEN
-      CALL PowDis(npow)
+      CALL get_power_dist(npow)
   END IF
 
   IF (aprad == 1) CALL AsmPow(npow)
@@ -229,7 +226,6 @@ contains
   USE io, ONLY: ounit, AsmFlux, AsmPow, AxiPow
   USE cmfd, ONLY: outer
   use th, only : th_iter
-  use th,    only: powdis
 
   IMPLICIT NONE
 
@@ -277,7 +273,7 @@ contains
   END DO
 
   IF (aprad == 1 .OR. apaxi == 1) THEN
-      CALL PowDis(npow)
+      CALL get_power_dist(npow)
   END IF
 
   IF (aprad == 1) CALL AsmPow(npow)
@@ -328,6 +324,56 @@ contains
   END IF
 
 END SUBROUTINE check_ppm
+
+!****************************************************************************!
+
+subroutine get_power_dist (p)
+
+  !
+  ! Purpose:
+  !    To calculate power for each nodes
+  !
+  
+  
+  USE sdata, ONLY: ng, nnod, sigf, f0, vdel, powtot, mode
+  USE io,    ONLY: ounit
+  
+  implicit none
+  
+  real(dp), dimension(:), intent(out) :: p
+  integer :: g, n
+  real(dp) :: pow, vtot
+  
+  p = 0._dp
+  do g= 1, ng
+      do n= 1, nnod
+        pow = f0(n,g) * sigf(n,g)
+        if (pow < 0.) pow = 0.
+        p(n) = p(n) + pow
+      end do
+  end do
+  
+  ! Normalize to 1._DP
+  powtot = 0._DP
+  vtot = 0.0
+  do n = 1, nnod
+      powtot = powtot + p(n) * vdel(n)
+      vtot   = vtot + vdel(n)
+  end do
+  
+  if (powtot <= 0 .AND. mode /= 'FIXEDSRC') THEN
+     write(ounit, *) '   ERROR: TOTAL NODES POWER IS ZERO OR LESS'
+     write(ounit, *) '   STOP IN subroutine get_power_dist'
+     STOP
+  end if
+  
+  if (powtot > 0.0) then
+     do n = 1, nnod
+         p(n) = p(n) * vtot / powtot
+     end do
+  end if
+  
+  end subroutine
 
   !****************************************************************************!
 
