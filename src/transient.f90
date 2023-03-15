@@ -42,7 +42,6 @@ module transient
         real(dp), allocatable      :: prev_flux(:,:)        ! previous time-step nodes flux
         real(dp), allocatable      :: prev_fsrc(:)          ! previous time-step nodes fission source
         real(dp), allocatable      :: adj_flux(:,:)         ! Adjoint flux
-        real(dp), allocatable      :: mod_sigr(:,:)         ! Modified sigma removal to take account of terms that appear in transient calc.
         logical                    :: is_exp                ! is exponential transformation used
         logical                    :: is_tabular            ! is tabular xs used
 
@@ -106,7 +105,6 @@ module transient
         allocate(tr % precursor(nnod,nf))
         allocate(tr % L(nnod,ng))
         allocate(tr % adj_flux(nnod,ng))
-        allocate(tr % mod_sigr(nnod,ng))
         allocate(tr % beta(nmat, nf))
         allocate(tr % lambda(nmat, nf))
         allocate(tr % neutron_velo(nmat, ng))
@@ -151,12 +149,13 @@ module transient
         class(trans_type)   :: tr
         logical, intent(in) :: is_th
         
-        real(dp) :: power_first
-        real(dp) :: rho
-        real(dp) :: t_now, t_next
-        integer  :: i_mat, i, p, i_max, i_step
-        real(dp) :: ftemp_err
-        logical  :: converge
+        real(dp)               :: power_first
+        real(dp)               :: rho
+        real(dp)               :: t_now, t_next
+        integer                :: i_mat, i, p, i_max, i_step
+        real(dp)               :: ftemp_err
+        real(dp), allocatable  :: tmp_flux(:,:)
+        logical                :: converge
         
         ! Update xsec
         call xs_update(tr % f % xs, tr % xsc)
@@ -165,20 +164,29 @@ module transient
         write(output_unit,*)
         write(output_unit,'(A)', advance='no') '  steady state calculation starts ... '
         if (is_th) then
-            call th_iteration(100, .false., ftemp_err, converge)
+            call th_iteration(100, .false., ftemp_err, is_converge=converge)
         else
             call outer_iter(tr % f, print_iter = .false., is_converge=converge)
-            if (.not. converge) call print_fail_converge()
         end if
+        if (.not. converge) call print_fail_converge()
         write(output_unit,*) 'done'
         
         ! If keff not equal to 1.0, force to 1.0
         if (abs(tr % f % Keff - 1._dp) > 1.e-5_dp) call adjust_keff(tr % f, tr % xsc)
         
-        ! Calculate Adjoint flux
-        write(output_unit,'(A)', advance='no') '  adjoint calculation starts ... '
-        call get_adjoint_flux(tr % xsc, tr % adj_flux)
-        write(output_unit,*) 'done'
+        ! ! Calculate Adjoint flux
+        ! write(output_unit,'(A)', advance='no') '  adjoint calculation starts ... '
+        ! allocate(tmp_flux(tr % nnod, tr % ng))
+        ! tmp_flux = tr % f % flux
+        ! call outer_adjoint(fdm, print_iter = .false., is_nodal_updated=.false., is_converge=converge)
+        ! if (.not. converge) call print_fail_converge()
+        ! tr % adj_flux = tr % f % flux
+        ! tr % f % flux = tmp_flux
+        ! deallocate(tmp_flux)
+        ! write(output_unit,*) 'done'
+        ! print *, tr % f % keff
+        tr % adj_flux = tr % f % flux
+        
         
         ! Calculate Initial precursor density
         call precursor_init(tr)
@@ -207,7 +215,7 @@ module transient
         end if
         
         ! Calculate reactivity
-        call reactivity(tr, rho)
+        call reactivity(tr, tr % f % xs % sigr, rho)
         
         ! File output
         call print_head()
@@ -218,8 +226,7 @@ module transient
         t_next = 0.
         i_max = nint(tr % time_mid/ tr % t_step_1)
         
-        ! First Time Step
-        ! write(*,*) sum(tr % xs % sigr)
+        ! First Time Step Width
         do i = 1, i_max
         
             i_step = i_step + 1
@@ -240,7 +247,7 @@ module transient
         
         end do
         
-        ! Second Time Step
+        ! Second Time Step Width
         i_max = nint((tr % total_time - tr % time_mid) / tr % t_step_2)
         
         do i = 1, i_max
@@ -278,7 +285,7 @@ module transient
         logical  :: converge
         
         real(dp) :: lin_power(tr % nnod)          ! Linear power density
-        real(dp) :: sigr_prev(tr % nnod, tr % ng) ! Previous sigr
+        real(dp) :: sigrp(tr % nnod, tr % ng)     ! sigr before modified
         real(dp) :: power_mult                    ! Power multiplication
         real(dp) :: tf, tm, mtf, mtm
         integer  :: i_mat
@@ -287,14 +294,14 @@ module transient
         call move_crod(t_step, t_next)
         
         ! Calculate xsec after pertubation
-        sigr_prev = tr % xs % sigr
         call xs_update(tr % f % xs, tr % xsc)
         
         ! Modify removal xsec
+        sigrp = tr % xs % sigr
         do g = 1, tr % ng
             do n = 1, tr % nnod
                 i_mat = tr % ind_mat(n)
-                tr % mod_sigr(n,g) = tr % xs % sigr(n,g) &
+                tr % xs % sigr(n,g) = sigrp(n,g) &
                 + 1._dp / (tr % theta * tr % neutron_velo(i_mat,g) * t_step) &
                 + tr % omega(n,g) / tr % neutron_velo(i_mat,g)
             end do
@@ -305,10 +312,10 @@ module transient
         tr % prev_fsrc = tr % f % fsrc
 
         ! get transient external source
-        tr % f % exsrc = get_exsrc(tr, sigr_prev, t_step)
+        tr % f % exsrc = get_exsrc(tr, sigrp, t_step)
         
         ! Transient calculation
-        call transient_outer(tr % f, tr % mod_sigr, converge)
+        call transient_outer(tr % f, converge)
         
         ! Update precursor density
         call precursor_update(tr, t_step)
@@ -318,7 +325,7 @@ module transient
         power_mult = power_now/power_first
         
         ! Calculate reactivity
-        call reactivity(tr, rho)
+        call reactivity(tr, sigrp, rho)
         
         if (is_th) then
             call th_solver_transient(power_mult, t_step)
@@ -335,12 +342,12 @@ module transient
     !    calculations but do not appear in static calculation
     !===============================================================================================!
 
-    function get_exsrc(tr, sigr, t_step) result(exsrc)
+    function get_exsrc(tr, sigrp, t_step) result(res_exsrc)
       
         class(trans_type)    :: tr
-        real(dp), intent(in) :: sigr(:,:)
+        real(dp), intent(in) :: sigrp(:,:)
         real(dp), intent(in) :: t_step
-        real(dp)             :: exsrc(tr % nnod, tr % ng)
+        real(dp)             :: res_exsrc(tr % nnod, tr % ng)
       
         real(dp) :: dt(tr % nnod), dtp(tr % nnod)
         integer  :: n, p, g, i_mat
@@ -365,12 +372,13 @@ module transient
 
         do g = 1, tr % ng
             do n = 1, tr % nnod
-                ! to do: should we use new sigr?
-                ! pther => all terms from previous time step
-                pthet = -tr % L(n,g) - sigr(n,g) * tr % prev_flux(n,g) + tr % f % scat(n,g) &
+                ! to do: should we use old sigr?
+                ! pthet => all terms from previous time step
+                i_mat = tr % ind_mat(n)
+                pthet = -tr % L(n,g) - sigrp(n,g) * tr % prev_flux(n,g) + tr % f % scat(n,g) &
                 + (1._dp - tr % total_beta(i_mat)) * tr % xs % chi(n,g) * tr % prev_fsrc(n) &
                 +  tr % xs % chi(n,g) * dtp(n)
-                exsrc(n,g) = tr % xs % chi(n,g) * dt(n) &
+                res_exsrc(n,g) = tr % xs % chi(n,g) * dt(n) &
                 + exp(tr % omega(n,g) * t_step) * tr % prev_flux(n,g) / (tr % theta * tr % neutron_velo(i_mat, g) * t_step) &
                 + tr % big_theta * pthet
             end do
@@ -387,22 +395,22 @@ module transient
         class(trans_type) tr
         real(dp), intent(out):: power
         
-        real(dp) :: p(tr % nnod)
+        real(dp) :: pn(tr % nnod)
         integer  :: g, n
         real(dp) :: pow
         
-        p = 0._dp
+        pn = 0._dp
         do g = 1, tr % ng
             do n= 1, tr % nnod
               pow = tr % f % flux(n,g) * tr % xs % sigf(n,g) * tr % f % vdel(n)
               if (pow < 0.) pow = 0.
-              p(n) = p(n) + pow
+              pn(n) = pn(n) + pow
             end do
         end do
         
         power = 0._dp
         do n = 1, tr % nnod
-            power = power + p(n)
+            power = power + pn(n)
         end do
         
     end subroutine
@@ -462,9 +470,10 @@ module transient
     ! To calculate dynamic reactivity
     !===============================================================================================!
 
-    subroutine reactivity(tr, rho)
+    subroutine reactivity(tr, sigrp, rho)
         
         class(trans_type)      :: tr
+        real(dp), intent(in)   :: sigrp(:,:)
         real(dp), intent(out)  :: rho
         
         integer  :: n, g, h
@@ -479,7 +488,7 @@ module transient
                 call get_leakage(tr % f, n, g, Lx, Ly, Lz)
                 tr % L(n,g) = Lx + Ly + Lz
                 src = src + tr % adj_flux(n,g) * (tr % f % scat(n,g) + tr % xs % chi(n,g) * tr % f % fsrc(n)) * tr % f % vdel(n)  ! total source
-                rem = rem + tr % adj_flux(n,g) * tr % xs % sigr(n,g) * tr % f % flux(n,g) * tr % f % vdel(n)                      ! removal
+                rem = rem + tr % adj_flux(n,g) * sigrp(n,g) * tr % f % flux(n,g) * tr % f % vdel(n)                      ! removal
                 lea = lea + tr % adj_flux(n,g) * tr % L(n,g) * tr % f % vdel(n)                                                   ! leakages
                 fde = fde + tr % adj_flux(n,g) * tr % xs % chi(n,g) * tr % f % fsrc(n) * tr % f % vdel(n)                         ! fission source
             end do

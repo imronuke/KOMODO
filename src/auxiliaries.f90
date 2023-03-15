@@ -92,7 +92,7 @@ module auxiliaries
         call xsec_setup(fdm_adj % xs, sigtr, siga, nuf, sigf, sigs, chi, dc, bxtab, bcrod)
         call xsec_update(fdm_adj % xs, xsc, bcon, ftem, mtem, cden, bank_pos)
 
-        call outer_adjoint(fdm_adj, print_iter = .false., is_converge=converge)
+        call outer_adjoint(fdm_adj, print_iter = .true., is_converge=converge)
         if (.not. converge) call print_fail_converge()
 
         adj_flux = flux_tmp
@@ -289,17 +289,17 @@ module auxiliaries
     ! thermal-hydraulics iteration
     !===============================================================================================!
 
-    subroutine th_iteration(max_iter, print_iter, fuel_temp_err, converge)
+    subroutine th_iteration(max_iter, print_iter, fuel_temp_err, is_converge)
 
         integer, intent(in)    :: max_iter
         logical, intent(in)    :: print_iter
         real(dp), intent(out)  :: fuel_temp_err
-        logical, intent(out)   :: converge
+        logical, intent(out)   :: is_converge
         
         integer  :: i
         real(dp) :: ftem_prev(nnod)
 
-        converge = .false.
+        is_converge = .false.
         do i = 1, max_iter
             ftem_prev = ftem
             call xsec_update(fdm % xs, xsc, bcon, ftem, mtem, cden, bank_pos)
@@ -311,7 +311,7 @@ module auxiliaries
                 write(ounit,'(I5,F13.5,3ES15.5)') i, fdm % Keff, fdm % fsrc_diff, fdm % flux_diff, fuel_temp_err
             end if
             if ((fdm % max_flux_err > fdm % flux_diff) .and. (fdm % max_fiss_err > fdm % fsrc_diff)) then
-                converge = .true.
+                is_converge = .true.
                 exit
             end if
         end do

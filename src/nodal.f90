@@ -39,6 +39,7 @@ module nodal
         logical              :: only_axial
         integer              :: nnod, ng
         integer              :: nxx, nyy, nzz
+        real(dp)             :: nodal_max_error
 
         real(dp), allocatable   :: a1n(:), a2n(:), a3n(:), a4n(:)  ! Flux expansion coefficients for current node
         real(dp), allocatable   :: a1p(:), a2p(:), a3p(:), a4p(:)  ! Flux expansion coefficients for following node
@@ -118,11 +119,11 @@ module nodal
     end subroutine
 
     !===============================================================================================!
-    ! Aliasing pointer data necessary for higher order nodal coupling coeff (D hat)
+    ! Aliasing pointer data necessary for higher order nodal coupling coeff (D hat) updates
     !===============================================================================================!
 
     subroutine set_nodal_pointer(d, Keff, xs, flux, exsrc, xdel, ydel, zdel, xstag, ystag, &
-        ix, iy, iz, xyz, df, dn, ind_mat, total_beta, dfis)
+        ix, iy, iz, xyz, df, dn)
         
         class(nodal_type), intent(inout)       :: d
         real(dp), intent(in), target           :: Keff
@@ -136,9 +137,6 @@ module nodal
         integer, intent(in), target            :: iz(:)
         integer, intent(in), target            :: xyz(:,:,:)
         real(dp), intent(in), target           :: df(:,:,:), dn(:,:,:)
-        integer, intent(in), target, optional  :: ind_mat(:)
-        real(dp), intent(in), target, optional :: total_beta(:)
-        real(dp), intent(in), target, optional :: dfis(:)
 
         d % Ke    => Keff
         d % xs    => xs
@@ -168,11 +166,6 @@ module nodal
 
         d % df  => df
         d % dn  => dn
-
-        ! Followings only used for transient calculations
-        if (present(ind_mat)) d % ind_mat => ind_mat
-        if (present(total_beta)) d % total_beta => total_beta
-        if (present(dfis)) d % dfis => dfis
 
     end subroutine
 
@@ -236,6 +229,7 @@ module nodal
         d % Fp = d % Fn; d % Gp = d % Gn; d % Hp = d % Hn
     
         call get_source(d)
+        d % nodal_max_error = 0.
     
         !Node sweeps in x-direction
         do k = 1, d % nzz
@@ -318,6 +312,8 @@ module nodal
         d % calc_mode = trim(adjustl(calc_mode))
     
         call get_source(d)
+
+        d % nodal_max_error = 0.
     
         !Node sweeps in x-direction
         do k = 1, d % nzz
@@ -413,8 +409,9 @@ module nodal
         integer, intent(in), optional            :: n, p
         real(dp), dimension(:), intent(in)       :: a1, a2, a3, a4
     
-        integer    :: g, s
-        real(dp)   :: dh, jp
+        integer  :: g, s
+        real(dp) :: dh, jp
+        real(dp) :: tmp, nodal_error
         integer  :: i, j, k
     
         if (u == 1) then
@@ -454,10 +451,14 @@ module nodal
                 * (a1(g) + 3. * a2(g) + d % Hn(g) * a3(g) + d % Gn(g) * a4(g))
         
                 ! Update nodal coupling
+                tmp           = d % dn(n,g,s)
                 d % dn(n,g,s) = (d % df(n,g,s) * (d % flux(n,g) - d % flux(p,g)) - jp) &
                 / (d % flux(n,g) + d % flux(p,g))
                 
                 d % dn(p,g,s+1) = d % dn(n,g,s)
+
+                nodal_error = abs(d % dn(n,g,s) - tmp)
+                if (nodal_error > d % nodal_max_error) d % nodal_max_error = nodal_error
 
             end do
 
@@ -468,7 +469,11 @@ module nodal
                 * (a1(g) - 3. * a2(g) + d % Hp(g) * a3(g) - d % Gp(g) * a4(g))
         
                 ! Update nodal coupling
+                tmp             = d % dn(p,g,s+1) 
                 d % dn(p,g,s+1) = -(jp / d % flux(p,g) + d % df(p,g,s+1))
+
+                nodal_error = abs(d % dn(p,g,s+1) - tmp)
+                if (nodal_error > d % nodal_max_error) d % nodal_max_error = nodal_error
 
             end do
 
@@ -479,7 +484,11 @@ module nodal
                 * (a1(g) + 3. * a2(g) + d % Hn(g) * a3(g) + d % Gn(g) * a4(g))
         
                 ! Update nodal coupling
+                tmp           = d % dn(n,g,s)
                 d % dn(n,g,s) = -(jp / d % flux(n,g) - d % df(n,g,s))
+
+                nodal_error = abs(d % dn(n,g,s) - tmp)
+                if (nodal_error > d % nodal_max_error) d % nodal_max_error = nodal_error
         
             end do
 
@@ -999,6 +1008,7 @@ module nodal
         integer  :: g, h
         real(dp) :: Ke
         integer  :: i, j, k
+        integer  :: i_mat
     
         Ke = d % Ke
         
@@ -1026,16 +1036,17 @@ module nodal
                 end do
             end do
         else if (d % calc_mode == 'transient') then
+            i_mat = d % ind_mat(n)
             do g = 1, d % ng
                 do h = 1, d % ng
                     if (g == h) then
-                        dum = d % xs % sigr(n,g) - (1. - d % total_beta(d % ind_mat(n)) + d % dfis(n)) &
+                        dum = d % xs % sigr(n,g) - (1. - d % total_beta(i_mat) + d % dfis(n)) &
                         * d % xs % chi(n,g) * d % xs % nuf(n,h)
                     else
-                        dum = -d % xs % sigs(n,h,g) - (1. - d % total_beta(d % ind_mat(n)) + d % dfis(n)) &
+                        dum = -d % xs % sigs(n,h,g) - (1. - d % total_beta(i_mat) + d % dfis(n)) &
                         * d % xs % chi(n,g) * d % xs % nuf(n,h)
                     end if
-                    B(g,h) = 0.25_dp * dn**2 / d % xs % D(n,g) * dum
+                    B(g,h) = 0.25 * dn**2 / d % xs % D(n,g) * dum
                 end do
               end do
         else  ! Adjoint calculation

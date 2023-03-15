@@ -212,7 +212,7 @@ module fdm
     end subroutine
 
     !===============================================================================================!
-    ! Set FDM pointers for rectangular geometry
+    ! Set FDM pointers for transient problems
     !===============================================================================================!
 
     subroutine set_fdm_transient(c, total_beta, dfis)
@@ -358,11 +358,10 @@ module fdm
     ! To perform transient fixed source outer iteration
     !===============================================================================================!
 
-    subroutine transient_outer(c, mod_sigr, is_converge)
+    subroutine transient_outer(c, is_converge)
 
         class(fdm_rect)               :: c
-        real(dp), intent(in)           :: mod_sigr(:,:)  ! modified sigma removal for transient
-        logical, intent(out)           :: is_converge
+        logical, intent(out)          :: is_converge
 
         integer  :: i, g
         real(dp) :: flux_old(c % nnod, c % ng)
@@ -370,11 +369,12 @@ module fdm
         real(dp) :: bs(c % nnod)
         real(dp) :: e1, e2
         real(dp) :: errn(c % nnod), erro(c % nnod)            ! current and past error vectors
+        logical  :: nodal_updated
 
         call fdm_time % on
 
         ! Build FDM matrix
-        call build_matrix(c, upd_fdm_coupling=.true., sigr=mod_sigr)
+        call build_matrix(c, upd_fdm_coupling=.true.)
 
         ! Init error vector
         errn = 1._dp
@@ -384,6 +384,7 @@ module fdm
     
         !Start outer iteration
         is_converge = .false.
+        nodal_updated = .false.
         do i = 1, c % max_outer
 
             call fdm_time % on
@@ -401,18 +402,24 @@ module fdm
             errn = c % fsrc - fsrc_old
             e2 = norm2(errn)
             if (mod(i, c % extrp) == 0) then
-                call fsrc_extrp(e1, e2, erro, errn, c % fsrc, .false.) ! Fission source extrapolation
+                call fsrc_extrp(e1, e2, erro, errn, c % fsrc, print_iter=.true.) ! Fission source extrapolation
             end if
             e1 = e2
             call get_difference(c % flux, flux_old, c % fsrc, fsrc_old, c % flux_diff, c % fsrc_diff)
-            if ((c % max_flux_err > c % flux_diff) .AND. (c % max_fiss_err > c % fsrc_diff)) then
-                is_converge = .true.
-                exit
+            write(output_unit,'(I5,F13.6,2ES15.5)')   i, c % Keff, c % fsrc_diff, c % flux_diff
+            if (nodal_updated) then
+                ! if (c % d % nodal_max_error > 0.01) then
+                    if ((c % max_flux_err > c % flux_diff) .and. (c % max_fiss_err > c % fsrc_diff)) then
+                        is_converge = .true.
+                        exit
+                    end if
+                ! end if
             end if
             call fdm_time % off
 
             if (mod(i, c % nod_intv) == 0) then
-                call nodal_update(c, 'transient', print_iter=.false., sigr=mod_sigr)  ! Nodal coefficients update
+                call nodal_update(c, 'transient', print_iter=.true.)  ! Nodal coefficients update
+                nodal_updated = .true.
             end if
         end do
 
@@ -564,11 +571,12 @@ module fdm
     ! to perfom outer iteration (adjoint)
     !===============================================================================================!
 
-    subroutine outer_adjoint(c, print_iter, is_converge)
+    subroutine outer_adjoint(c, print_iter, is_nodal_updated, is_converge)
     
-        class(fdm_rect)               :: c
-        logical, intent(in)            :: print_iter
-        logical, intent(out)           :: is_converge
+        class(fdm_rect)      :: c
+        logical, intent(in)  :: print_iter
+        logical, optional    :: is_nodal_updated
+        logical, intent(out) :: is_converge
 
         integer  :: i, g
         real(dp) :: fc, fco                                  ! new and old integrated fission SOURCES
@@ -580,6 +588,8 @@ module fdm
         real(dp) :: errn(c % nnod), erro(c % nnod)            ! current and past error vectors
 
         call fdm_time % on
+
+        if (.not. present(is_nodal_updated)) is_nodal_updated = .true.
 
         ! Build FDM matrix
         call build_matrix(c, upd_fdm_coupling=.true.)
@@ -621,10 +631,10 @@ module fdm
             fc = integrate(c, c % fsrc)
             c % Keff = Keo * fc / fco             ! Update Keff
             call get_difference(c % flux, flux_old, c % fsrc, fsrc_old, c % flux_diff, c % fsrc_diff)
-            ! if (print_iter) then
+            if (print_iter) then
                 write(fid,'(I5,F13.6,2ES15.5)') i, c % Keff, c % fsrc_diff, c % flux_diff
                 write(output_unit,'(I5,F13.6,2ES15.5)')   i, c % Keff, c % fsrc_diff, c % flux_diff
-            ! end if
+            end if
             if ((c % max_flux_err > c % flux_diff) .AND. (c % max_fiss_err > c % fsrc_diff)) then
                 is_converge = .true.
                 exit
@@ -632,7 +642,7 @@ module fdm
             call fdm_time % off
 
             if (mod(i, c % nod_intv) == 0) then
-                call nodal_update(c, 'adjoint', print_iter)  ! Nodal coefficients update
+                if (is_nodal_updated) call nodal_update(c, 'adjoint', print_iter)  ! Nodal coefficients update
             end if
         end do
     
@@ -642,12 +652,11 @@ module fdm
     ! To update nodal coupling coefficients (D hat)
     !===============================================================================================!
 
-    subroutine nodal_update(c, calc_mode, print_iter, sigr)
+    subroutine nodal_update(c, calc_mode, print_iter)
       
         class(fdm_rect), intent(in)   :: c
         character(*), intent(in)      :: calc_mode
         logical, intent(in)           :: print_iter
-        real(dp), optional            :: sigr(:,:)
 
         call nodal_time % on
       
@@ -661,11 +670,7 @@ module fdm
         end if
 
         ! Update CMFD matrix
-        if (present(sigr)) then
-            call build_matrix(c, upd_fdm_coupling=.false., sigr=sigr)
-        else
-            call build_matrix(c, upd_fdm_coupling=.false.)
-        end if
+        call build_matrix(c, upd_fdm_coupling=.false.)
 
         if (print_iter) then
             write(fid,*) '    .....NODAL COUPLING UPDATED..... '
@@ -1073,11 +1078,10 @@ module fdm
     ! Setup sparse penta-diagonal matrix indexed in CSR                                             !
     !===============================================================================================!
 
-    subroutine build_matrix(c, upd_fdm_coupling, sigr)
+    subroutine build_matrix(c, upd_fdm_coupling)
 
         class(fdm_rect), target       :: c
-        logical, intent(in)            :: upd_fdm_coupling
-        real(dp), intent(in), optional :: sigr(:,:)
+        logical, intent(in)           :: upd_fdm_coupling
 
         integer                     :: n, g, idx
 
@@ -1091,12 +1095,6 @@ module fdm
         ! If need to calculate FDM coupling coefficients
         if (upd_fdm_coupling) call fdm_coupling_coef(c)
 
-        if (present(sigr)) then
-            sigma_removal = sigr
-        else
-            sigma_removal = c % xs % sigr
-        end if
-    
         ! Setup CMFD linear system
         do g = 1, ng
             idx = 0
@@ -1129,7 +1127,7 @@ module fdm
                 (c % df(n,g,1) + c % df(n,g,2) - c % dn(n,g,1) + c % dn(n,g,2)) / c % xdel(i) + &
                 (c % df(n,g,3) + c % df(n,g,4) - c % dn(n,g,3) + c % dn(n,g,4)) / c % ydel(j) + &
                 (c % df(n,g,5) + c % df(n,g,6) - c % dn(n,g,5) + c % dn(n,g,6)) / c % zdel(k) + &
-                sigma_removal(n,g)
+                c % xs % sigr(n,g)
         
                  ! Upper diagonal matrix element for x-direction
                 if (i /= c % ystag(j) % smax) then

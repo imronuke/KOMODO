@@ -346,7 +346,7 @@ module control
                 end do
             end if
 
-            call set_transient_pointer(tr, fdm, xsc, beta_tmp, lambda_tmp, neut_velo_tmp,total_beta, dfis, ind_mat)
+            call set_transient_pointer(tr, fdm, xsc, beta_tmp, lambda_tmp, neut_velo_tmp, total_beta, dfis, ind_mat)
         end if
 
     end subroutine

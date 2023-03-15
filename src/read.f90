@@ -3317,16 +3317,17 @@ module read
         write(ounit,'(A,I5)') '  MAX. NUMBER OF OUTER ITERATION PER T-H ITERATION      : ', max_outer_th
         
         if (max_outer < nodal_interval .and. kern .ne. ' FDM') then
-          write(error_unit,*) "ERROR: MAX. NUMBER OF OUTER ITERATION SHOULD BE BIGGER THAN NODAL UPDATE INTERVAL"
-          write(ounit,*) "ERROR: MAX. NUMBER OF OUTER ITERATION SHOULD BE BIGGER THAN NODAL UPDATE INTERVAL"
-          stop
+            write(error_unit,*) "ERROR: MAX. NUMBER OF OUTER ITERATION SHOULD BE BIGGER THAN NODAL UPDATE INTERVAL"
+            write(ounit,*) "ERROR: MAX. NUMBER OF OUTER ITERATION SHOULD BE BIGGER THAN NODAL UPDATE INTERVAL"
+            stop
         end if
         
-        ! if (max_outer_th < nodal_interval .and. kern .ne. ' FDM' .and. bther == YES) then
-        !   write(error_unit,*) "ERROR: MAX. NUMBER OF OUTER ITERATION PER T-H ITERATION SHOULD BE BIGGER THAN NODAL UPDATE INTERVAL"
-        !   write(ounit,*) "ERROR: MAX. NUMBER OF OUTER ITERATION PER T-H ITERATION SHOULD BE BIGGER THAN NODAL UPDATE INTERVAL"
-        !   stop
-        ! end if
+        if ((max_outer_th < nodal_interval) .and. (kern .ne. ' FDM') .and. (bther == YES)) then
+            write(error_unit,*) "ERROR: MAX. NUMBER OF OUTER ITERATION PER T-H ITERATION SHOULD BE ", &
+            "BIGGER THAN NODAL UPDATE INTERVAL"
+            write(ounit,*) "ERROR: MAX. NUMBER OF OUTER ITERATION PER T-H ITERATION SHOULD BE BIGGER THAN NODAL UPDATE INTERVAL"
+            stop
+        end if
     
     end subroutine inp_iter
     
