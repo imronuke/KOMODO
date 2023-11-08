@@ -301,17 +301,16 @@ END IF
 if (bextr == 1) call inp_extr()
 
 !!CARD BCON
-IF (bbcon == 1 .AND. bxtab == 0) CALL inp_bcon (ubcon)
-IF (bbcon == 1 .AND. bxtab == 1 .AND. mode == 'RODEJECT') CALL inp_bcon (ubcon)
+IF (bbcon == 1) CALL inp_bcon (ubcon)
 
 !!CARD FTEM
-IF (bftem == 1 .AND. bxtab == 0) CALL inp_ftem (uftem)
+IF (bftem == 1) CALL inp_ftem (uftem)
 
 !!CARD MTEM
-IF (bmtem == 1 .AND. bxtab == 0) CALL inp_mtem (umtem)
+IF (bmtem == 1) CALL inp_mtem (umtem)
 
 !!CARD CDEN
-IF (bcden == 1 .AND. bxtab == 0) CALL inp_cden (ucden)
+IF (bcden == 1) CALL inp_cden (ucden)
 
 
 !CARD ADF
