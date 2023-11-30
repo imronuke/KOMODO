@@ -171,7 +171,7 @@ subroutine rod_eject_th()
 USE sdata, ONLY: ng, nnod, sigr, nf, ttot, tdiv, tstep1, tstep2, Ke, &
                  tfm, ppow, m, ftem, mtem, bpos, nb, iBeta, &
                  f0, ft, c0, tbeta, omeg, npow, ctbeta, nmat, L, th_niter
-USE io, ONLY: ounit, bextr, bxtab, scr
+USE io, ONLY: ounit, bextr, bxtab, scr, bvtk
 USE xsec, ONLY: XS_updt
 USE cmfd, ONLY: outer_tr, outer, outer_ad
 use th, only : th_iter, par_ave, par_max
@@ -185,6 +185,7 @@ real(dp) :: t1, t2
 real(dp) :: tpow1
 integer :: n, i, j, imax, step
 real(dp) :: tf, tm, mtf, mtm
+character(len=20) :: steady_name
 
 ! Allocate precusor density
 allocate (c0(nnod,nf))
@@ -200,6 +201,13 @@ allocate(L(nnod,ng))
 
 ! Determine th paramters distribution
 CALL th_iter(th_niter, 0)
+
+if (bvtk == 1) then
+  ! Output the steady-state parameters in VTK format
+  steady_name = 'steady'
+  call vtk_out(steady_name)
+end if
+
 if (scr) then
   write(*,*)
   write(*,*) ' steady state calculation ... done'
@@ -740,6 +748,122 @@ write(ounit,1344) ctbeta*1.e5
 
 
 end subroutine calc_beta
+
+ subroutine vtk_out(i_name)
+ 
+!
+! Purpose:
+!    To output the results in vtk file format
+!
+
+ use sdata, only: nver, nnod, ng, vertice, cell, f0, pow, ppow, yutag, xutag, &
+                  iu, iv, iw, uvw, ftem, mtem, cden 				   
+ use th, only: PowDis
+ use io, only: flux_atpower, casename, uver
+
+ implicit none
+
+ integer:: n, i, g
+ character(len=20), intent(in) :: i_name
+ character(len=20) :: oname
+ real(dp), allocatable :: node_pow(:)
+ 
+ oname = TRIM(casename) // '_' // TRIM(i_name) // '.vtk'
+
+ open(unit=uver, file = oname)
+
+ write(uver, '(A26)')'# vtk DataFile Version 4.0'
+ write(uver, '(A10)')'vtk output'
+ write(uver, '(A5)')'ASCII'
+ write(uver, '(A25)')'DATASET UNSTRUCTURED_GRID'
+
+ write(uver, 3000)'POINTS', nver, 'double'
+
+ do n = 1, nver 
+   write(uver, 3001) vertice(n)%u(1), vertice(n)%u(2), vertice(n)%u(3)
+ end do 
+
+ write(uver, 3002)'CELLS', nnod, nnod * 9
+
+ do n = 1, nnod 
+   write(uver, 3003)'8', cell(n)%vertice_index(1), cell(n)%vertice_index(2), &
+			 cell(n)%vertice_index(3), cell(n)%vertice_index(4), & 
+			 cell(n)%vertice_index(5), cell(n)%vertice_index(6), &
+			 cell(n)%vertice_index(7), cell(n)%vertice_index(8)
+ end do
+
+ write(uver, 3004)'CELL_TYPES', nnod
+
+ do i = 1, nnod
+   write(uver, *)'11'
+ end do
+
+ write(uver, 3005)'CELL_DATA', nnod
+
+ ! Normalized power distribution
+ allocate(node_pow(nnod))
+
+ call PowDis(node_pow)
+
+ ! Actual power distribution
+ write(uver, *)'SCALARS Power(W) double'
+ write(uver, *)'LOOKUP_TABLE default'
+  
+ do n = 1, nnod
+   write(uver,'(ES13.6)') node_pow(n) * pow * ppow * 0.01_dp
+ end do
+ 
+ ! Normalize the fluxes to given power
+ call flux_atpower()
+
+ do g = 1, ng
+
+   write(uver, 3006)'SCALARS flux_', g, '(Neutrons/cm^2*s) double'
+   write(uver, *)'LOOKUP_TABLE default'
+   
+   do n = 1, nnod
+     write(uver,'(ES13.6)') f0(n, g)
+   end do
+
+ end do
+ 
+ ! Fuel temperature
+ write(uver, *)'SCALARS Fuel_temp(C) double'
+ write(uver, *)'LOOKUP_TABLE default'
+ 
+ do n = 1, nnod
+   write(uver,'(ES13.6)') ftem(n) - 273.15
+ end do
+ 
+ ! Moderator temperature
+ write(uver, *)'SCALARS Moderator_temp(C) double'
+ write(uver, *)'LOOKUP_TABLE default'
+ 
+ do n = 1, nnod
+   write(uver,'(ES13.6)') mtem(n) - 273.15
+ end do
+ 
+ ! Coolant density
+ write(uver, *)'SCALARS Coolant_density(g/cm3) double'
+ write(uver, *)'LOOKUP_TABLE default'
+ 
+ do n = 1, nnod
+   write(uver,'(ES13.6)') cden(n)
+ end do 
+
+ close(uver)
+
+ deallocate(node_pow)
+
+ 3000 format(A6, 1X, I7, 1X, A6)
+ 3001 format(F6.2,1X, F6.2, 1X, F6.2)
+ 3002 format(A5, 1X, I7, 1X, I8)
+ 3003 format(A1, I7,I7,I7,I7,I7,I7,I7,I7)
+ 3004 format(A10, I7)
+ 3005 format(A9, I7)
+ 3006 format(A13, I1, A24)
+
+ end subroutine vtk_out
 
 
 end MODULE trans

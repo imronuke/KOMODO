@@ -206,6 +206,29 @@ real(dp), allocatable                 :: r(:), rs(:), v(:), p(:), s(:), t(:), tm
 real(dp) :: fdm_time = 0., nod_time = 0., xs_time = 0., &
 inp_time = 0., th_time = 0.
 
+! Data analysis (VTK format output).
+ integer :: nu, nv, nw  !< Number of vertices in x, y, and z directions
+ integer :: nver        !< Number of vertices
+ integer, allocatable :: iu(:), iv(:), iw(:)
+ integer, allocatable :: uvw(:,:,:)
+
+ type:: VERTICE_TYPE
+ 	real(dp):: u(3)
+ end type
+ 
+ type(VERTICE_TYPE), allocatable:: vertice(:)
+ 
+ ! imax and imin along x and y direction for staggered vertices
+ type(STAGGERED), allocatable:: yutag(:), xutag(:)
+  
+ type:: CELL_TYPE
+   integer:: vertice_index(8)
+ end type 
+ 
+ type(CELL_TYPE), allocatable:: cell(:)
+
+!****************************************************************************!
+
 contains
 
   function get_time() result (time)
