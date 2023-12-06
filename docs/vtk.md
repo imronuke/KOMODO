@@ -18,8 +18,8 @@ Example:
 ```
 Some examples of visualized vtk files:
 
-<img src="./images/neacrp.png" style="zoom:50%;" />
+<img src="./images/neacrp.png" alt="alt text" style="zoom: 50%;" />
 
 <img src="./images/MOX.png" style="zoom: 50%;" />
 
-<img src="./images/half_core.png" style="zoom: 50%;" />
+<img src="/home/cuiyong/Program_files/KOMODO/docs/images/MOX.png" style="zoom: 50%;" />
