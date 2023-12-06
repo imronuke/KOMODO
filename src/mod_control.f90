@@ -223,15 +223,17 @@ contains
   USE sdata, ONLY: Ke, bcon, rbcon, npow, nnod, &
                    ser, fer, aprad, apaxi, afrad, npow, th_err, &
                    serc, ferc
-  USE io, ONLY: ounit, AsmFlux, AsmPow, AxiPow
+  USE io, ONLY: ounit, AsmFlux, AsmPow, AxiPow, bvtk
   USE cmfd, ONLY: outer
   use th, only : th_iter
+  use trans, only: vtk_out
 
   IMPLICIT NONE
 
   REAL(DP)  :: bc1, bc2    ! Boron Concentration
   REAL(DP) :: ke1, ke2
   INTEGER :: n
+  character(len=20) :: steady_name
 
   call print_head()
 
@@ -275,6 +277,12 @@ contains
   IF (aprad == 1 .OR. apaxi == 1) THEN
       CALL get_power_dist(npow)
   END IF
+  
+  if (bvtk == 1) then
+    ! Output the steady-state parameters in VTK format
+    steady_name = 'steady'
+    call vtk_out(steady_name)
+  end if
 
   IF (aprad == 1) CALL AsmPow(npow)
 

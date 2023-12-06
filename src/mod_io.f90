@@ -11,6 +11,7 @@ IMPLICIT NONE
 SAVE
 
 CHARACTER(LEN=100) :: iname, oname
+character(len=20)  :: casename   ! File name of the VTK output
 
 ! ind is sed to read x indicator in beginning of input buffer line.
 ! This to prevent reading next line
@@ -34,7 +35,7 @@ INTEGER, PARAMETER :: uesrc = 115, uiter = 116, uprnt = 117, uadf  = 118
 INTEGER, PARAMETER :: ucrod = 119, ubcon = 120, uftem = 121, umtem = 122
 INTEGER, PARAMETER :: ucden = 123, ucbcs = 124, uejct = 125, uther = 126
 INTEGER, PARAMETER :: uxtab = 127, ukern = 128, uextr = 129, uthet = 130
-INTEGER, PARAMETER :: uoutp = 131
+INTEGER, PARAMETER :: uoutp = 131, uvtk  = 132, uver  = 133
 INTEGER :: bunit
 
 ! Card active/inactive indicator (active = 1, inactive = 0)
@@ -42,18 +43,18 @@ INTEGER :: bmode = 0, bxsec = 0, bgeom = 0, bcase = 0, besrc = 0
 INTEGER :: biter = 0, bprnt = 0, badf  = 0, bcrod = 0, bbcon = 0
 INTEGER :: bftem = 0, bmtem = 0, bcden = 0, bcbcs = 0, bejct = 0
 INTEGER :: bther = 0, bxtab = 0, bkern = 0, bextr = 0, bthet = 0
-INTEGER :: boutp = 0
+INTEGER :: boutp = 0, bvtk  = 0
 
 ! This declaration is to notify that the error in separated card file (in case so)
-INTEGER, PARAMETER :: ncard = 21                  ! Number of card
+INTEGER, PARAMETER :: ncard = 22                  ! Number of card
 INTEGER, DIMENSION(ncard) :: uarr = &             ! Array of buffer unit number
 (/umode, uxsec, ugeom, ucase, uesrc, uiter, uprnt, uadf,  ucrod, ubcon, &
   uftem, umtem, ucden, ucbcs, uejct, uther, uxtab, ukern, uextr, uthet, &
-  uoutp /)
+  uoutp, uvtk /)
 CHARACTER(LEN=4), DIMENSION(ncard) :: carr = &    ! Array of card name
 (/'MODE', 'XSEC', 'GEOM', 'CASE', 'ESRC', 'ITER', 'PRNT', 'ADF ', 'CROD', 'BCON', &
   'FTEM', 'MTEM', 'CDEN', 'CBCS', 'EJCT', 'THER', 'XTAB', 'KERN', 'EXTR', 'THET', &
-  'OUTP' /)
+  'OUTP', 'VTK ' /)
 CHARACTER(LEN=100), DIMENSION(:), ALLOCATABLE :: farr   ! Array of card file
 
 ! Geometry
@@ -72,7 +73,6 @@ TYPE :: OPT_DATA
     INTEGER :: o3d, power, assembly
 END TYPE
 TYPE(OPT_DATA) :: output_opt
-
 
 CONTAINS
 
@@ -107,6 +107,7 @@ iname = TRIM(iname)
 
 CALL openFIle (iunit, iname, 'input', 'Input File Open Failed--status')
 
+casename = TRIM(iname)   !< VTK File name
 oname = TRIM(iname) // '.out'
 oname = TRIM(oname)
 
@@ -133,6 +134,7 @@ OPEN (UNIT=ukern, STATUS='SCRATCH', ACTION='READWRITE')
 OPEN (UNIT=uextr, STATUS='SCRATCH', ACTION='READWRITE')
 OPEN (UNIT=uthet, STATUS='SCRATCH', ACTION='READWRITE')
 OPEN (UNIT=uoutp, STATUS='SCRATCH', ACTION='READWRITE')
+OPEN (UNIT=uvtk,  STATUS='SCRATCH', ACTION='READWRITE')
 
 ! By default, card file names are the input file name
 ALLOCATE (farr(ncard)); farr = ADJUSTL(iname)
@@ -151,7 +153,7 @@ REWIND(umode); REWIND(uxsec); REWIND(ugeom); REWIND(ucase); REWIND(uesrc)
 REWIND(uiter); REWIND(uprnt); REWIND(uadf); REWIND(ucrod); REWIND(ubcon)
 REWIND(uftem); REWIND(umtem); REWIND(ucden); REWIND(ucbcs); REWIND(uejct)
 REWIND(uther); REWIND(uxtab); REWIND(ukern); REWIND(uextr); REWIND(uthet)
-REWIND(uoutp)
+REWIND(uoutp); REWIND(uvtk)
 
 ! Start reading buffer files for each input card buffer
 
@@ -350,7 +352,8 @@ ELSE
     CONTINUE
 END IF
 
-
+! card VTK
+IF (bvtk == 1)  CALL inp_ver(uvtk) 
 
 DEALLOCATE(mnum)
 DO i= 1,np
@@ -370,13 +373,13 @@ WRITE(ounit,*) &
 1041 FORMAT(2X, 'CARD ', A, ' DOES NOT PRESENT. THIS CARD IS MANDATORY FOR ', A,' CALCULATION MODE')
 
 
-CLOSE(UNIT=umode); CLOSE(UNIT=uxsec); CLOSE(UNIT=ugeom); CLOSE(UNIT=ucase)
-CLOSE(UNIT=uesrc); CLOSE(UNIT=uiter); CLOSE(UNIT=uprnt); CLOSE(UNIT=uadf)
-CLOSE(UNIT=ucrod); CLOSE(UNIT=ubcon); CLOSE(UNIT=uftem); CLOSE(UNIT=umtem)
-CLOSE(UNIT=ucden); CLOSE(UNIT=ucbcs); CLOSE(UNIT=uejct); CLOSE(UNIT=uther)
-CLOSE(UNIT=uxtab); CLOSE(UNIT=ukern); CLOSE(UNIT=uextr); CLOSE(UNIT=uthet)
-CLOSE(UNIT=uoutp)
-CLOSE(UNIT=buff)
+ CLOSE(UNIT=umode); CLOSE(UNIT=uxsec); CLOSE(UNIT=ugeom); CLOSE(UNIT=ucase)
+ CLOSE(UNIT=uesrc); CLOSE(UNIT=uiter); CLOSE(UNIT=uprnt); CLOSE(UNIT=uadf)
+ CLOSE(UNIT=ucrod); CLOSE(UNIT=ubcon); CLOSE(UNIT=uftem); CLOSE(UNIT=umtem)
+ CLOSE(UNIT=ucden); CLOSE(UNIT=ucbcs); CLOSE(UNIT=uejct); CLOSE(UNIT=uther)
+ CLOSE(UNIT=uxtab); CLOSE(UNIT=ukern); CLOSE(UNIT=uextr); CLOSE(UNIT=uthet)
+ CLOSE(UNIT=uoutp); CLOSE(UNIT=uvtk)
+ CLOSE(UNIT=buff)
 
 
 END SUBROUTINE inp_read
@@ -579,7 +582,9 @@ DO
       CASE('EXTR'); bunit = uextr; bextr = 1
       CASE('THET'); bunit = uthet; bthet = 1
       CASE('OUTP'); bunit = uoutp; boutp = 1
+      CASE('VTK') ; bunit = uvtk ; bvtk  = 1
       CASE DEFAULT
+      
         WRITE(ounit,1014) ln, iline
         WRITE(*,1014) ln, iline
         STOP
@@ -3832,6 +3837,154 @@ WRITE(ounit,*)
 
 
 END SUBROUTINE AsmFlux
+
+!****************************************************************************!
+
+ subroutine inp_ver(xbunit)
+ 
+!
+! Purpose:
+!    To read VTK card in input.
+!
+
+ use sdata, only: nxx, nyy, nzz, nu, nv, nw, xutag, yutag, nver, vertice, iu, &
+                  iv, iw, uvw, cell, ix, iy, iz, xyz, zdel, xdel, ydel, nnod, &
+                  ystag
+
+ implicit none
+
+ integer, intent(in):: xbunit
+ integer:: ln, ios
+ integer, allocatable:: vertice_dis(:,:)
+ integer:: i, j, k, n
+ real(dp):: h
+
+ nu = nxx + 1
+ nv = nyy + 1
+ nw = nzz + 1
+
+ allocate(vertice_dis(nu, nv))
+
+ do j = nv, 1, -1
+   read(xbunit, *, iostat = ios) ind, ln, (vertice_dis(i, j), i = 1, nu)
+   message = ' error in reading vertice distribution'
+   call er_message(ounit, ios, ln, message, buf=xbunit)
+ end do
+
+ ! Indexing non zero vertice for staggered mesh
+ allocate(yutag(nv), xutag(nu))
+
+ ! Indexing non zero vertice for staggered mesh along y direction
+ do j = 1, nv
+   yutag(j)%smin = nu
+   do i = 1, nu
+     if (vertice_dis(i, j) /= 0) then
+       yutag(j)%smin = i
+       exit
+     end if
+   end do
+ end do
+
+ do j = 1, nv
+   yutag(j)%smax = 0
+   do i = nu, 1, -1
+     if (vertice_dis(i, j) /= 0) then
+       yutag(j)%smax = i
+       exit
+     end if
+   end do
+ end do
+
+ ! Indexing non zero vertice for staggered mesh along x direction
+ do i = 1, nu
+   xutag(i)%smin = nv
+   do j = 1, nv
+     if (vertice_dis(i, j) /= 0) then
+       xutag(i)%smin = j
+       exit
+     end if
+   end do
+ end do
+
+ do i = 1, nu
+   xutag(i)%smax = 0
+   do j = nv, 1, -1
+     if (vertice_dis(i, j) /= 0) then
+       xutag(i)%smax = j
+       exit
+     end if
+   end do
+ end do
+
+ nver = 0
+ do k = 1, nw
+   do j = 1, nv
+     do i = yutag(j)%smin, yutag(j)%smax
+       nver = nver + 1
+     end do	
+   end do
+ end do 
+
+ allocate(vertice(nver))
+ allocate(iu(nver))
+ allocate(iv(nver))
+ allocate(iw(nver))
+ allocate(uvw(nu,nv,nw))
+
+ ! Set iu, iv, iw and uvw
+ n = 0
+ do k = 1, nw
+   do j = nv, 1, -1
+     do i = yutag(j)%smin, yutag(j)%smax
+       n = n + 1
+       iu(n) = i
+       iv(n) = j
+       iw(n) = k
+       uvw(i, j, k) = n
+     end do
+   end do
+ end do
+
+ h = 0.d0
+
+ do k = 1, nw
+
+   if (k == 1) then
+     h = 0.d0
+   else
+     h = h + zdel(k-1)
+   end if
+
+   do j = nv, 1, -1
+     do i = yutag(j)%smin, yutag(j)%smax
+       vertice(uvw(i,j,k))%u(1) = (i-1) * xdel(1)
+       vertice(uvw(i,j,k))%u(2) = (j-1) * ydel(1)
+       vertice(uvw(i,j,k))%u(3) = h		
+     end do
+   end do
+
+ end do
+
+ allocate(cell(nnod))
+
+ do k = 1, nzz
+   do j = nyy, 1, -1
+     do i = ystag(j)%smin, ystag(j)%smax
+       cell(xyz(i,j,k))%vertice_index(1) = uvw(i,   j,   k  ) - 1
+       cell(xyz(i,j,k))%vertice_index(2) = uvw(i+1, j,   k  ) - 1
+       cell(xyz(i,j,k))%vertice_index(3) = uvw(i,   j+1, k  ) - 1
+       cell(xyz(i,j,k))%vertice_index(4) = uvw(i+1, j+1, k  ) - 1
+       cell(xyz(i,j,k))%vertice_index(5) = uvw(i,   j,   k+1) - 1
+       cell(xyz(i,j,k))%vertice_index(6) = uvw(i+1, j,   k+1) - 1
+       cell(xyz(i,j,k))%vertice_index(7) = uvw(i,   j+1, k+1) - 1
+       cell(xyz(i,j,k))%vertice_index(8) = uvw(i+1, j+1, k+1) - 1
+     end do
+   end do
+ end do 
+
+ deallocate(vertice_dis)
+
+end subroutine inp_ver
 
 !****************************************************************************!
 
