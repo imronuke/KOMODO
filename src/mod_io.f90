@@ -11,7 +11,6 @@ IMPLICIT NONE
 SAVE
 
 CHARACTER(LEN=100) :: iname, oname
-character(len=20)  :: casename   ! File name of the VTK output
 
 ! ind is sed to read x indicator in beginning of input buffer line.
 ! This to prevent reading next line
@@ -27,6 +26,7 @@ LOGICAL, PARAMETER :: scr = .TRUE.    ! Terminal ouput print option
 ! Input, output and buffer input file unit number
 INTEGER, PARAMETER :: iunit = 100   !input file unit number
 INTEGER, PARAMETER :: ounit = 101   !output file unit number
+INTEGER, PARAMETER :: vunit = 103   !vtk output file unit number
 INTEGER, PARAMETER :: buff  = 99    !input buffer file unit number (entire input)
 
 ! Input buffer file unit number for each card
@@ -35,7 +35,7 @@ INTEGER, PARAMETER :: uesrc = 115, uiter = 116, uprnt = 117, uadf  = 118
 INTEGER, PARAMETER :: ucrod = 119, ubcon = 120, uftem = 121, umtem = 122
 INTEGER, PARAMETER :: ucden = 123, ucbcs = 124, uejct = 125, uther = 126
 INTEGER, PARAMETER :: uxtab = 127, ukern = 128, uextr = 129, uthet = 130
-INTEGER, PARAMETER :: uoutp = 131, uvtk  = 132, uver  = 133
+INTEGER, PARAMETER :: uoutp = 131, uvtk  = 132
 INTEGER :: bunit
 
 ! Card active/inactive indicator (active = 1, inactive = 0)
@@ -107,7 +107,6 @@ iname = TRIM(iname)
 
 CALL openFIle (iunit, iname, 'input', 'Input File Open Failed--status')
 
-casename = TRIM(iname)   !< VTK File name
 oname = TRIM(iname) // '.out'
 oname = TRIM(oname)
 
@@ -353,7 +352,7 @@ ELSE
 END IF
 
 ! card VTK
-IF (bvtk == 1)  CALL inp_ver(uvtk) 
+IF (bvtk == 1)  CALL inp_vtk() 
 
 DEALLOCATE(mnum)
 DO i= 1,np
@@ -3701,6 +3700,7 @@ INTEGER :: g, i, j, k, n
 INTEGER :: ly, lx, ys, xs, yf, xf
 REAL(DP) :: summ, vsumm
 REAL(DP), DIMENSION(nxx, nyy, ng) :: fnode
+REAL(DP), DIMENSION(nnod, ng) :: flux
 REAL(DP), DIMENSION(nx, ny, ng) :: fasm
 REAL(DP), DIMENSION(ng) :: totp
 CHARACTER(LEN=10), DIMENSION(nx, ny, ng) :: cflx
@@ -3709,12 +3709,16 @@ INTEGER, PARAMETER :: xm = 12
 INTEGER :: ip, ipr
 INTEGER :: negf
 
-if (bther == 1) call flux_atpower()  !calculate actual flux at given power level
+if (bther == 1) then
+  call flux_atpower(flux)  !calculate actual flux at given power level
+else
+  flux = f0
+end if
 
 fx = 0._DP
 DO g = 1, ng
     DO n = 1, nnod
-        fx(ix(n), iy(n), iz(n), g) = f0(n,g)
+        fx(ix(n), iy(n), iz(n), g) = flux(n,g)
     END DO
 END DO
 
@@ -3840,155 +3844,35 @@ END SUBROUTINE AsmFlux
 
 !****************************************************************************!
 
- subroutine inp_ver(xbunit)
+subroutine inp_vtk()
  
 !
 ! Purpose:
 !    To read VTK card in input.
 !
 
- use sdata, only: nxx, nyy, nzz, nu, nv, nw, xutag, yutag, nver, vertice, iu, &
-                  iv, iw, uvw, cell, ix, iy, iz, xyz, zdel, xdel, ydel, nnod, &
-                  ystag
+implicit none
 
- implicit none
+WRITE(ounit,*)
+WRITE(ounit,*)
+WRITE(ounit,*) '                  >>>>>READING VTK<<<<<'
+WRITE(ounit,*) '           -------------------------------------'
+WRITE(ounit,1581)
 
- integer, intent(in):: xbunit
- integer:: ln, ios
- integer, allocatable:: vertice_dis(:,:)
- integer:: i, j, k, n
- real(dp):: h
+oname = TRIM(iname) // '.vtk'
+oname = TRIM(oname)
 
- nu = nxx + 1
- nv = nyy + 1
- nw = nzz + 1
+OPEN (UNIT=vunit, FILE=oname, STATUS='REPLACE', ACTION='WRITE')
+call get_vertices()
+call init_vtk()
+ 
+1581 format (2X, 'VTK FILE WILL BE GENERATED')
 
- allocate(vertice_dis(nu, nv))
-
- do j = nv, 1, -1
-   read(xbunit, *, iostat = ios) ind, ln, (vertice_dis(i, j), i = 1, nu)
-   message = ' error in reading vertice distribution'
-   call er_message(ounit, ios, ln, message, buf=xbunit)
- end do
-
- ! Indexing non zero vertice for staggered mesh
- allocate(yutag(nv), xutag(nu))
-
- ! Indexing non zero vertice for staggered mesh along y direction
- do j = 1, nv
-   yutag(j)%smin = nu
-   do i = 1, nu
-     if (vertice_dis(i, j) /= 0) then
-       yutag(j)%smin = i
-       exit
-     end if
-   end do
- end do
-
- do j = 1, nv
-   yutag(j)%smax = 0
-   do i = nu, 1, -1
-     if (vertice_dis(i, j) /= 0) then
-       yutag(j)%smax = i
-       exit
-     end if
-   end do
- end do
-
- ! Indexing non zero vertice for staggered mesh along x direction
- do i = 1, nu
-   xutag(i)%smin = nv
-   do j = 1, nv
-     if (vertice_dis(i, j) /= 0) then
-       xutag(i)%smin = j
-       exit
-     end if
-   end do
- end do
-
- do i = 1, nu
-   xutag(i)%smax = 0
-   do j = nv, 1, -1
-     if (vertice_dis(i, j) /= 0) then
-       xutag(i)%smax = j
-       exit
-     end if
-   end do
- end do
-
- nver = 0
- do k = 1, nw
-   do j = 1, nv
-     do i = yutag(j)%smin, yutag(j)%smax
-       nver = nver + 1
-     end do	
-   end do
- end do 
-
- allocate(vertice(nver))
- allocate(iu(nver))
- allocate(iv(nver))
- allocate(iw(nver))
- allocate(uvw(nu,nv,nw))
-
- ! Set iu, iv, iw and uvw
- n = 0
- do k = 1, nw
-   do j = nv, 1, -1
-     do i = yutag(j)%smin, yutag(j)%smax
-       n = n + 1
-       iu(n) = i
-       iv(n) = j
-       iw(n) = k
-       uvw(i, j, k) = n
-     end do
-   end do
- end do
-
- h = 0.d0
-
- do k = 1, nw
-
-   if (k == 1) then
-     h = 0.d0
-   else
-     h = h + zdel(k-1)
-   end if
-
-   do j = nv, 1, -1
-     do i = yutag(j)%smin, yutag(j)%smax
-       vertice(uvw(i,j,k))%u(1) = (i-1) * xdel(1)
-       vertice(uvw(i,j,k))%u(2) = (j-1) * ydel(1)
-       vertice(uvw(i,j,k))%u(3) = h		
-     end do
-   end do
-
- end do
-
- allocate(cell(nnod))
-
- do k = 1, nzz
-   do j = nyy, 1, -1
-     do i = ystag(j)%smin, ystag(j)%smax
-       cell(xyz(i,j,k))%vertice_index(1) = uvw(i,   j,   k  ) - 1
-       cell(xyz(i,j,k))%vertice_index(2) = uvw(i+1, j,   k  ) - 1
-       cell(xyz(i,j,k))%vertice_index(3) = uvw(i,   j+1, k  ) - 1
-       cell(xyz(i,j,k))%vertice_index(4) = uvw(i+1, j+1, k  ) - 1
-       cell(xyz(i,j,k))%vertice_index(5) = uvw(i,   j,   k+1) - 1
-       cell(xyz(i,j,k))%vertice_index(6) = uvw(i+1, j,   k+1) - 1
-       cell(xyz(i,j,k))%vertice_index(7) = uvw(i,   j+1, k+1) - 1
-       cell(xyz(i,j,k))%vertice_index(8) = uvw(i+1, j+1, k+1) - 1
-     end do
-   end do
- end do 
-
- deallocate(vertice_dis)
-
-end subroutine inp_ver
+end subroutine inp_vtk
 
 !****************************************************************************!
 
-subroutine flux_atpower()
+subroutine flux_atpower(flux)
 
 !
 ! Purpose:
@@ -4000,6 +3884,7 @@ USE sdata, ONLY: ng, nnod, sigf, f0, vdel, pow, ppow
 
 implicit none
 
+real(dp), intent(out) :: flux(:,:)
 integer :: g, n
 real(dp) :: tpow
 
@@ -4014,7 +3899,7 @@ end do
 !Get flux at given power level
 do g= 1, ng
   do n = 1, nnod
-    f0(n,g) = f0(n,g) * pow * ppow * 0.01_dp / tpow
+    flux(n,g) = f0(n,g) * pow * ppow * 0.01_dp / tpow
   end do
 end do
 
@@ -4462,5 +4347,272 @@ END DO
 1132 FORMAT(2X, 'KOMODO IS STOPPING')
 
 END SUBROUTINE skipRead
+
+!****************************************************************************!
+
+subroutine get_vertices()
+ 
+  !
+  ! Purpose:
+  !    To calculate vertices for vtk output
+  !
+  
+  use sdata, only: nxx, nyy, nzz, cell, xyz, nver, &
+   zdel, xdel, ydel, nnod, ystag, xstag
+  
+  implicit none
+
+  integer :: i, j, k, n
+  integer, allocatable :: uvw(:,:,:)
+  real(dp):: x, y, z
+
+  nver = nnod * 8
+  
+  allocate(cell(nnod))
+  
+  n = -1
+  z = 0.0
+  do k = 1, nzz
+    y = 0.0
+    do j = 1, nyy
+      x = 0.0
+      do i = 1, nxx
+        if (i >= ystag(j)%smin .and. i <= ystag(j)%smax) then
+          n = n + 1
+          cell(xyz(i,j,k))%vertice(1) % x = x
+          cell(xyz(i,j,k))%vertice(1) % y = y
+          cell(xyz(i,j,k))%vertice(1) % z = z
+          cell(xyz(i,j,k))%vertice(1) % index = n
+
+          n = n + 1
+          cell(xyz(i,j,k))%vertice(2) % x = x + xdel(i)
+          cell(xyz(i,j,k))%vertice(2) % y = y
+          cell(xyz(i,j,k))%vertice(2) % z = z
+          cell(xyz(i,j,k))%vertice(2) % index = n
+
+          n = n + 1
+          cell(xyz(i,j,k))%vertice(3) % x = x
+          cell(xyz(i,j,k))%vertice(3) % y = y + ydel(j)
+          cell(xyz(i,j,k))%vertice(3) % z = z
+          cell(xyz(i,j,k))%vertice(3) % index = n
+
+          n = n + 1
+          cell(xyz(i,j,k))%vertice(4) % x = x + xdel(i)
+          cell(xyz(i,j,k))%vertice(4) % y = y + ydel(j)
+          cell(xyz(i,j,k))%vertice(4) % z = z
+          cell(xyz(i,j,k))%vertice(4) % index = n
+
+          n = n + 1
+          cell(xyz(i,j,k))%vertice(5) % x = x
+          cell(xyz(i,j,k))%vertice(5) % y = y
+          cell(xyz(i,j,k))%vertice(5) % z = z + zdel(k)
+          cell(xyz(i,j,k))%vertice(5) % index = n
+
+          n = n + 1
+          cell(xyz(i,j,k))%vertice(6) % x = x + xdel(i)
+          cell(xyz(i,j,k))%vertice(6) % y = y
+          cell(xyz(i,j,k))%vertice(6) % z = z + zdel(k)
+          cell(xyz(i,j,k))%vertice(6) % index = n
+
+          n = n + 1
+          cell(xyz(i,j,k))%vertice(7) % x = x
+          cell(xyz(i,j,k))%vertice(7) % y = y + ydel(j)
+          cell(xyz(i,j,k))%vertice(7) % z = z + zdel(k)
+          cell(xyz(i,j,k))%vertice(7) % index = n
+
+          n = n + 1
+          cell(xyz(i,j,k))%vertice(8) % x = x + xdel(i)
+          cell(xyz(i,j,k))%vertice(8) % y = y + ydel(j)
+          cell(xyz(i,j,k))%vertice(8) % z = z + zdel(k)
+          cell(xyz(i,j,k))%vertice(8) % index = n
+          
+        end if
+
+        x = x + xdel(i)
+      end do
+      y = y + ydel(j)
+    end do
+    z = z + zdel(k)
+  end do 
+  
+end subroutine
+
+!******************************************************************************!
+
+SUBROUTINE init_vtk()
+
+  !Purpose: To init vtk output
+
+  USE sdata, ONLY: nnod, nver, cell
+  IMPLICIT NONE
+
+  integer :: n, i
+
+  write(vunit, '(A26)')'# vtk DataFile Version 4.0'
+  write(vunit, '(A33)')'VTK data file generated by KOMODO'
+  write(vunit, '(A5)')'ASCII'
+  write(vunit, '(A25)')'DATASET UNSTRUCTURED_GRID'
+
+  write(vunit, 3000)'POINTS', nver, 'double'
+ 
+  do n = 1, nnod
+    do i = 1, 8
+      write(vunit, 3001) cell(n) % vertice(i) % x, &
+      cell(n) % vertice(i) % y, &
+      cell(n) % vertice(i) % z
+    end do
+  end do 
+ 
+  write(vunit, 3002)'CELLS', nnod, nnod * 9
+ 
+  do n = 1, nnod 
+    write(vunit, 3003)'8', &
+    cell(n)%vertice(1)%index, cell(n)%vertice(2)%index, &
+    cell(n)%vertice(3)%index, cell(n)%vertice(4)%index, & 
+    cell(n)%vertice(5)%index, cell(n)%vertice(6)%index, &
+    cell(n)%vertice(7)%index, cell(n)%vertice(8)%index
+  end do
+ 
+  write(vunit, 3004)'CELL_TYPES', nnod
+ 
+  do i = 1, nnod
+    write(vunit, *)'11'
+  end do
+ 
+  write(vunit, 3005)'CELL_DATA', nnod
+
+  deallocate(cell)
+
+  3000 format(A6, 1X, I8, 1X, A6)
+  3001 format(3ES13.5)
+  3002 format(A5, 1X, I8, 1X, I8)
+  3003 format(A1, 8(1X, I8))
+  3004 format(A10, 1X, I8)
+  3005 format(A9, 1X, I8)
+  
+END SUBROUTINE
+
+!******************************************************************************!
+
+SUBROUTINE print_vtk(time_step)
+
+  !Purpose: To init vtk output
+
+  USE sdata, ONLY: nnod, ng, f0, npow, pow, ppow, ftem, mtem, cden
+  IMPLICIT NONE
+
+  integer, intent(in) :: time_step
+
+  integer      :: g
+  character(5) :: step
+  real(dp)     :: flux(nnod, ng)
+
+  step = int_to_char(time_step)
+
+  ! Power
+  if (bther == 1) then
+    write(vunit, *)'SCALARS Power_' // trim(adjustl(step)) &
+    // '(W) double'
+    npow = npow * pow * ppow * 0.01_dp
+  else
+    write(vunit, *)'SCALARS Relative_Power_' // trim(adjustl(step)) &
+    // ' double'
+  end if
+  write(vunit, *)'LOOKUP_TABLE default'
+
+  write(vunit, '(ES13.5)') npow
+
+  ! FLux
+  if (bther == 1) then
+    call flux_atpower(flux)
+  else
+    flux = f0
+  end if
+  do g = 1, ng
+    if (bther == 1) then
+      write(vunit, *)'SCALARS flux_g_'// int_to_char(g) &
+      // '_' // trim(adjustl(step)) // '(Neutrons/cm^2*s) double'
+    else
+      write(vunit, *)'SCALARS flux_g_'// int_to_char(g) &
+      // '_' // trim(adjustl(step)) // '(Relative) double'
+    end if
+    write(vunit, *)'LOOKUP_TABLE default'
+    write(vunit, '(ES13.5)') flux(:,g)
+  end do
+
+  ! TH PARAMETERS
+  if (bther == 1) then
+    write(vunit, *)'SCALARS Fuel_temp_' // trim(adjustl(step)) &
+    // '(C) double'
+    write(vunit, *)'LOOKUP_TABLE default'
+    write(vunit, '(ES13.5)') ftem - 273.15
+
+    write(vunit, *)'SCALARS Moderator_temp_' // trim(adjustl(step)) &
+    // '(C) double'
+    write(vunit, *)'LOOKUP_TABLE default'
+    write(vunit, '(ES13.5)') mtem - 273.15
+
+    write(vunit, *)'SCALARS Coolant_density_' // trim(adjustl(step)) &
+    // '(g/cm3) double'
+    write(vunit, *)'LOOKUP_TABLE default'
+    write(vunit, '(ES13.5)') cden
+  end if
+  
+END SUBROUTINE
+
+!******************************************************************************!
+
+function int_to_char(num, digit) result(char_out)
+  implicit none
+  character(len=32)             :: char
+  character(len=32)             :: form
+  character(len=:), allocatable :: char_out
+  integer                       :: n_out
+  integer                       :: num
+  integer                       :: i
+  integer, optional             :: digit
+  integer                       :: digit0
+  integer                       :: digit1
+
+  form = "(I30)"
+  write(char,form) num
+  char=trim(adjustl(char))
+  
+  if(present(digit)) then
+     digit0 = abs(digit)
+     digit1 = get_digit(num)
+     do i = 1, digit0 - digit1
+        if(digit > 0) then
+           char = "0"//trim(char)
+        else
+           char = " "//trim(char)
+        end if
+     end do
+  end if
+  
+  n_out = len(trim(char))
+  allocate(character(n_out) :: char_out)
+  char_out = char(1:n_out)
+
+end function
+
+!******************************************************************************!
+function get_digit(num) result(digit0)
+  implicit none
+  integer  :: digit0
+  integer  :: num
+  integer  :: t
+  
+  t = num
+  digit0 = 1
+  do
+     if(t < 10) then
+        exit
+     end if
+     t = t/10
+     digit0 = digit0 + 1
+  end do
+  
+end function
 
 END MODULE

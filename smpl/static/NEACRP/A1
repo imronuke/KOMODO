@@ -10,27 +10,27 @@ NEACRP Critical Boron Concentration Search - Case A1
 
 ! XSEC CARD
 %XSEC
-FILE /home/travis/build/imronuke/KOMODO/smpl/static/NEACRP/neacrp_xsec
+FILE /home/imronuke/github/tsuiyong/KOMODO/smpl/static/NEACRP/neacrp_xsec
 
 ! GEOMETRY CARD
 %GEOM
-FILE /home/travis/build/imronuke/KOMODO/smpl/static/NEACRP/neacrp_geom
+FILE /home/imronuke/github/tsuiyong/KOMODO/smpl/static/NEACRP/neacrp_geom
 
 ! CRITICAL BORON SEARCH CARD
 %CBCS
-FILE /home/travis/build/imronuke/KOMODO/smpl/static/NEACRP/neacrp_cbcs
+FILE /home/imronuke/github/tsuiyong/KOMODO/smpl/static/NEACRP/neacrp_cbcs
 
 ! FUEL TEMPERATURE CARD
 %FTEM
-FILE /home/travis/build/imronuke/KOMODO/smpl/static/NEACRP/neacrp_ftem
+FILE /home/imronuke/github/tsuiyong/KOMODO/smpl/static/NEACRP/neacrp_ftem
 
 ! MODERATOR TEMPERATURE CARD
 %MTEM
-FILE /home/travis/build/imronuke/KOMODO/smpl/static/NEACRP/neacrp_mtem
+FILE /home/imronuke/github/tsuiyong/KOMODO/smpl/static/NEACRP/neacrp_mtem
 
 ! COOLANT DENSITY CARD
 %CDEN
-FILE /home/travis/build/imronuke/KOMODO/smpl/static/NEACRP/neacrp_cden
+FILE /home/imronuke/github/tsuiyong/KOMODO/smpl/static/NEACRP/neacrp_cden
 
 ! CONTROL ROD CARD
 %CROD
@@ -81,3 +81,5 @@ FILE /home/travis/build/imronuke/KOMODO/smpl/static/NEACRP/neacrp_cden
 264  25                                ! Number of fuel pin and guide tubes
 0.019                                  ! FRACTION OF HEAT DEPOSITED IN COOLANT
 1
+
+%VTK

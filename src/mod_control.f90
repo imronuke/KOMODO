@@ -16,15 +16,14 @@ contains
     !
 
     use sdata, only: nnod, aprad, apaxi, afrad, ftem, mtem, cden, &
-    bcon, bpos, npow, th_niter
-    use io,    only: AsmPow, AxiPow, AsmFlux, inp_read, bther, boutp, print_outp
+    bcon, bpos, npow, th_niter, npow
+    use io,    only: AsmPow, AxiPow, AsmFlux, inp_read, bther, &
+    boutp, print_outp, bvtk, print_vtk
     use xsec,  only: XS_updt
     use cmfd,  only: outer,print_keff
     use th,  only: th_iter
 
     IMPLICIT NONE
-
-    REAL(DP), DIMENSION(:), ALLOCATABLE :: pow
 
     !Update xsec
     CALL XS_updt(bcon, ftem, mtem, cden, bpos)
@@ -43,18 +42,19 @@ contains
     call print_keff()
 
     IF (aprad == 1 .OR. apaxi == 1) THEN
-        ALLOCATE(pow(nnod))
-        CALL get_power_dist(pow)
+        ALLOCATE(npow(nnod))
+        CALL get_power_dist(npow)
     END IF
 
-    IF (aprad == 1) CALL AsmPow(pow)
+    IF (aprad == 1) CALL AsmPow(npow)
 
-    IF (apaxi == 1) CALL AxiPow(pow)
+    IF (apaxi == 1) CALL AxiPow(npow)
 
     IF (afrad == 1) CALL AsmFlux(1.e0_DP)
 
-    IF (boutp == 1) CALL print_outp(pow)
+    IF (boutp == 1) CALL print_outp(npow)
 
+    IF (bvtk == 1) CALL print_vtk(0)
 
   END SUBROUTINE forward
 
@@ -67,14 +67,14 @@ contains
     !    To solve adjoint problems
     !
 
-    use sdata, only: nnod, aprad, apaxi, afrad, ftem, mtem, cden, bcon, bpos
-    use io,    only: AsmPow, AxiPow, AsmFlux, inp_read
+    use sdata, only: nnod, aprad, apaxi, afrad, ftem, mtem, &
+    cden, bcon, bpos, npow
+    use io,    only: AsmPow, AxiPow, AsmFlux, inp_read, &
+    bvtk, print_vtk
     use xsec,  only: XS_updt
     use cmfd,  only: outer_ad,print_keff
 
     IMPLICIT NONE
-
-    REAL(DP), DIMENSION(:), ALLOCATABLE :: pow
 
     !Update xsec
     CALL XS_updt(bcon, ftem, mtem, cden, bpos)
@@ -87,15 +87,17 @@ contains
     call print_keff()
 
     IF (aprad == 1 .OR. apaxi == 1) THEN
-        ALLOCATE(pow(nnod))
-        CALL get_power_dist(pow)
+        ALLOCATE(npow(nnod))
+        CALL get_power_dist(npow)
     END IF
 
-    IF (aprad == 1) CALL AsmPow(pow)
+    IF (aprad == 1) CALL AsmPow(npow)
 
-    IF (apaxi == 1) CALL AxiPow(pow)
+    IF (apaxi == 1) CALL AxiPow(npow)
 
     IF (afrad == 1) CALL AsmFlux(1.e0_DP)
+
+    IF (bvtk == 1) CALL print_vtk(0)
 
   END SUBROUTINE adjoint
 
@@ -108,14 +110,13 @@ contains
     !    To solve fixed source problems
     !
 
-    use sdata, only: nnod, aprad, apaxi, afrad, ftem, mtem, cden, bcon, bpos, powtot
-    use io,    only: AsmPow, AxiPow, AsmFlux, inp_read
+    use sdata, only: nnod, aprad, apaxi, afrad, ftem, mtem, cden, &
+    bcon, bpos, powtot, npow
+    use io,    only: AsmPow, AxiPow, AsmFlux, inp_read, bvtk, print_vtk
     use xsec,  only: XS_updt
     use cmfd,  only: outer_fs
 
     IMPLICIT NONE
-
-    REAL(DP), DIMENSION(:), ALLOCATABLE :: pow
 
     !Update xsec
     CALL XS_updt(bcon, ftem, mtem, cden, bpos)
@@ -126,16 +127,18 @@ contains
     CALL outer_fs(1)
 
     IF (aprad == 1 .OR. apaxi == 1) THEN
-        ALLOCATE(pow(nnod))
-        CALL get_power_dist(pow)
+        ALLOCATE(npow(nnod))
+        CALL get_power_dist(npow)
     END IF
 
     IF (powtot > 0.0) THEN
-      IF (aprad == 1) CALL AsmPow(pow)
-      IF (apaxi == 1) CALL AxiPow(pow)
+      IF (aprad == 1) CALL AsmPow(npow)
+      IF (apaxi == 1) CALL AxiPow(npow)
     END IF
 
     IF (afrad == 1) CALL AsmFlux()
+
+    IF (bvtk == 1) CALL print_vtk(0)
 
   END SUBROUTINE fixedsrc
 
@@ -150,7 +153,7 @@ contains
 
   USE sdata, ONLY: Ke, rbcon, ftem, mtem, cden, bpos, nnod, fer, ser, &
                    aprad, apaxi, afrad, npow
-  USE io, ONLY: ounit, AsmFlux, AsmPow, AxiPow
+  USE io, ONLY: ounit, AsmFlux, AsmPow, AxiPow, bvtk, print_vtk
   USE cmfd, ONLY: outer
   USE xsec, ONLY: XS_updt
 
@@ -207,6 +210,8 @@ contains
 
   IF (afrad == 1) CALL AsmFlux(1._DP)
 
+  IF (bvtk == 1) CALL print_vtk(0)
+
   1791 format(I3, F10.2, F14.5, ES14.5, ES13.5)
 
   END SUBROUTINE cbsearch
@@ -223,10 +228,10 @@ contains
   USE sdata, ONLY: Ke, bcon, rbcon, npow, nnod, &
                    ser, fer, aprad, apaxi, afrad, npow, th_err, &
                    serc, ferc
-  USE io, ONLY: ounit, AsmFlux, AsmPow, AxiPow, bvtk
+  USE io, ONLY: ounit, AsmFlux, AsmPow, AxiPow, bvtk, print_vtk
   USE cmfd, ONLY: outer
   use th, only : th_iter
-  use trans, only: vtk_out
+  ! use trans, only: vtk_out
 
   IMPLICIT NONE
 
@@ -278,17 +283,19 @@ contains
       CALL get_power_dist(npow)
   END IF
   
-  if (bvtk == 1) then
-    ! Output the steady-state parameters in VTK format
-    steady_name = 'steady'
-    call vtk_out(steady_name)
-  end if
+  ! if (bvtk == 1) then
+  !   ! Output the steady-state parameters in VTK format
+  !   steady_name = 'steady'
+  !   call vtk_out(steady_name)
+  ! end if
 
   IF (aprad == 1) CALL AsmPow(npow)
 
   IF (apaxi == 1) CALL AxiPow(npow)
 
   IF (afrad == 1) CALL AsmFlux(1._DP)
+
+  IF (bvtk == 1) CALL print_vtk(0)
 
   call print_tail()
 

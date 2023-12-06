@@ -82,3 +82,5 @@ KOMODO has several input cards. Card is a keyword marked with `%`. Each card can
 | 18. | [`%KERN`](https://imronuke.github.io/KOMODO/kern) | Nodal kernel options | Optional |
 | 19. | [`%EXTR`](https://imronuke.github.io/KOMODO/extr) | Exponential flux transformation option card for transient problem | Optional |
 | 20. | [`%THET`](https://imronuke.github.io/KOMODO/thet) | Used to set theta value for transient problem | Optional |
+| 21. | [`%OUTP`](https://imronuke.github.io/KOMODO/outp) | Used to produce detailed 3D power | Optional |
+| 22. | [`%VTK`](https://imronuke.github.io/KOMODO/vtk) | Used to generate a vtk file for visualization | Optional |

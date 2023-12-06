@@ -23,10 +23,11 @@ subroutine rod_eject()
 
 USE sdata, ONLY: ng, nnod, sigr, nf, nmat, ttot, tdiv, tstep1, tstep2, Ke, &
                  bcon, ftem, mtem, cden, bpos, nb, &
-                 iBeta, f0, ft, c0, tbeta, omeg, ctbeta, L
-USE io, ONLY: ounit, bextr, scr
+                 iBeta, f0, ft, c0, tbeta, omeg, ctbeta, L, npow
+USE io, ONLY: ounit, bextr, scr, bvtk, print_vtk
 USE xsec, ONLY: XS_updt
 USE cmfd, ONLY: outer_tr, outer, outer_ad
+use th, only : powdis
 
 implicit none
 
@@ -93,6 +94,11 @@ end do
 
 ! Calculate reactivity
 call reactivity(af, sigr, rho)
+
+! print vtk
+allocate(npow(nnod))
+CALL PowDis(npow)
+if (bvtk == 1) call print_vtk(0)
 
 ! File output
 WRITE(*, *)
@@ -171,7 +177,7 @@ subroutine rod_eject_th()
 USE sdata, ONLY: ng, nnod, sigr, nf, ttot, tdiv, tstep1, tstep2, Ke, &
                  tfm, ppow, m, ftem, mtem, bpos, nb, iBeta, &
                  f0, ft, c0, tbeta, omeg, npow, ctbeta, nmat, L, th_niter
-USE io, ONLY: ounit, bextr, bxtab, scr, bvtk
+USE io, ONLY: ounit, bextr, bxtab, scr, bvtk, print_vtk
 USE xsec, ONLY: XS_updt
 USE cmfd, ONLY: outer_tr, outer, outer_ad
 use th, only : th_iter, par_ave, par_max
@@ -201,12 +207,6 @@ allocate(L(nnod,ng))
 
 ! Determine th paramters distribution
 CALL th_iter(th_niter, 0)
-
-if (bvtk == 1) then
-  ! Output the steady-state parameters in VTK format
-  steady_name = 'steady'
-  call vtk_out(steady_name)
-end if
 
 if (scr) then
   write(*,*)
@@ -267,6 +267,8 @@ CALL par_ave(ftem, tf)
 CALL par_max(tfm(:,1), mtf)
 CALL par_ave(mtem, tm)
 CALL par_max(mtem, mtm)
+
+if (bvtk == 1) call print_vtk(0)
 
 ! File output
 WRITE(ounit, *)
@@ -348,7 +350,7 @@ USE sdata, ONLY: ng, nnod, sigr, bcon, ftem, mtem, cden, &
                  fbpos, bpos, tmove, bspeed, mdir, nb, velo, npow, &
                  f0, ft, fst, fs0, omeg, tranw, ix, iy, iz, pow, &
                  tfm, zdel, ppow, node_nf, m, mat, dfis, ctbeta, sth, sigrp
-USE io, ONLY: ounit, bxtab
+USE io, ONLY: ounit, bxtab, bvtk, print_vtk
 USE xsec, ONLY: XS_updt
 USE cmfd, ONLY: outer_tr, outer
 use th, only : th_trans, par_ave, par_max, powdis
@@ -431,10 +433,10 @@ CALL PowTot(f0, tpow2)
 ! Calculate reactivity
 call reactivity(af, sigrp, rho)
 
-if (thc == 1) then
-  ! Calculate node power distribution
-  CALL PowDis(npow)
+! Calculate node power distribution
+CALL PowDis(npow)
 
+if (thc == 1) then
   ! Power change
   xppow = ppow * tpow2/tpow1 * 0.01_DP
 
@@ -475,6 +477,10 @@ else
       WRITE(ounit,'(I4, F10.3, F10.4, ES15.4)') step, t2, rho/ctbeta, &
       tpow2/tpow1
   end if
+end if
+
+if (bvtk == 1) then
+  call print_vtk(step)
 end if
 
 if (maxi) tranw = .TRUE.
@@ -748,122 +754,6 @@ write(ounit,1344) ctbeta*1.e5
 
 
 end subroutine calc_beta
-
- subroutine vtk_out(i_name)
- 
-!
-! Purpose:
-!    To output the results in vtk file format
-!
-
- use sdata, only: nver, nnod, ng, vertice, cell, f0, pow, ppow, yutag, xutag, &
-                  iu, iv, iw, uvw, ftem, mtem, cden 				   
- use th, only: PowDis
- use io, only: flux_atpower, casename, uver
-
- implicit none
-
- integer:: n, i, g
- character(len=20), intent(in) :: i_name
- character(len=20) :: oname
- real(dp), allocatable :: node_pow(:)
- 
- oname = TRIM(casename) // '_' // TRIM(i_name) // '.vtk'
-
- open(unit=uver, file = oname)
-
- write(uver, '(A26)')'# vtk DataFile Version 4.0'
- write(uver, '(A10)')'vtk output'
- write(uver, '(A5)')'ASCII'
- write(uver, '(A25)')'DATASET UNSTRUCTURED_GRID'
-
- write(uver, 3000)'POINTS', nver, 'double'
-
- do n = 1, nver 
-   write(uver, 3001) vertice(n)%u(1), vertice(n)%u(2), vertice(n)%u(3)
- end do 
-
- write(uver, 3002)'CELLS', nnod, nnod * 9
-
- do n = 1, nnod 
-   write(uver, 3003)'8', cell(n)%vertice_index(1), cell(n)%vertice_index(2), &
-			 cell(n)%vertice_index(3), cell(n)%vertice_index(4), & 
-			 cell(n)%vertice_index(5), cell(n)%vertice_index(6), &
-			 cell(n)%vertice_index(7), cell(n)%vertice_index(8)
- end do
-
- write(uver, 3004)'CELL_TYPES', nnod
-
- do i = 1, nnod
-   write(uver, *)'11'
- end do
-
- write(uver, 3005)'CELL_DATA', nnod
-
- ! Normalized power distribution
- allocate(node_pow(nnod))
-
- call PowDis(node_pow)
-
- ! Actual power distribution
- write(uver, *)'SCALARS Power(W) double'
- write(uver, *)'LOOKUP_TABLE default'
-  
- do n = 1, nnod
-   write(uver,'(ES13.6)') node_pow(n) * pow * ppow * 0.01_dp
- end do
- 
- ! Normalize the fluxes to given power
- call flux_atpower()
-
- do g = 1, ng
-
-   write(uver, 3006)'SCALARS flux_', g, '(Neutrons/cm^2*s) double'
-   write(uver, *)'LOOKUP_TABLE default'
-   
-   do n = 1, nnod
-     write(uver,'(ES13.6)') f0(n, g)
-   end do
-
- end do
- 
- ! Fuel temperature
- write(uver, *)'SCALARS Fuel_temp(C) double'
- write(uver, *)'LOOKUP_TABLE default'
- 
- do n = 1, nnod
-   write(uver,'(ES13.6)') ftem(n) - 273.15
- end do
- 
- ! Moderator temperature
- write(uver, *)'SCALARS Moderator_temp(C) double'
- write(uver, *)'LOOKUP_TABLE default'
- 
- do n = 1, nnod
-   write(uver,'(ES13.6)') mtem(n) - 273.15
- end do
- 
- ! Coolant density
- write(uver, *)'SCALARS Coolant_density(g/cm3) double'
- write(uver, *)'LOOKUP_TABLE default'
- 
- do n = 1, nnod
-   write(uver,'(ES13.6)') cden(n)
- end do 
-
- close(uver)
-
- deallocate(node_pow)
-
- 3000 format(A6, 1X, I7, 1X, A6)
- 3001 format(F6.2,1X, F6.2, 1X, F6.2)
- 3002 format(A5, 1X, I7, 1X, I8)
- 3003 format(A1, I7,I7,I7,I7,I7,I7,I7,I7)
- 3004 format(A10, I7)
- 3005 format(A9, I7)
- 3006 format(A13, I1, A24)
-
- end subroutine vtk_out
 
 
 end MODULE trans

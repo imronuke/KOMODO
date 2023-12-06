@@ -82,3 +82,5 @@ LMW  TRANSIENT
 ! Theta card. Theta value is set to  0.5 (Crank-Nicholson)
 %THET
 0.5
+
+%VTK
