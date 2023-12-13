@@ -4506,14 +4506,17 @@ SUBROUTINE print_vtk(time_step)
   integer      :: g
   character(5) :: step
   real(dp)     :: flux(nnod, ng)
+  real(dp)     :: total
 
   step = int_to_char(time_step)
 
   ! Power
   if (bther == 1) then
     write(vunit, *)'SCALARS Power_' // trim(adjustl(step)) &
-    // '(W) double'
-    npow = npow * pow * ppow * 0.01_dp
+    // '(kW) double'
+    total = sum(npow)
+    npow = npow / total
+    npow = npow * pow * ppow * 1.e-5
   else
     write(vunit, *)'SCALARS Relative_Power_' // trim(adjustl(step)) &
     // ' double'
