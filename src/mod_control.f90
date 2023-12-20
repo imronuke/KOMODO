@@ -42,7 +42,7 @@ contains
     call print_keff()
 
     IF (aprad == 1 .OR. apaxi == 1) THEN
-        ALLOCATE(npow(nnod))
+        if (.not. allocated(npow)) allocate(npow(nnod))
         CALL get_power_dist(npow)
     END IF
 
