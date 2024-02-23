@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        
+        {
+            "name": "Run GDB",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceRoot}/build/komodo",
+            "args": ["${workspaceRoot}/smpl/static/NEACRP/A2"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceRoot}",
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "preLaunchTask": "build",
+
+        }
+    ]
+}

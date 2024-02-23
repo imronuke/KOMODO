@@ -1,0 +1,18 @@
+{
+    "editor.rulers": [132],
+    "workbench.colorCustomizations": {
+        "editorRuler.foreground": "#ff4081"
+    },
+    "cmake.configureOnOpen": false,
+    //"fortran-ls.executablePath": "/home/imronuke/.local/lib/python3.8/site-packages/fortls",
+    "fortran.fortls.disabled": false,
+    "spellright.language": [
+        "en"
+    ],
+    "spellright.documentTypes": [
+        "markdown",
+        "latex",
+        "plaintext"
+    ],
+    "fortran.fortls.path": "fortls",
+}
