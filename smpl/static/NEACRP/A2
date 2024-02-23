@@ -80,3 +80,7 @@ FILE /home/imronuke/KOMODO/smpl/static/NEACRP/neacrp_cden
 4.11950E-03  6.8E-05  5.71E-04  1.2655E-2 ! Fuel meat rad., gap thickness, cladding thickness and pin pitch (m)
 264  25                                ! Number of fuel pin and guide tubes
 0.019                                  ! FRACTION OF HEAT DEPOSITED IN COOLANT
+
+%OUTP
+
+%VTK

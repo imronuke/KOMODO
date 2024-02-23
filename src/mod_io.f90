@@ -988,7 +988,7 @@ INTEGER :: ln, ios
 
 INTEGER :: i, j, k, lx, ly, lz, xtot, ytot, ztot
 CHARACTER(LEN=2), DIMENSION(nxx, nyy) :: mmap
-INTEGER, PARAMETER :: xm = 36
+INTEGER, PARAMETER :: xm = 40
 INTEGER :: ip, ipr, kp
 INTEGER :: xs, xf
 
@@ -1816,7 +1816,7 @@ INTEGER, DIMENSION(ny+1) :: ty
 INTEGER, DIMENSION(nz+1) :: tz
 INTEGER :: zp
 CHARACTER(LEN=6), DIMENSION(nx, ny) :: cadf
-INTEGER, PARAMETER :: xm = 12
+INTEGER, PARAMETER :: xm = 20
 INTEGER :: ip, ipr
 INTEGER :: xs, xf
 
@@ -3330,8 +3330,8 @@ SUBROUTINE print_outp(fn)
     !
     
     USE sdata, ONLY: nx, ny, nxx, nyy, nzz, zdel, &
-                    xdel, ydel, ystag, nnod, ix, iy, iz, &
-                    xdiv, ydiv
+                    nnod, ix, iy, iz, &
+                    ftem, mtem, cden
     
     IMPLICIT NONE
     
@@ -3339,18 +3339,11 @@ SUBROUTINE print_outp(fn)
     
     REAL(DP), DIMENSION(nxx, nyy, nzz) :: fx
     INTEGER :: i, j, k, n
-    INTEGER :: ly, lx, ys, xs, yf, xf
-    REAL(DP) :: summ, vsumm
-    REAL(DP), DIMENSION(nxx, nyy) :: fnode
     REAL(DP), DIMENSION(nx, ny, nzz) :: fasm
     REAL(DP) :: totp
     INTEGER :: nfuel
-    REAL(DP) :: fmax
-    INTEGER :: xmax, ymax
     CHARACTER(LEN=6), DIMENSION(nx, ny, nzz) :: cpow
-    
-    INTEGER, PARAMETER :: xm = 12
-    INTEGER :: ip, ipr
+    LOGICAL, DIMENSION(nzz) :: is_print_planar
     
     fx = 0._DP
     DO n = 1, nnod
@@ -3358,8 +3351,90 @@ SUBROUTINE print_outp(fn)
     END DO
     
     !Calculate assembly power
+    CALL node_to_asm_dist(fx, fasm, is_power=.true.)
+
+    !NORMALIZE
     nfuel = 0
     totp  = 0._DP
+    DO k = 1, nzz
+        DO j = 1, ny
+            DO i = 1, nx
+                IF (fasm(i,j,k) > 0) THEN
+                    nfuel = nfuel + 1
+                    totp  = totp + fasm(i,j,k)
+                END IF
+            END DO
+        END DO
+    END DO
+    DO k = 1, nzz
+        DO j = 1, ny
+            DO i = 1, nx
+                fasm(i,j,k) = fasm(i,j,k) * nfuel / totp
+            END DO
+        END DO
+    END DO
+
+    OPEN (UNIT=102, FILE=TRIM(iname) // '_3d_power.out', STATUS='REPLACE', ACTION='WRITE')
+    CALL dist_to_char(fasm, 'F6.3', is_print_planar, cpow)
+    CALL print_3d(102, '   3-D Power Distribution', is_print_planar, cpow)
+    CLOSE(102)
+
+    if (bther == 1) then
+        fx = 0._DP
+        DO n = 1, nnod
+            fx(ix(n), iy(n), iz(n)) = ftem(n)
+        END DO
+        CALL node_to_asm_dist(fx, fasm, .false.)
+        CALL dist_to_char(fasm, 'F6.1', is_print_planar, cpow)
+        OPEN (UNIT=102, FILE=TRIM(iname) // '_fuel_temp.out', STATUS='REPLACE', ACTION='WRITE')
+        CALL print_3d(102, '   3D Fuel Temperature Distribution', is_print_planar, cpow)
+        CLOSE(102)
+
+        fx = 0._DP
+        DO n = 1, nnod
+            fx(ix(n), iy(n), iz(n)) = mtem(n)
+        END DO
+        CALL node_to_asm_dist(fx, fasm, .false.)
+        CALL dist_to_char(fasm, 'F6.1', is_print_planar, cpow)
+        OPEN (UNIT=102, FILE=TRIM(iname) // '_cool_temp.out', STATUS='REPLACE', ACTION='WRITE')
+        CALL print_3d(102, '   3D Coolant Temperature Distribution', is_print_planar, cpow)
+        CLOSE(102)
+        
+        fx = 0._DP
+        DO n = 1, nnod
+            fx(ix(n), iy(n), iz(n)) = cden(n)
+        END DO
+        CALL node_to_asm_dist(fx, fasm, .false.)
+        CALL dist_to_char(fasm, 'F6.3', is_print_planar, cpow)
+        OPEN (UNIT=102, FILE=TRIM(iname) // '_cool_dens.out', STATUS='REPLACE', ACTION='WRITE')
+        CALL print_3d(102, '   3D Coolant Density Distribution', is_print_planar, cpow)
+        CLOSE(102)
+    END IF
+    
+END SUBROUTINE print_outp
+
+!******************************************************************************!
+
+SUBROUTINE node_to_asm_dist(node_dist, asm_dist, is_power)
+
+    !
+    ! Purpose:
+    !    convert node-wise distribution to assembly-wise distribution
+    !
+    
+    USE sdata, ONLY: nx, ny, nzz, ydiv, xdiv, xdel, ydel, zdel
+    
+    IMPLICIT NONE
+
+
+    REAL(DP), DIMENSION(:,:,:), INTENT(IN)            :: node_dist
+    LOGICAL, INTENT(IN)                               :: is_power
+    REAL(DP), DIMENSION(:,:,:), INTENT(OUT)           :: asm_dist
+
+    INTEGER :: n, i, j, k
+    INTEGER :: ly, lx, ys, xs, yf, xf
+    REAL(DP) :: summ, vsumm
+    
     DO k = 1, nzz
         ys = 1
         yf = 0
@@ -3373,75 +3448,125 @@ SUBROUTINE print_outp(fn)
                 vsumm = 0._DP
                 DO ly= ys, yf
                     DO lx= xs, xf
-                        summ = summ + fx(lx,ly,k)*xdel(lx)*ydel(ly)
+                        IF (is_power) THEN
+                            summ = summ + node_dist(lx,ly,k)
+                        ELSE
+                            summ = summ + node_dist(lx,ly,k)*xdel(lx)*ydel(ly)*zdel(k)
+                        END IF
                         vsumm = vsumm + xdel(lx)*ydel(ly)*zdel(k)
                     END DO
                 END DO
-                fasm(i,j,k) = summ / vsumm
+                asm_dist(i,j,k) = summ / vsumm
                 xs = xs + xdiv(i)
-                IF (fasm(i,j,k) > 0._DP) nfuel = nfuel + 1
-                IF (fasm(i,j,k) > 0._DP) totp  = totp + fasm(i,j,k)
             END DO
             ys = ys + ydiv(j)
         END DO
     END DO
     
     
-    ! Normalize assembly power to 1._DP
-    xmax = 1; ymax = 1
-    fmax = 0._DP
+END SUBROUTINE node_to_asm_dist
+
+!******************************************************************************!
+
+SUBROUTINE dist_to_char(val, format, is_print_planar, cpow)
+
+    !
+    ! Purpose:
+    !    convert distribution to character
+    !
+    
+    USE sdata, ONLY: nx, ny, nzz
+    
+    IMPLICIT NONE
+
+
+    REAL(DP), DIMENSION(:,:,:), INTENT(IN)            :: val
+    CHARACTER(LEN=*), INTENT(IN)                      :: format
+    LOGICAL, DIMENSION(:), INTENT(OUT)                :: is_print_planar
+    CHARACTER(LEN=6), DIMENSION(:, :, :), INTENT(OUT) :: cpow
+    INTEGER :: n, i, j, k
+    INTEGER :: xs, xf
+    
+    ! CONVERT TO CHARACTER
+    is_print_planar = .FALSE.
     DO k = 1, nzz
+        if (sum(val(:,:,k)) > 0.0) is_print_planar(k) = .TRUE.
         DO j = 1, ny
             DO i = 1, nx
                 ! Convert power to character (If power == 0 convert to blank spaces)
-                IF ((fasm(i,j,k) - 0.) < 1.e-5_DP) THEN
+                IF ((val(i,j,k) - 0.) < 1.e-5_DP) THEN
                     cpow(i,j,k) = '     '
                 ELSE
-                    WRITE (cpow(i,j,k),'(F6.3)') fasm(i,j,k)
+                    WRITE (cpow(i,j,k),'(' // trim(format) // ')') val(i,j,k)
                     cpow(i,j,k) = TRIM(cpow(i,j,k))
                 END IF
             END DO
         END DO
     END DO
     
-    OPEN (UNIT=102, FILE=TRIM(iname) // '_3d_power.out', STATUS='REPLACE', ACTION='WRITE')
+    
+END SUBROUTINE dist_to_char
+
+!******************************************************************************!
+
+SUBROUTINE print_3d(funit, msg, is_print_planar, cpow)
+
+    !
+    ! Purpose:
+    !    To print 3d distribution
+    !
+    
+    USE sdata, ONLY: nx, ny, nzz
+    
+    IMPLICIT NONE
+
+    INTEGER, INTENT(IN)                              :: funit
+    CHARACTER(LEN=*), INTENT(IN)                     :: msg
+    LOGICAL, DIMENSION(:), INTENT(IN)                :: is_print_planar
+    CHARACTER(LEN=6), DIMENSION(:, :, :), INTENT(IN) :: cpow
+    INTEGER :: n, i, j, k
+    INTEGER :: xs, xf
+    
+    INTEGER, PARAMETER :: xm = 20
+    INTEGER :: ip, ipr
+    
 
     ! Print assembly power distribution
-    WRITE(102,*) '   3-D Power Distribution'
-    WRITE(102,*) '  =============================='
+    WRITE(funit,*) '   ' // trim(adjustl(msg))
+    WRITE(funit,*) '  =============================='
     
     DO k = nzz, 1, -1
-        IF (sum(fasm(:,:,k)) > 0.0) THEN
+        IF (is_print_planar(k)) THEN
             ip = nx/xm
             ipr = MOD(nx,xm) - 1
             xs = 1; xf = xm
-            WRITE(102,100)  k
+            WRITE(funit,100)  k
             DO n = 1, ip
-                WRITE(102,'(4X,100I8)') (i, i = xs, xf)
+                WRITE(funit,'(4X,100I8)') (i, i = xs, xf)
                 DO j= ny, 1, -1
-                    WRITE(102,'(2X,I4,100A8)') j, (cpow(i,j,k), i=xs, xf)
+                    WRITE(funit,'(2X,I4,100A8)') j, (cpow(i,j,k), i=xs, xf)
                 END DO
-                WRITE(102,*)
+                WRITE(funit,*)
                 xs = xs + xm
                 xf = xf + xm
             END DO
             
             
-            WRITE(102,'(4X,100I8)') (i, i = xs, xs+ipr)
+            WRITE(funit,'(4X,100I8)') (i, i = xs, xs+ipr)
             IF (xs+ipr > xs) THEN
                 DO j= ny, 1, -1
-                    WRITE(102,'(2X,I4,100A8)') j, (cpow(i,j,k), i=xs, xs+ipr)
+                    WRITE(funit,'(2X,I4,100A8)') j, (cpow(i,j,k), i=xs, xs+ipr)
                 END DO
             END IF
         END IF
     END DO
     
-    WRITE(102,*)
+    WRITE(funit,*)
 
     100 FORMAT(2X, 'z = ', I3)
     
     
-    END SUBROUTINE print_outp
+END SUBROUTINE print_3d
 
 !******************************************************************************!
 
@@ -3472,7 +3597,7 @@ REAL(DP) :: fmax
 INTEGER :: xmax, ymax
 CHARACTER(LEN=6), DIMENSION(nx, ny) :: cpow
 
-INTEGER, PARAMETER :: xm = 12
+INTEGER, PARAMETER :: xm = 20
 INTEGER :: ip, ipr
 
 fx = 0._DP
@@ -3705,7 +3830,7 @@ REAL(DP), DIMENSION(nx, ny, ng) :: fasm
 REAL(DP), DIMENSION(ng) :: totp
 CHARACTER(LEN=10), DIMENSION(nx, ny, ng) :: cflx
 
-INTEGER, PARAMETER :: xm = 12
+INTEGER, PARAMETER :: xm = 20
 INTEGER :: ip, ipr
 INTEGER :: negf
 
@@ -4498,7 +4623,7 @@ SUBROUTINE print_vtk(time_step)
 
   !Purpose: To init vtk output
 
-  USE sdata, ONLY: nnod, ng, f0, npow, pow, ppow, ftem, mtem, cden
+  USE sdata, ONLY: nnod, ng, f0, npow, pow, ppow, ftem, mtem, cden, vdel
   IMPLICIT NONE
 
   integer, intent(in) :: time_step
@@ -4512,11 +4637,11 @@ SUBROUTINE print_vtk(time_step)
 
   ! Power
   if (bther == 1) then
-    write(vunit, *)'SCALARS Power_' // trim(adjustl(step)) &
-    // '(kW) double'
+    write(vunit, *)'SCALARS Power_Density_' // trim(adjustl(step)) &
+    // '_kW/cm3_ double'
     total = sum(npow)
     npow = npow / total
-    npow = npow * pow * ppow * 1.e-5
+    npow = npow * pow * ppow * 1.e-5 / vdel
   else
     write(vunit, *)'SCALARS Relative_Power_' // trim(adjustl(step)) &
     // ' double'
@@ -4534,7 +4659,7 @@ SUBROUTINE print_vtk(time_step)
   do g = 1, ng
     if (bther == 1) then
       write(vunit, *)'SCALARS flux_g_'// int_to_char(g) &
-      // '_' // trim(adjustl(step)) // '(Neutrons/cm^2*s) double'
+      // '_' // trim(adjustl(step)) // '_n/cm^2*s_ double'
     else
       write(vunit, *)'SCALARS flux_g_'// int_to_char(g) &
       // '_' // trim(adjustl(step)) // '(Relative) double'
@@ -4546,17 +4671,17 @@ SUBROUTINE print_vtk(time_step)
   ! TH PARAMETERS
   if (bther == 1) then
     write(vunit, *)'SCALARS Fuel_temp_' // trim(adjustl(step)) &
-    // '(C) double'
+    // '_C_ double'
     write(vunit, *)'LOOKUP_TABLE default'
     write(vunit, '(ES13.5)') ftem - 273.15
 
     write(vunit, *)'SCALARS Moderator_temp_' // trim(adjustl(step)) &
-    // '(C) double'
+    // '_C_ double'
     write(vunit, *)'LOOKUP_TABLE default'
     write(vunit, '(ES13.5)') mtem - 273.15
 
     write(vunit, *)'SCALARS Coolant_density_' // trim(adjustl(step)) &
-    // '(g/cm3) double'
+    // '_g/cm3_ double'
     write(vunit, *)'LOOKUP_TABLE default'
     write(vunit, '(ES13.5)') cden
   end if

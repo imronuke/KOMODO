@@ -153,7 +153,8 @@ contains
 
   USE sdata, ONLY: Ke, rbcon, ftem, mtem, cden, bpos, nnod, fer, ser, &
                    aprad, apaxi, afrad, npow
-  USE io, ONLY: ounit, AsmFlux, AsmPow, AxiPow, bvtk, print_vtk
+  USE io, ONLY: ounit, AsmFlux, AsmPow, AxiPow, bvtk, print_vtk, &
+                print_outp, boutp
   USE cmfd, ONLY: outer
   USE xsec, ONLY: XS_updt
 
@@ -212,6 +213,8 @@ contains
 
   IF (bvtk == 1) CALL print_vtk(0)
 
+  IF (boutp == 1) CALL print_outp(npow)
+
   1791 format(I3, F10.2, F14.5, ES14.5, ES13.5)
 
   END SUBROUTINE cbsearch
@@ -228,7 +231,8 @@ contains
   USE sdata, ONLY: Ke, bcon, rbcon, npow, nnod, &
                    ser, fer, aprad, apaxi, afrad, npow, th_err, &
                    serc, ferc
-  USE io, ONLY: ounit, AsmFlux, AsmPow, AxiPow, bvtk, print_vtk
+  USE io, ONLY: ounit, AsmFlux, AsmPow, AxiPow, bvtk, print_vtk, &
+              print_outp, boutp
   USE cmfd, ONLY: outer
   use th, only : th_iter
   ! use trans, only: vtk_out
@@ -282,12 +286,6 @@ contains
   IF (aprad == 1 .OR. apaxi == 1) THEN
       CALL get_power_dist(npow)
   END IF
-  
-  ! if (bvtk == 1) then
-  !   ! Output the steady-state parameters in VTK format
-  !   steady_name = 'steady'
-  !   call vtk_out(steady_name)
-  ! end if
 
   IF (aprad == 1) CALL AsmPow(npow)
 
@@ -296,6 +294,8 @@ contains
   IF (afrad == 1) CALL AsmFlux(1._DP)
 
   IF (bvtk == 1) CALL print_vtk(0)
+
+  IF (boutp == 1) CALL print_outp(npow)
 
   call print_tail()
 
