@@ -22,7 +22,8 @@ This card is used to set the T-H parameters. It also activates T-H feedback. Whe
 |        | PPITCH | Fuel pin pitch in meter    |  |
 | LINE 5 | NFPIN | Number of fuel pin for each assembly |  |
 |        | NGT | Number of guide tubes    |  |
-| LINE 6 | CF | Fraction of heat deposited in the coolant |  |
+| LINE 6 | CF | Fraction of heat directly deposited in the coolant via radiative heat transfer |  |
+|        |    | Typical value for PWR is around 0.019  |  |
 | LINE 7 | POPT | Print option if users want to print this card | Optional |
 
 Example:
