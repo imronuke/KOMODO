@@ -3331,7 +3331,7 @@ SUBROUTINE print_outp(fn)
     
     USE sdata, ONLY: nx, ny, nxx, nyy, nzz, zdel, &
                     nnod, ix, iy, iz, &
-                    ftem, mtem, cden
+                    ftem, mtem, cden, tfm
     
     IMPLICIT NONE
     
@@ -3387,7 +3387,7 @@ SUBROUTINE print_outp(fn)
         CALL node_to_asm_dist(fx, fasm, .false.)
         CALL dist_to_char(fasm, 'F6.1', is_print_planar, cpow)
         OPEN (UNIT=102, FILE=TRIM(iname) // '_fuel_temp.out', STATUS='REPLACE', ACTION='WRITE')
-        CALL print_3d(102, '   3D Fuel Temperature Distribution', is_print_planar, cpow)
+        CALL print_3d(102, '   3D Fuel Temperature Distribution (K)', is_print_planar, cpow)
         CLOSE(102)
 
         fx = 0._DP
@@ -3397,7 +3397,7 @@ SUBROUTINE print_outp(fn)
         CALL node_to_asm_dist(fx, fasm, .false.)
         CALL dist_to_char(fasm, 'F6.1', is_print_planar, cpow)
         OPEN (UNIT=102, FILE=TRIM(iname) // '_cool_temp.out', STATUS='REPLACE', ACTION='WRITE')
-        CALL print_3d(102, '   3D Coolant Temperature Distribution', is_print_planar, cpow)
+        CALL print_3d(102, '   3D Coolant Temperature Distribution (K)', is_print_planar, cpow)
         CLOSE(102)
         
         fx = 0._DP
@@ -3407,7 +3407,17 @@ SUBROUTINE print_outp(fn)
         CALL node_to_asm_dist(fx, fasm, .false.)
         CALL dist_to_char(fasm, 'F6.3', is_print_planar, cpow)
         OPEN (UNIT=102, FILE=TRIM(iname) // '_cool_dens.out', STATUS='REPLACE', ACTION='WRITE')
-        CALL print_3d(102, '   3D Coolant Density Distribution', is_print_planar, cpow)
+        CALL print_3d(102, '   3D Coolant Density Distribution (g/cm3)', is_print_planar, cpow)
+        CLOSE(102)
+
+        fx = 0._DP
+        DO n = 1, nnod
+            fx(ix(n), iy(n), iz(n)) = tfm(n,1)
+        END DO
+        CALL node_to_asm_dist(fx, fasm, .false.)
+        CALL dist_to_char(fasm, 'F6.1', is_print_planar, cpow)
+        OPEN (UNIT=102, FILE=TRIM(iname) // '_max_centerline.out', STATUS='REPLACE', ACTION='WRITE')
+        CALL print_3d(102, '   3D Max Centerline Fuel Temperature (K)', is_print_planar, cpow)
         CLOSE(102)
     END IF
     
@@ -3431,7 +3441,7 @@ SUBROUTINE node_to_asm_dist(node_dist, asm_dist, is_power)
     LOGICAL, INTENT(IN)                               :: is_power
     REAL(DP), DIMENSION(:,:,:), INTENT(OUT)           :: asm_dist
 
-    INTEGER :: n, i, j, k
+    INTEGER :: i, j, k
     INTEGER :: ly, lx, ys, xs, yf, xf
     REAL(DP) :: summ, vsumm
     
@@ -3484,8 +3494,7 @@ SUBROUTINE dist_to_char(val, format, is_print_planar, cpow)
     CHARACTER(LEN=*), INTENT(IN)                      :: format
     LOGICAL, DIMENSION(:), INTENT(OUT)                :: is_print_planar
     CHARACTER(LEN=6), DIMENSION(:, :, :), INTENT(OUT) :: cpow
-    INTEGER :: n, i, j, k
-    INTEGER :: xs, xf
+    INTEGER :: i, j, k
     
     ! CONVERT TO CHARACTER
     is_print_planar = .FALSE.
