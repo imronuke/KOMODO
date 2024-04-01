@@ -3333,11 +3333,11 @@ SUBROUTINE print_outp(fn)
     
     USE sdata, ONLY: nx, ny, nxx, nyy, nzz, zdel, &
                     nnod, ix, iy, iz, &
-                    ftem, mtem, cden, tfm
+                    ftem, mtem, cden, tfm, pow, ppow, vdel
     
     IMPLICIT NONE
     
-    REAL(DP), DIMENSION(:), INTENT(IN) :: fn
+    REAL(DP), DIMENSION(:), INTENT(INOUT) :: fn
     
     REAL(DP), DIMENSION(nxx, nyy, nzz) :: fx
     INTEGER :: i, j, k, n
@@ -3347,38 +3347,51 @@ SUBROUTINE print_outp(fn)
     CHARACTER(LEN=6), DIMENSION(:, :, :), allocatable :: cpow
     LOGICAL, DIMENSION(nzz) :: is_print_planar
     
-    fx = 0._DP
-    DO n = 1, nnod
-        fx(ix(n), iy(n), iz(n)) = fn(n)
-    END DO
+    if (bther == 0) then
+        fx = 0._DP
+        DO n = 1, nnod
+            fx(ix(n), iy(n), iz(n)) = fn(n)
+        END DO
+        
+        CALL get_distribution(fx, fdist, is_power=.true., is_max=.false.)
     
-    !Calculate assembly power
-    CALL get_distribution(fx, fdist, is_power=.true., is_max=.false.)
+        !NORMALIZE
+        nfuel = 0
+        totp  = 0._DP
+        DO k = 1, nzz
+            DO j = 1, ny
+                DO i = 1, nx
+                    IF (fdist(i,j,k) > 0) THEN
+                        nfuel = nfuel + 1
+                        totp  = totp + fdist(i,j,k)
+                    END IF
+                END DO
+            END DO
+        END DO
+        DO k = 1, nzz
+            DO j = 1, ny
+                DO i = 1, nx
+                    fdist(i,j,k) = fdist(i,j,k) * nfuel / totp
+                END DO
+            END DO
+        END DO
+    else
+        fn = fn * pow * ppow * 1.e-5_dp / vdel  ! Power density (kW/cm3)
+        fx = 0._DP
+        DO n = 1, nnod
+            fx(ix(n), iy(n), iz(n)) = fn(n)
+        END DO
 
-    !NORMALIZE
-    nfuel = 0
-    totp  = 0._DP
-    DO k = 1, nzz
-        DO j = 1, ny
-            DO i = 1, nx
-                IF (fdist(i,j,k) > 0) THEN
-                    nfuel = nfuel + 1
-                    totp  = totp + fdist(i,j,k)
-                END IF
-            END DO
-        END DO
-    END DO
-    DO k = 1, nzz
-        DO j = 1, ny
-            DO i = 1, nx
-                fdist(i,j,k) = fdist(i,j,k) * nfuel / totp
-            END DO
-        END DO
-    END DO
+        CALL get_distribution(fx, fdist, is_power=.true., is_max=.false.)
+    end if
 
     OPEN (UNIT=102, FILE=TRIM(iname) // '_3d_power.out', STATUS='REPLACE', ACTION='WRITE')
     CALL dist_to_char(fdist, 'F6.3', is_print_planar, cpow)
-    CALL print_3d(102, '   3-D Power Distribution', is_print_planar, cpow)
+    if (bther == 0) then
+        CALL print_3d(102, '   3-D Power Distribution (Relative)', is_print_planar, cpow)
+    else
+        CALL print_3d(102, '   3-D Power Distribution (kW/cm3)', is_print_planar, cpow)
+    end if
     CLOSE(102)
 
     if (bther == 1) then
