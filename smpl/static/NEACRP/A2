@@ -82,5 +82,6 @@ FILE /home/imronuke/KOMODO/smpl/static/NEACRP/neacrp_cden
 0.019                                  ! FRACTION OF HEAT DEPOSITED IN COOLANT
 
 %OUTP
+node-wise
 
 %VTK
