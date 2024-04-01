@@ -3337,7 +3337,7 @@ SUBROUTINE print_outp(fn)
     
     IMPLICIT NONE
     
-    REAL(DP), DIMENSION(:), INTENT(INOUT) :: fn
+    REAL(DP), DIMENSION(:), INTENT(IN) :: fn
     
     REAL(DP), DIMENSION(nxx, nyy, nzz) :: fx
     INTEGER :: i, j, k, n
@@ -3390,7 +3390,7 @@ SUBROUTINE print_outp(fn)
     if (bther == 0) then
         avg = 1.0
     else
-        avg = pow * ppow * 1.e-5_DP / sum(vdel)  ! Power density (kw/cm3)
+        avg = pow * ppow * 1.e-5_DP / get_active_volume(fn)  ! Power density (kw/cm3)
         avg = avg * 1.0e6  ! to kw/m3
     end if
     WRITE (avg_char,'(ES12.5)') avg
@@ -3448,6 +3448,26 @@ SUBROUTINE print_outp(fn)
     END IF
     
 END SUBROUTINE print_outp
+
+!******************************************************************************!
+
+FUNCTION get_active_volume(fn) RESULT(vol)
+    
+    USE sdata, ONLY: nnod, vdel
+    
+    IMPLICIT NONE
+
+    REAL(DP), DIMENSION(:), INTENT(IN) :: fn
+    REAL(DP) :: vol
+
+    INTEGER :: n
+
+    vol = 0.
+    do n = 1, nnod
+        if (fn(n) > 0.0) vol = vol + vdel(n)
+    end do
+    
+END FUNCTION get_active_volume
 
 !******************************************************************************!
 
