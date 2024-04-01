@@ -3343,54 +3343,65 @@ SUBROUTINE print_outp(fn)
     INTEGER :: i, j, k, n
     REAL(DP), DIMENSION(:, :, :), allocatable :: fdist
     REAL(DP) :: totp
+    REAL(DP) :: avg
+    CHARACTER(LEN=12) :: avg_char
     INTEGER :: nfuel
+    INTEGER :: nxc, nyc
     CHARACTER(LEN=6), DIMENSION(:, :, :), allocatable :: cpow
     LOGICAL, DIMENSION(nzz) :: is_print_planar
     
-    if (bther == 0) then
-        fx = 0._DP
-        DO n = 1, nnod
-            fx(ix(n), iy(n), iz(n)) = fn(n)
-        END DO
-        
-        CALL get_distribution(fx, fdist, is_power=.true., is_max=.false.)
+    fx = 0._DP
+    DO n = 1, nnod
+        fx(ix(n), iy(n), iz(n)) = fn(n)
+    END DO
     
-        !NORMALIZE
-        nfuel = 0
-        totp  = 0._DP
-        DO k = 1, nzz
-            DO j = 1, ny
-                DO i = 1, nx
-                    IF (fdist(i,j,k) > 0) THEN
-                        nfuel = nfuel + 1
-                        totp  = totp + fdist(i,j,k)
-                    END IF
-                END DO
-            END DO
-        END DO
-        DO k = 1, nzz
-            DO j = 1, ny
-                DO i = 1, nx
-                    fdist(i,j,k) = fdist(i,j,k) * nfuel / totp
-                END DO
-            END DO
-        END DO
-    else
-        fn = fn * pow * ppow * 1.e-5_dp / vdel  ! Power density (kW/cm3)
-        fx = 0._DP
-        DO n = 1, nnod
-            fx(ix(n), iy(n), iz(n)) = fn(n)
-        END DO
+    CALL get_distribution(fx, fdist, is_power=.true., is_max=.false.)
 
-        CALL get_distribution(fx, fdist, is_power=.true., is_max=.false.)
+    !NORMALIZE
+    if (output_opt % assembly) then
+        nxc = nx
+        nyc = ny
+    else
+        nxc = nxx
+        nyc = nyy
     end if
 
+    nfuel = 0
+    totp  = 0._DP
+    DO k = 1, nzz
+        DO j = 1, nyc
+            DO i = 1, nxc
+                IF (fdist(i,j,k) > 0) THEN
+                    nfuel = nfuel + 1
+                    totp  = totp + fdist(i,j,k)
+                END IF
+            END DO
+        END DO
+    END DO
+    DO k = 1, nzz
+        DO j = 1, nyc
+            DO i = 1, nxc
+                fdist(i,j,k) = fdist(i,j,k) * nfuel / totp
+            END DO
+        END DO
+    END DO
+
+    ! Get average power density
+    if (bther == 0) then
+        avg = 1.0
+    else
+        avg = pow * ppow * 1.e-5_DP / sum(vdel)  ! Power density (kw/cm3)
+        avg = avg * 1.0e6  ! to kw/m3
+    end if
+    WRITE (avg_char,'(ES12.5)') avg
+
     OPEN (UNIT=102, FILE=TRIM(iname) // '_3d_power.out', STATUS='REPLACE', ACTION='WRITE')
-    CALL dist_to_char(fdist, 'F6.3', is_print_planar, cpow)
+    CALL dist_to_char(fdist, 'F6.4', is_print_planar, cpow)
     if (bther == 0) then
         CALL print_3d(102, '   3-D Power Distribution (Relative)', is_print_planar, cpow)
     else
-        CALL print_3d(102, '   3-D Power Distribution (kW/cm3)', is_print_planar, cpow)
+        CALL print_3d(102, '   3-D Power Distribution (Relative. Average =' &
+        // avg_char // ' kw/m3)', is_print_planar, cpow)
     end if
     CLOSE(102)
 
