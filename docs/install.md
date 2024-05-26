@@ -87,7 +87,8 @@ There are at least two ways installing KOMODO on Windows.
 Using this way, you can go to Microsoft Store and install Ubuntu from there for free. Open the Ubuntu app and follow the same steps on installing KOMODO on Ubuntu OS.
 
 ### Using g95 Fortran Compiler
-You can also intsall KOMODO directly into Windows by using free fortran compiler g95 which can be obtained from [here](https://www.fortran.com/wp-content/uploads/2013/05/g95-Mingw_201210.exe). Then install g95 to your computer.
+You can also intsall KOMODO directly into Windows by using free fortran compiler min-GW which can be obtained from [here](https://github.com/skeeto/w64devkit/releases) direct link to [64-bit version](https://github.com/skeeto/w64devkit/releases/download/v1.23.0/w64devkit-fortran-1.23.0.zip) and the [32-bit version](https://github.com/skeeto/w64devkit/releases/download/v1.23.0/w64devkit-i686-fortran-1.23.0.zip)
+
 
 Now you can download the [KOMODO zip files](https://github.com/imronuke/KOMODO/archive/master.zip) from Github then extract that zip file.
 
@@ -97,22 +98,22 @@ After you installed g95 and extracted KOMODO zip file, open the command prompt. 
 cd KOMODO-master
 ```
 
-and build the source codes using g95:
+and build the source codes using min-GW:
 
 ```
-g95 -O4 -c src\mod_data.f90
-g95 -O4 -c src\mod_io.f90
-g95 -O4 -c src\mod_xsec.f90
-g95 -O4 -c src\mod_nodal.f90
-g95 -O4 -c src\mod_cmfd.f90
-g95 -O4 -c src\mod_th.f90
-g95 -O4 -c src\mod_trans.f90
-g95 -O4 -c src\mod_control.f90
-g95 -O4 -c src\komodo.f90
-g95 *.o -o komodo
+gfortran -O4 -c src\mod_data.f90
+gfortran -O4 -c src\mod_io.f90
+gfortran -O4 -c src\mod_xsec.f90
+gfortran -O4 -c src\mod_nodal.f90
+gfortran -O4 -c src\mod_cmfd.f90
+gfortran -O4 -c src\mod_th.f90
+gfortran -O4 -c src\mod_trans.f90
+gfortran -O4 -c src\mod_control.f90
+gfortran -O4 -c src\komodo.f90
+gfortran *.o -o komodo
 ```
 
-These command will create an executable file named `komodo`. If you use Intel fortran compiler, just change `g95` with `ifort` in the commands above. Now, you can run a test using several examples of inputs file in folder [smpl](https://github.com/imronuke/KOMODO/tree/master/smpl) to see if you had built KOMODO properly. You can run KOMODO using command
+These command will create an executable file named `komodo`. If you use Intel fortran compiler, just change `gfortran` with `ifort` in the commands above. Now, you can run a test using several examples of inputs file in folder [smpl](https://github.com/imronuke/KOMODO/tree/master/smpl) to see if you had built KOMODO properly. You can run KOMODO using command
 
 ```
 komodo [INPUT_FILE_PATH_NAME]
