@@ -1701,7 +1701,7 @@ SUBROUTINE inp_outp (xbunit)
       WRITE(*,1650) 'THREE-DIMENSIONAL NODE POWER'
     end if
     
-    1650 format (2X, 'NODAL KERNEL  : ', A30)
+    1650 format (2X, 'OUTPUT OPTION '  : ', A30)
     
     END SUBROUTINE inp_outp
 
