@@ -1,7 +1,7 @@
 ![Language](https://raw.githubusercontent.com/imronuke/KOMODO/master/docs/images/fortran.png) [![Build Status](https://travis-ci.com/imronuke/KOMODO.svg?branch=master)](https://travis-ci.com/imronuke/KOMODO) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/imronuke/KOMODO/blob/master/LICENSE)  [![codecov](https://codecov.io/gh/imronuke/KOMODO/branch/master/graph/badge.svg)](https://codecov.io/gh/imronuke/KOMODO)
 
 # KOMODO
-## An Open Nuclear Reactor Simulator
+## An Open Nodal Core Simulator
 
 **Documentation available at**: https://imronuke.github.io/KOMODO/
 
@@ -24,7 +24,7 @@
   * Semi-Analytic Nodal Method (SANM)
 
 # KOMODO
-KOMODO is an open nuclear reactor simulator that solves both static and transient neutron diffusion equation for one, two or three dimensional reactor problems in Cartesian geometry. Currently, by default, KOMODO uses Semi-Analytic Nodal Method (SANM) to spatially discretise the neutron diffusion equation. While theta method is used for the time discretisation.
+KOMODO is an open nodal core simulator that solves both static and transient neutron diffusion equation for one, two or three dimensional reactor problems in Cartesian geometry. Currently, by default, KOMODO uses Semi-Analytic Nodal Method (SANM) to spatially discretise the neutron diffusion equation. While theta method is used for the time discretisation.
 
 KOMODO development was mainly motivated by the cumbersome process to obtain computer codes for most nuclear engineering students. And even so, some of them are not completely free. KOMODO is a great learning tool for reactor theory classes, and we have been striving hard to make the input is easy to create. It is open and free, so everyone has access to the source codes and play with them.
 
