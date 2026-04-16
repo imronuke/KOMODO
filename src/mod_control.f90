@@ -1,539 +1,580 @@
 module control
 
-  use sdata, only: dp
-  implicit none
-  save
+   use sdata, only: dp
+   implicit none
+   save
 
-contains
+   contains
 
-  !******************************************************************************!
+   !******************************************************************************!
 
-  SUBROUTINE forward()
+   subroutine forward()
 
-    !
-    ! Purpose:
-    !    To solve forward (normal) problems
-    !
+      !
+      ! Purpose:
+      !    To solve forward (normal) problems
+      !
 
-    use sdata, only: nnod, aprad, apaxi, afrad, ftem, mtem, cden, &
-    bcon, bpos, npow, th_niter, npow
-    use io,    only: AsmPow, AxiPow, AsmFlux, inp_read, bther, &
-    boutp, print_outp, bvtk, print_vtk
-    use xsec,  only: XS_updt
-    use cmfd,  only: outer,print_keff
-    use th,  only: th_iter
+      use sdata, only: nnod, aprad, apaxi, afrad, ftem, mtem, cden, &
+      bcon, bpos, npow, th_niter, npow
+      use io, only: asmpow, axipow, asmflux, inp_read, bther, &
+      boutp, print_outp, bvtk, print_vtk
+      use xsec, only: xs_updt
+      use cmfd, only: outer, print_keff
+      use th, only: th_iter
 
-    IMPLICIT NONE
 
-    !Update xsec
-    CALL XS_updt(bcon, ftem, mtem, cden, bpos)
+      !Update xsec
+      call xs_updt(bcon, ftem, mtem, cden, bpos)
 
-    call print_head()
+      call print_head()
 
-    !Outer iteration
-    if (bther == 0) then
-      CALL outer(1)
-    else
-      allocate(npow(nnod))
-      call th_iter(th_niter, 1)
-      call print_tail()
-    end if
-
-    call print_keff()
-
-    IF (aprad == 1 .OR. apaxi == 1) THEN
-        if (.not. allocated(npow)) allocate(npow(nnod))
-        CALL get_power_dist(npow)
-    END IF
-
-    IF (aprad == 1) CALL AsmPow(npow)
-
-    IF (apaxi == 1) CALL AxiPow(npow)
-
-    IF (afrad == 1) CALL AsmFlux(1.e0_DP)
-
-    IF (boutp == 1) CALL print_outp(npow)
-
-    IF (bvtk == 1) CALL print_vtk(0)
-
-  END SUBROUTINE forward
-
-  !******************************************************************************!
-
-  SUBROUTINE adjoint()
-
-    !
-    ! Purpose:
-    !    To solve adjoint problems
-    !
-
-    use sdata, only: nnod, aprad, apaxi, afrad, ftem, mtem, &
-    cden, bcon, bpos, npow
-    use io,    only: AsmPow, AxiPow, AsmFlux, inp_read, &
-    bvtk, print_vtk
-    use xsec,  only: XS_updt
-    use cmfd,  only: outer_ad,print_keff
-
-    IMPLICIT NONE
-
-    !Update xsec
-    CALL XS_updt(bcon, ftem, mtem, cden, bpos)
-
-    call print_head()
-
-    !Outer iteration
-    CALL outer_ad(1)
-
-    call print_keff()
-
-    IF (aprad == 1 .OR. apaxi == 1) THEN
-        ALLOCATE(npow(nnod))
-        CALL get_power_dist(npow)
-    END IF
-
-    IF (aprad == 1) CALL AsmPow(npow)
-
-    IF (apaxi == 1) CALL AxiPow(npow)
-
-    IF (afrad == 1) CALL AsmFlux(1.e0_DP)
-
-    IF (bvtk == 1) CALL print_vtk(0)
-
-  END SUBROUTINE adjoint
-
-  !******************************************************************************!
-
-  SUBROUTINE fixedsrc()
-
-    !
-    ! Purpose:
-    !    To solve fixed source problems
-    !
-
-    use sdata, only: nnod, aprad, apaxi, afrad, ftem, mtem, cden, &
-    bcon, bpos, powtot, npow
-    use io,    only: AsmPow, AxiPow, AsmFlux, inp_read, bvtk, print_vtk
-    use xsec,  only: XS_updt
-    use cmfd,  only: outer_fs
-
-    IMPLICIT NONE
-
-    !Update xsec
-    CALL XS_updt(bcon, ftem, mtem, cden, bpos)
-
-    call print_head()
-
-    !Outer iteration
-    CALL outer_fs(1)
-
-    IF (aprad == 1 .OR. apaxi == 1) THEN
-        ALLOCATE(npow(nnod))
-        CALL get_power_dist(npow)
-    END IF
-
-    IF (powtot > 0.0) THEN
-      IF (aprad == 1) CALL AsmPow(npow)
-      IF (apaxi == 1) CALL AxiPow(npow)
-    END IF
-
-    IF (afrad == 1) CALL AsmFlux()
-
-    IF (bvtk == 1) CALL print_vtk(0)
-
-  END SUBROUTINE fixedsrc
-
- !****************************************************************************!
-
-  SUBROUTINE cbsearch()
-
-  !
-  ! Purpose:
-  !    To search critical boron concentration
-  !
-
-  USE sdata, ONLY: Ke, rbcon, ftem, mtem, cden, bpos, nnod, fer, ser, &
-                   aprad, apaxi, afrad, npow
-  USE io, ONLY: ounit, AsmFlux, AsmPow, AxiPow, bvtk, print_vtk, &
-                print_outp, boutp
-  USE cmfd, ONLY: outer
-  USE xsec, ONLY: XS_updt
-
-  IMPLICIT NONE
-
-  REAL(DP)  :: bc1, bc2, bcon     ! Boron Concentration
-  REAL(DP) :: ke1, ke2
-  INTEGER :: n
-
-  call print_head()
-
-  bcon = rbcon
-  CALL XS_updt(bcon, ftem, mtem, cden, bpos)
-  CALL outer(0)
-  bc1 = bcon
-  ke1 = Ke
-
-  WRITE(ounit,1791) 1, bc1, Ke1, ser, fer
-  WRITE(*,1791) 1, bc1, Ke1, ser, fer
-
-  bcon = bcon + (Ke - 1.) * bcon   ! Guess next critical boron concentration
-  CALL XS_updt(bcon, ftem, mtem, cden, bpos)
-  CALL outer(0)
-  bc2 = bcon
-  ke2 = Ke
-
-  WRITE(ounit,1791) 2, bc2, Ke2, ser, fer
-  WRITE(*,1791) 2, bc2, Ke2, ser, fer
-
-  n = 3
-  DO
-    bcon = bc2 + (1._DP - ke2) / (ke1 - ke2) * (bc1 - bc2)
-    CALL XS_updt(bcon, ftem, mtem, cden, bpos)
-    CALL outer(0)
-    bc1 = bc2
-    bc2 = bcon
-    ke1 = ke2
-    ke2 = ke
-    WRITE(ounit,1791) n, bcon, Ke, ser, fer
-    WRITE(*,1791) n, bcon, Ke, ser, fer
-      IF ((ABS(Ke - 1._DP) < 1.e-5_DP) .AND. (ser < 1.e-5_DP) .AND. (fer < 1.e-5_DP)) EXIT
-      n = n + 1
-      call check_ppm(n, bcon)
-  END DO
-
-  ALLOCATE(npow(nnod))
-  IF (aprad == 1 .OR. apaxi == 1) THEN
-      CALL get_power_dist(npow)
-  END IF
-
-  IF (aprad == 1) CALL AsmPow(npow)
-
-  IF (apaxi == 1) CALL AxiPow(npow)
-
-  IF (afrad == 1) CALL AsmFlux(1._DP)
-
-  IF (bvtk == 1) CALL print_vtk(0)
-
-  IF (boutp == 1) CALL print_outp(npow)
-
-  1791 format(I3, F10.2, F14.5, ES14.5, ES13.5)
-
-  END SUBROUTINE cbsearch
-
-  !****************************************************************************!
-
-  SUBROUTINE cbsearcht()
-
-  !
-  ! Purpose:
-  !    To search critical boron concentration with thermal feedback
-  !
-
-  USE sdata, ONLY: Ke, bcon, rbcon, npow, nnod, &
-                   ser, fer, aprad, apaxi, afrad, npow, th_err, &
-                   serc, ferc
-  USE io, ONLY: ounit, AsmFlux, AsmPow, AxiPow, bvtk, print_vtk, &
-              print_outp, boutp
-  USE cmfd, ONLY: outer
-  use th, only : th_iter
-  ! use trans, only: vtk_out
-
-  IMPLICIT NONE
-
-  REAL(DP)  :: bc1, bc2    ! Boron Concentration
-  REAL(DP) :: ke1, ke2
-  INTEGER :: n
-  character(len=20) :: steady_name
-
-  call print_head()
-
-  ALLOCATE(npow(nnod))
-
-  bcon = rbcon
-  CALL th_iter(2, 0)  ! Start thermal hydarulic iteration with current paramters
-  bc1 = bcon
-  ke1 = Ke
-
-  WRITE(ounit,1792) 1, bc1, Ke1, ser, fer, th_err
-  WRITE(*,1792) 1, bc1, Ke1, ser, fer, th_err
-
-  IF (bcon < 1.e-5) THEN
-    bcon = 500.
-  ELSE
-    bcon = bcon + (Ke - 1.) * bcon   ! Guess next critical boron concentration
-  END IF
-  CALL th_iter(2, 0)                 ! Perform second thermal hydarulic iteration with updated parameters
-  bc2 = bcon
-  ke2 = Ke
-
-  WRITE(ounit,1792) 2, bc2, Ke2, ser, fer, th_err
-  WRITE(*,1792) 2, bc2, Ke2, ser, fer, th_err
-
-  n = 3
-  DO
-      bcon = bc2 + (1._DP - ke2) / (ke1 - ke2) * (bc1 - bc2)
-      CALL th_iter(2, 0)
-      bc1 = bc2
-      bc2 = bcon
-      ke1 = ke2
-      ke2 = ke
-      WRITE(ounit,1792) n, bcon, Ke, ser, fer, th_err
-      WRITE(*,1792) n, bcon, Ke, ser, fer, th_err
-      IF ((ABS(Ke - 1._DP) < 1.e-5_DP) .AND. (ser < serc) .AND. (fer < ferc)) EXIT
-      n = n + 1
-      call check_ppm(n, bcon)
-  END DO
-
-  IF (aprad == 1 .OR. apaxi == 1) THEN
-      CALL get_power_dist(npow)
-  END IF
-
-  IF (aprad == 1) CALL AsmPow(npow)
-
-  IF (apaxi == 1) CALL AxiPow(npow)
-
-  IF (afrad == 1) CALL AsmFlux(1._DP)
-
-  IF (bvtk == 1) CALL print_vtk(0)
-
-  IF (boutp == 1) CALL print_outp(npow)
-
-  call print_tail()
-
-  1792 format(I3, F9.2, F14.5, ES14.5, ES13.5, ES17.5)
-
-  END SUBROUTINE cbsearcht
-
-  !****************************************************************************!
-
-  SUBROUTINE check_ppm(n, bcon)
-
-  !
-  ! Purpose:
-  !    To check critical boron concentration search
-  !
-
-  USE io, ONLY: ounit
-
-  IMPLICIT NONE
-
-  integer, intent(in) :: n
-  real(dp), intent(in) :: bcon
-
-  IF (bcon > 3000.) THEN
-      WRITE(ounit,*) '  CRITICAL BORON CONCENTRATION EXCEEDS THE LIMIT(3000 ppm)'
-      WRITE(ounit,*) '  KOMODO IS STOPPING'
-      WRITE(*,*) '  CRITICAL BORON CONCENTRATION EXCEEDS THE LIMIT(3000 ppm)'
-      STOP
-  END IF
-  IF (bcon < 0.) THEN
-      WRITE(ounit,*) '  CRITICAL BORON CONCENTRATION IS NOT FOUND (LESS THAN ZERO)'
-      WRITE(ounit,*) '  KOMODO IS STOPPING'
-      WRITE(*,*) '  CRITICAL BORON CONCENTRATION IS NOT FOUND (LESS THAN ZERO)'
-      STOP
-  END IF
-  IF (n == 30) THEN
-      WRITE(ounit,*) '  MAXIMUM ITERATION FOR CRITICAL BORON SEARCH IS REACHING MAXIMUM'
-      WRITE(ounit,*) '  KOMODO IS STOPPING'
-      WRITE(*,*) '  MAXIMUM ITERATION FOR CRITICAL BORON SEARCH IS REACHING MAXIMUM'
-      STOP
-  END IF
-
-END SUBROUTINE check_ppm
-
-!****************************************************************************!
-
-subroutine get_power_dist (p)
-
-  !
-  ! Purpose:
-  !    To calculate power for each nodes
-  !
-  
-  
-  USE sdata, ONLY: ng, nnod, sigf, f0, vdel, powtot, mode
-  USE io,    ONLY: ounit
-  
-  implicit none
-  
-  real(dp), dimension(:), intent(out) :: p
-  integer :: g, n
-  real(dp) :: pow
-  
-  p = 0._dp
-  do g= 1, ng
-      do n= 1, nnod
-        pow = f0(n,g) * sigf(n,g) * vdel(n)
-        if (pow < 0.) pow = 0.
-        p(n) = p(n) + pow
-      end do
-  end do
-  
-  ! Normalize to 1._DP
-  powtot = 0._DP
-  do n = 1, nnod
-      powtot = powtot + p(n)
-  end do
-  
-  if (powtot <= 0 .AND. mode /= 'FIXEDSRC') THEN
-     write(ounit, *) '   ERROR: TOTAL NODES POWER IS ZERO OR LESS'
-     write(ounit, *) '   STOP IN subroutine get_power_dist'
-     STOP
-  end if
-  
-  if (powtot > 0.0) then
-     do n = 1, nnod
-         p(n) = p(n) / powtot
-     end do
-  end if
-  
-  end subroutine
-
-  !****************************************************************************!
-
-  SUBROUTINE print_head()
-
-    !
-    ! Purpose:
-    !    To print header
-    !
-
-    use sdata, only: mode
-    use io,    only: ounit, scr, bther
-
-    IMPLICIT NONE
-    if (mode == 'FORWARD' .and. bther == 1) then
-      WRITE(ounit,*); WRITE(ounit,*)
-      WRITE(ounit,3245); WRITE(ounit,3247) mode; WRITE(ounit,3245)
-      WRITE(ounit,*)
-      WRITE(ounit,3251); WRITE(ounit,1179)
-      if (scr) then
-        WRITE(*,*); WRITE(*,*)
-        WRITE(*,3245); WRITE(*,3247) mode; WRITE(*,3245)
-        WRITE(*,*)
-        WRITE(*,3251); WRITE(*,1179)
-      end if
-    else if (mode == 'FORWARD' .or. mode == 'ADJOINT') then
-      WRITE(ounit,*); WRITE(ounit,*)
-      WRITE(ounit,3245); WRITE(ounit,3247) mode; WRITE(ounit,3245)
-      WRITE(ounit,*)
-      WRITE(ounit,3248); WRITE(ounit,3249)
-      if (scr) then
-        WRITE(*,*); WRITE(*,*)
-        WRITE(*,3245); WRITE(*,3247) mode; WRITE(*,3245)
-        WRITE(*,*)
-        WRITE(*,3248); WRITE(*,3249)
-      end if
-    else if (mode == 'FIXEDSRC') then
-      WRITE(ounit,*); WRITE(ounit,*)
-      WRITE(ounit,3245); WRITE(ounit,3247) mode; WRITE(ounit,3245)
-      WRITE(ounit,*)
-      WRITE(ounit,3248); WRITE(ounit,3249)
-      if (scr) then
-        WRITE(*,*); WRITE(*,*)
-        WRITE(*,3245); WRITE(*,3247) mode; WRITE(*,3245)
-        WRITE(*,*)
-        WRITE(*,3250); WRITE(*,3249)
-      end if
-    else
+      !Outer iteration
       if (bther == 0) then
-        ! File Output
-        WRITE(ounit,*); WRITE(ounit,*)
-        WRITE(ounit,2176); WRITE(ounit,2177); WRITE(ounit,2176)
-        WRITE(ounit,*); WRITE(ounit,2178); WRITE(ounit,2179)
-        if (scr) then
-          ! Terminal Output
-          WRITE(*,*); WRITE(*,*)
-          WRITE(*,2176); WRITE(*,2177); WRITE(*,2176)
-          WRITE(*,*); WRITE(*,2178); WRITE(*,2179)
-        end if
+         call outer(1)
       else
-        ! File Output
-        WRITE(ounit,*); WRITE(ounit,*)
-        WRITE(ounit,1176); WRITE(ounit,1177); WRITE(ounit,1176)
-        WRITE(ounit,*); WRITE(ounit,1178); WRITE(ounit,1179)
-        if (scr) then
-          ! Terminal Output
-          WRITE(*,*); WRITE(*,*)
-          WRITE(*,1176); WRITE(*,1177); WRITE(*,1176)
-          WRITE(*,*); WRITE(*,1178); WRITE(*,1179)
-        end if
+         allocate(npow(nnod))
+         call th_iter(th_niter, 1)
+         call print_tail()
       end if
-    end if
+
+      call print_keff()
+
+      if (aprad == 1 .or. apaxi == 1) then
+         if (.not. allocated(npow)) allocate(npow(nnod))
+         call get_power_dist(npow)
+      end if
+
+      if (aprad == 1) call asmpow(npow)
+
+      if (apaxi == 1) call axipow(npow)
+
+      if (afrad == 1) call asmflux(1.e0_dp)
+
+      if (boutp == 1) call print_outp(npow)
+
+      if (bvtk == 1) call print_vtk(0)
+
+   end subroutine forward
+
+   !******************************************************************************!
+
+   subroutine adjoint()
+
+      !
+      ! Purpose:
+      !    To solve adjoint problems
+      !
+
+      use sdata, only: nnod, aprad, apaxi, afrad, ftem, mtem, &
+      cden, bcon, bpos, npow
+      use io, only: asmpow, axipow, asmflux, inp_read, &
+      bvtk, print_vtk
+      use xsec, only: xs_updt
+      use cmfd, only: outer_ad, print_keff
+
+
+      !Update xsec
+      call xs_updt(bcon, ftem, mtem, cden, bpos)
+
+      call print_head()
+
+      !Outer iteration
+      call outer_ad(1)
+
+      call print_keff()
+
+      if (aprad == 1 .or. apaxi == 1) then
+         allocate(npow(nnod))
+         call get_power_dist(npow)
+      end if
+
+      if (aprad == 1) call asmpow(npow)
+
+      if (apaxi == 1) call axipow(npow)
+
+      if (afrad == 1) call asmflux(1.e0_dp)
+
+      if (bvtk == 1) call print_vtk(0)
+
+   end subroutine adjoint
+
+   !******************************************************************************!
+
+   subroutine fixedsrc()
+
+      !
+      ! Purpose:
+      !    To solve fixed source problems
+      !
+
+      use sdata, only: nnod, aprad, apaxi, afrad, ftem, mtem, cden, &
+      bcon, bpos, powtot, npow
+      use io, only: asmpow, axipow, asmflux, inp_read, bvtk, print_vtk
+      use xsec, only: xs_updt
+      use cmfd, only: outer_fs
+
+
+      !Update xsec
+      call xs_updt(bcon, ftem, mtem, cden, bpos)
+
+      call print_head()
+
+      !Outer iteration
+      call outer_fs(1)
+
+      if (aprad == 1 .or. apaxi == 1) then
+         allocate(npow(nnod))
+         call get_power_dist(npow)
+      end if
+
+      if (powtot > 0.0) then
+         if (aprad == 1) call asmpow(npow)
+         if (apaxi == 1) call axipow(npow)
+      end if
+
+      if (afrad == 1) call asmflux()
+
+      if (bvtk == 1) call print_vtk(0)
+
+   end subroutine fixedsrc
+
+   !****************************************************************************!
+
+   subroutine cbsearch()
+
+      !
+      ! Purpose:
+      !    To search critical boron concentration
+      !
+
+      use sdata, only: ke, rbcon, ftem, mtem, cden, bpos, nnod, fer, ser, &
+      aprad, apaxi, afrad, npow
+      use io, only: ounit, asmflux, asmpow, axipow, bvtk, print_vtk, &
+      print_outp, boutp
+      use cmfd, only: outer
+      use xsec, only: xs_updt
+
+
+      real(dp) :: bc1, bc2, bcon     ! Boron Concentration
+      real(dp) :: ke1, ke2
+      integer :: n
+
+      call print_head()
+
+      bcon = rbcon
+      call xs_updt(bcon, ftem, mtem, cden, bpos)
+      call outer(0)
+      bc1 = bcon
+      ke1 = ke
+
+      write(ounit, 1791) 1, bc1, ke1, ser, fer
+      write(*, 1791) 1, bc1, ke1, ser, fer
+
+      bcon = bcon + (ke - 1.) * bcon   ! Guess next critical boron concentration
+      call xs_updt(bcon, ftem, mtem, cden, bpos)
+      call outer(0)
+      bc2 = bcon
+      ke2 = ke
+
+      write(ounit, 1791) 2, bc2, ke2, ser, fer
+      write(*, 1791) 2, bc2, ke2, ser, fer
+
+      n = 3
+      do
+         bcon = bc2 + (1._dp - ke2) / (ke1 - ke2) * (bc1 - bc2)
+         call xs_updt(bcon, ftem, mtem, cden, bpos)
+         call outer(0)
+         bc1 = bc2
+         bc2 = bcon
+         ke1 = ke2
+         ke2 = ke
+         write(ounit, 1791) n, bcon, ke, ser, fer
+         write(*, 1791) n, bcon, ke, ser, fer
+         if ((abs(ke - 1._dp) < 1.e-5_dp) .and. (ser < 1.e-5_dp) .and. (fer < 1.e-5_dp)) exit
+         n = n + 1
+         call check_ppm(n, bcon)
+      end do
+
+      allocate(npow(nnod))
+      if (aprad == 1 .or. apaxi == 1) then
+         call get_power_dist(npow)
+      end if
+
+      if (aprad == 1) call asmpow(npow)
+
+      if (apaxi == 1) call axipow(npow)
+
+      if (afrad == 1) call asmflux(1._dp)
+
+      if (bvtk == 1) call print_vtk(0)
+
+      if (boutp == 1) call print_outp(npow)
+
+      1791 format(i3, f10.2, f14.5, es14.5, es13.5)
+
+   end subroutine cbsearch
+
+   !****************************************************************************!
+
+   subroutine cbsearcht()
+
+      !
+      ! Purpose:
+      !    To search critical boron concentration with thermal feedback
+      !
+
+      use sdata, only: ke, bcon, rbcon, npow, nnod, &
+      ser, fer, aprad, apaxi, afrad, npow, th_err, &
+      serc, ferc
+      use io, only: ounit, asmflux, asmpow, axipow, bvtk, print_vtk, &
+      print_outp, boutp
+      use cmfd, only: outer
+      use th, only : th_iter
+      ! use trans, only: vtk_out
+
+
+      real(dp) :: bc1, bc2    ! Boron Concentration
+      real(dp) :: ke1, ke2
+      integer :: n
+      character(len = 20) :: steady_name
+
+      call print_head()
+
+      allocate(npow(nnod))
+
+      bcon = rbcon
+      call th_iter(2, 0)  ! Start thermal hydarulic iteration with current paramters
+      bc1 = bcon
+      ke1 = ke
+
+      write(ounit, 1792) 1, bc1, ke1, ser, fer, th_err
+      write(*, 1792) 1, bc1, ke1, ser, fer, th_err
+
+      if (bcon < 1.e-5) then
+         bcon = 500.
+      else
+         bcon = bcon + (ke - 1.) * bcon   ! Guess next critical boron concentration
+      end if
+      call th_iter(2, 0)                 ! Perform second thermal hydarulic iteration with updated parameters
+      bc2 = bcon
+      ke2 = ke
+
+      write(ounit, 1792) 2, bc2, ke2, ser, fer, th_err
+      write(*, 1792) 2, bc2, ke2, ser, fer, th_err
+
+      n = 3
+      do
+         bcon = bc2 + (1._dp - ke2) / (ke1 - ke2) * (bc1 - bc2)
+         call th_iter(2, 0)
+         bc1 = bc2
+         bc2 = bcon
+         ke1 = ke2
+         ke2 = ke
+         write(ounit, 1792) n, bcon, ke, ser, fer, th_err
+         write(*, 1792) n, bcon, ke, ser, fer, th_err
+         if ((abs(ke - 1._dp) < 1.e-5_dp) .and. (ser < serc) .and. (fer < ferc)) exit
+         n = n + 1
+         call check_ppm(n, bcon)
+      end do
+
+      if (aprad == 1 .or. apaxi == 1) then
+         call get_power_dist(npow)
+      end if
+
+      if (aprad == 1) call asmpow(npow)
+
+      if (apaxi == 1) call axipow(npow)
+
+      if (afrad == 1) call asmflux(1._dp)
+
+      if (bvtk == 1) call print_vtk(0)
+
+      if (boutp == 1) call print_outp(npow)
+
+      call print_tail()
+
+      1792 format(i3, f9.2, f14.5, es14.5, es13.5, es17.5)
+
+   end subroutine cbsearcht
+
+   !****************************************************************************!
+
+   subroutine check_ppm(n, bcon)
+
+      !
+      ! Purpose:
+      !    To check critical boron concentration search
+      !
+
+      use io, only: ounit
+
+
+      integer, intent(in) :: n
+      real(dp), intent(in) :: bcon
+
+      if (bcon > 3000.) then
+         write(ounit, *) '  CRITICAL BORON CONCENTRATION EXCEEDS THE LIMIT(3000 ppm)'
+         write(ounit, *) '  KOMODO IS STOPPING'
+         write(*, *) '  CRITICAL BORON CONCENTRATION EXCEEDS THE LIMIT(3000 ppm)'
+         stop
+      end if
+      if (bcon < 0.) then
+         write(ounit, *) '  CRITICAL BORON CONCENTRATION IS NOT FOUND (LESS THAN ZERO)'
+         write(ounit, *) '  KOMODO IS STOPPING'
+         write(*, *) '  CRITICAL BORON CONCENTRATION IS NOT FOUND (LESS THAN ZERO)'
+         stop
+      end if
+      if (n == 30) then
+         write(ounit, *) '  MAXIMUM ITERATION FOR CRITICAL BORON SEARCH IS REACHING MAXIMUM'
+         write(ounit, *) '  KOMODO IS STOPPING'
+         write(*, *) '  MAXIMUM ITERATION FOR CRITICAL BORON SEARCH IS REACHING MAXIMUM'
+         stop
+      end if
+
+   end subroutine check_ppm
+
+   !****************************************************************************!
+
+   subroutine get_power_dist (p)
+
+      !
+      ! Purpose:
+      !    To calculate power for each nodes
+      !
+
+
+      use sdata, only: ng, nnod, sigf, f0, vdel, powtot, mode
+      use io, only: ounit
+
+
+      real(dp), dimension(:), intent(out) :: p
+      integer :: g, n
+      real(dp) :: pow
+
+      p = 0._dp
+      do g = 1, ng
+         do n = 1, nnod
+            pow = f0(n, g) * sigf(n, g) * vdel(n)
+            if (pow < 0.) pow = 0.
+            p(n) = p(n) + pow
+         end do
+      end do
+
+      ! Normalize to 1._dp
+      powtot = 0._dp
+      do n = 1, nnod
+         powtot = powtot + p(n)
+      end do
+
+      if (powtot <= 0 .and. mode /= 'FIXEDSRC') then
+         write(ounit, *) '   ERROR: TOTAL NODES POWER IS ZERO OR LESS'
+         write(ounit, *) '   stop IN subroutine get_power_dist'
+         stop
+      end if
+
+      if (powtot > 0.0) then
+         do n = 1, nnod
+            p(n) = p(n) / powtot
+         end do
+      end if
+
+   end subroutine
+
+   !****************************************************************************!
+
+   subroutine print_head()
+
+      !
+      ! Purpose:
+      !    To print header
+      !
+
+      use sdata, only: mode
+      use io, only: ounit, scr, bther
+
+      if (mode == 'FORWARD' .and. bther == 1) then
+         write(ounit, *) ;
+         write(ounit, *)
+         write(ounit, 3245) ;
+         write(ounit, 3247) mode;
+         write(ounit, 3245)
+         write(ounit, *)
+         write(ounit, 3251) ;
+         write(ounit, 1179)
+         if (scr) then
+            write(*, *) ;
+            write(*, *)
+            write(*, 3245) ;
+            write(*, 3247) mode;
+            write(*, 3245)
+            write(*, *)
+            write(*, 3251) ;
+            write(*, 1179)
+         end if
+      else if (mode == 'FORWARD' .or. mode == 'ADJOINT') then
+         write(ounit, *) ;
+         write(ounit, *)
+         write(ounit, 3245) ;
+         write(ounit, 3247) mode;
+         write(ounit, 3245)
+         write(ounit, *)
+         write(ounit, 3248) ;
+         write(ounit, 3249)
+         if (scr) then
+            write(*, *) ;
+            write(*, *)
+            write(*, 3245) ;
+            write(*, 3247) mode;
+            write(*, 3245)
+            write(*, *)
+            write(*, 3248) ;
+            write(*, 3249)
+         end if
+      else if (mode == 'FIXEDSRC') then
+         write(ounit, *) ;
+         write(ounit, *)
+         write(ounit, 3245) ;
+         write(ounit, 3247) mode;
+         write(ounit, 3245)
+         write(ounit, *)
+         write(ounit, 3248) ;
+         write(ounit, 3249)
+         if (scr) then
+            write(*, *) ;
+            write(*, *)
+            write(*, 3245) ;
+            write(*, 3247) mode;
+            write(*, 3245)
+            write(*, *)
+            write(*, 3250) ;
+            write(*, 3249)
+         end if
+      else
+         if (bther == 0) then
+            ! File Output
+            write(ounit, *) ;
+            write(ounit, *)
+            write(ounit, 2176) ;
+            write(ounit, 2177) ;
+            write(ounit, 2176)
+            write(ounit, *) ;
+            write(ounit, 2178) ;
+            write(ounit, 2179)
+            if (scr) then
+               ! Terminal Output
+               write(*, *) ;
+               write(*, *)
+               write(*, 2176) ;
+               write(*, 2177) ;
+               write(*, 2176)
+               write(*, *) ;
+               write(*, 2178) ;
+               write(*, 2179)
+            end if
+         else
+            ! File Output
+            write(ounit, *) ;
+            write(ounit, *)
+            write(ounit, 1176) ;
+            write(ounit, 1177) ;
+            write(ounit, 1176)
+            write(ounit, *) ;
+            write(ounit, 1178) ;
+            write(ounit, 1179)
+            if (scr) then
+               ! Terminal Output
+               write(*, *) ;
+               write(*, *)
+               write(*, 1176) ;
+               write(*, 1177) ;
+               write(*, 1176)
+               write(*, *) ;
+               write(*, 1178) ;
+               write(*, 1179)
+            end if
+         end if
+      end if
 
 
 
-    3245 format (1X, ' ==============================================', &
-    '================================')
-    3247 format(23X, A8, ' CALCULATION RESULTS')
-    3248 format(2X,'Itr     k-eff     Fis.Src Error     Flux error')
-    3249 format(1X,'----------------------------------------------------')
-    3250 format(2X,'Itr   Fis.Src Error     Flux error')
-    2176 format(' ============================================================')
-    2177 format(12X,'CRITICAL BORON CONCENTRATION SEARCH')
-    2178 format('Itr  Boron Conc.   K-eff     Flux Error   Fiss. Src. Error')
-    2179 format(' -----------------------------------------------------------')
-    1176 format  &
-    (' =========================================================================')
-    1177 format(19X,'CRITICAL BORON CONCENTRATION SEARCH')
-    1178 format &
-    ('Itr  Boron Conc.   K-eff     Flux Err.    Fiss. Src. Err.  Fuel Temp. Error.')
-    1179 format &
-    (' -----------------------------------------------------------------------')
-    3251 format(2X,'Itr     k-eff     Fis.Src Error     Flux error    Fuel Temp. Error')
+      3245 format (1x, ' ==============================================', &
+      '================================')
+      3247 format(23x, a8, ' CALCULATION RESULTS')
+      3248 format(2x, 'Itr     k-eff     Fis.Src Error     Flux error')
+      3249 format(1x, '----------------------------------------------------')
+      3250 format(2x, 'Itr   Fis.Src Error     Flux error')
+      2176 format(' ============================================================')
+      2177 format(12x, 'CRITICAL BORON CONCENTRATION SEARCH')
+      2178 format('Itr  Boron Conc.   K-eff     Flux Error   Fiss. Src. Error')
+      2179 format(' -----------------------------------------------------------')
+      1176 format &
+      (' =========================================================================')
+      1177 format(19x, 'CRITICAL BORON CONCENTRATION SEARCH')
+      1178 format &
+      ('Itr  Boron Conc.   K-eff     Flux Err.    Fiss. Src. Err.  Fuel Temp. Error.')
+      1179 format &
+      (' -----------------------------------------------------------------------')
+      3251 format(2x, 'Itr     k-eff     Fis.Src Error     Flux error    Fuel Temp. Error')
 
 
-  END SUBROUTINE print_head
+   end subroutine print_head
 
-  !****************************************************************************!
+   !****************************************************************************!
 
-  SUBROUTINE print_tail()
+   subroutine print_tail()
 
-    !
-    ! Purpose:
-    !    To print final th paramters
-    !
+      !
+      ! Purpose:
+      !    To print final th paramters
+      !
 
-    use sdata, only: ftem, mtem, cden, tfm
-    use io, only: ounit, scr
-    use th, only : par_ave, par_max, par_ave_out
+      use sdata, only: ftem, mtem, cden, tfm
+      use io, only: ounit, scr
+      use th, only : par_ave, par_max, par_ave_out
 
-    IMPLICIT NONE
 
-    REAL(DP) :: tf, tm, mtm, mtf, otm, cd, ocd
+      real(dp) :: tf, tm, mtm, mtf, otm, cd, ocd
 
-    CALL par_ave(ftem, tf)
-    CALL par_ave(mtem, tm)
+      call par_ave(ftem, tf)
+      call par_ave(mtem, tm)
 
-    CALL par_max(tfm(:,1), mtf)
-    CALL par_max(mtem, mtm)
+      call par_max(tfm(:, 1), mtf)
+      call par_max(mtem, mtm)
 
-    CALL par_ave_out(mtem, otm)
-    CALL par_ave(cden, cd)
-    CALL par_ave_out(cden, ocd)
+      call par_ave_out(mtem, otm)
+      call par_ave(cden, cd)
+      call par_ave_out(cden, ocd)
 
-    ! Write Output
-    WRITE(ounit,*)
-    WRITE(ounit, 5001) tf, tf-273.15; WRITE(ounit, 5002)  mtf, mtf-273.15
-    WRITE(ounit, 5003) tm, tm-273.15; WRITE(ounit, 5004) mtm, mtm-273.15
-    WRITE(ounit, 5005) otm, otm-273.15; WRITE(ounit, 5006) cd * 1000., cd
-    WRITE(ounit, 5007) ocd * 1000., ocd
-    if (scr) then
-      WRITE(*,*)
-      WRITE(*, 5001) tf, tf-273.15; WRITE(*, 5002)  mtf, mtf-273.15
-      WRITE(*, 5003) tm, tm-273.15; WRITE(*, 5004) mtm, mtm-273.15
-      WRITE(*, 5005) otm, otm-273.15; WRITE(*, 5006) cd * 1000., cd
-      WRITE(*, 5007) ocd * 1000., ocd
-    end if
+      ! Write Output
+      write(ounit, *)
+      write(ounit, 5001) tf, tf - 273.15;
+      write(ounit, 5002) mtf, mtf - 273.15
+      write(ounit, 5003) tm, tm - 273.15;
+      write(ounit, 5004) mtm, mtm - 273.15
+      write(ounit, 5005) otm, otm - 273.15;
+      write(ounit, 5006) cd * 1000. , cd
+      write(ounit, 5007) ocd * 1000. , ocd
+      if (scr) then
+         write(*, *)
+         write(*, 5001) tf, tf - 273.15;
+         write(*, 5002) mtf, mtf - 273.15
+         write(*, 5003) tm, tm - 273.15;
+         write(*, 5004) mtm, mtm - 273.15
+         write(*, 5005) otm, otm - 273.15;
+         write(*, 5006) cd * 1000. , cd
+         write(*, 5007) ocd * 1000. , ocd
+      end if
 
-    5001 FORMAT(2X, 'AVERAGE FUEL TEMPERATURE        : ', F7.1, ' K (', F7.1, ' C)')
-    5002 FORMAT(2X, 'MAX FUEL CENTERLINE TEMPERATURE : ', F7.1, ' K (', F7.1, ' C)')
-    5003 FORMAT(2X, 'AVERAGE MODERATOR TEMPERATURE   : ', F7.1, ' K (', F7.1, ' C)')
-    5004 FORMAT(2X, 'MAXIMUM MODERATOR TEMPERATURE   : ', F7.1, ' K (', F7.1, ' C)')
-    5005 FORMAT(2X, 'OUTLET MODERATOR TEMPERATURE    : ', F7.1, ' K (', F7.1, ' C)')
-    5006 FORMAT(2X, 'AVERAGE MODERATOR DENSITY       : ', F7.1, ' kg/m3 (', F7.3, ' g/cc)')
-    5007 FORMAT(2X, 'OUTLET MODERATOR DENSITY        : ', F7.1, ' kg/m3 (', F7.3, ' g/cc)')
+      5001 format(2x, 'AVERAGE FUEL TEMPERATURE        : ', f7.1, ' K (', f7.1, ' C)')
+      5002 format(2x, 'MAX FUEL CENTERLINE TEMPERATURE : ', f7.1, ' K (', f7.1, ' C)')
+      5003 format(2x, 'AVERAGE MODERATOR TEMPERATURE   : ', f7.1, ' K (', f7.1, ' C)')
+      5004 format(2x, 'MAXIMUM MODERATOR TEMPERATURE   : ', f7.1, ' K (', f7.1, ' C)')
+      5005 format(2x, 'OUTLET MODERATOR TEMPERATURE    : ', f7.1, ' K (', f7.1, ' C)')
+      5006 format(2x, 'AVERAGE MODERATOR DENSITY       : ', f7.1, ' kg/m3 (', f7.3, ' g/cc)')
+      5007 format(2x, 'OUTLET MODERATOR DENSITY        : ', f7.1, ' kg/m3 (', f7.3, ' g/cc)')
 
-  END SUBROUTINE print_tail
+   end subroutine print_tail
 
 
 
