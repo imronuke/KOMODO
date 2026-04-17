@@ -181,6 +181,7 @@ module trans
       use xsec, only: xs_updt
       use cmfd, only: outer_tr, outer, outer_ad
       use th, only : th_iter, par_ave, par_max
+      use control, only: print_tail
 
       implicit none
 
@@ -332,6 +333,8 @@ module trans
          call trans_calc(1, tstep2, af, tpow1, step, t2)
 
       end do
+
+      call print_tail()
 
       1324 format(2x, 'Core-averaged delayed neutron fraction :', f7.2, ' pcm')
 
