@@ -5,7 +5,7 @@ FORWARD
 
 ! CASE CARD
 %CASE
-NEACRP Critical Boron Concentration Search - Case A2 (no TH feedback)
+FORWARD CALCULATION WITH TH FEEDBACK
 10.803 CM NODE SIZE
 
 ! XSEC CARD
