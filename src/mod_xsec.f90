@@ -1,17 +1,18 @@
 module xsec
 
    use sdata, only: dp
+   use io, only: bbcon, bftem, bmtem, bcden, bcrod, bcbcs, bxtab, ounit
    implicit none
    save
 
    !Define + and - operators for XBRANCH type addition and substitution respectively
-   interface operator (.add.)
+   interface operator (+)
       module procedure bradd
    end interface
-   interface operator (.subs.)
+   interface operator (-)
       module procedure brsubst
    end interface
-   interface operator (.mult.)
+   interface operator (*)
       module procedure brrealmult
    end interface
 
@@ -27,9 +28,7 @@ module xsec
 
       use sdata, only : nnod, mat, sigtr, siga, nuf, sigf, sigs, dc, &
       get_time, xs_time
-      use io, only: bbcon, bftem, bmtem, bcden, bcrod, bcbcs, bcrod, bxtab
 
-      implicit none
 
       real(dp), intent(in) :: xbcon  ! Provided Boron Concentration
       real(dp), dimension(:), intent(in) :: xftem  ! Provided fuel temperature
@@ -76,10 +75,8 @@ module xsec
       !
 
       use sdata, only : d, sigr, nuf, chi, sigs, nnod, ng, mat, nmat
-      use io, only : ounit
 
 
-      implicit none
 
       integer :: n, g, h
 
@@ -161,7 +158,6 @@ module xsec
       use sdata, only: nnod, sigtr, siga, nuf, sigf, sigs, mat, &
       xsigtr, xsiga, xnuf, xsigf, xsigs
 
-      implicit none
 
       integer :: n
 
@@ -188,7 +184,6 @@ module xsec
       use sdata, only: nnod, ng, sigtr, siga, &
       sigs, d, sigr
 
-      implicit none
 
       integer :: i, g, h
       real(dp) :: dum
@@ -219,7 +214,6 @@ module xsec
       dsigtr, dsiga, dnuf, dsigf, dsigs, &
       coreh, fbmap, pos0, ssize
 
-      implicit none
 
       real(dp), dimension(:), intent(in) :: bpos
 
@@ -289,7 +283,6 @@ module xsec
       coreh, fbmap, pos0, ssize, m, &
       nnod, cden, ftem, mtem, bcon
 
-      implicit none
 
       real(dp), dimension(:), intent(in) :: bpos
 
@@ -382,7 +375,6 @@ module xsec
       use sdata, only: nnod, ng, sigtr, siga, nuf, sigf, sigs, mat, &
       csigtr, csiga, cnuf, csigf, csigs, rbcon
 
-      implicit none
 
       real(dp), intent(in) :: bcon
       integer :: n, g, h
@@ -413,7 +405,6 @@ module xsec
       use sdata, only: nnod, ng, sigtr, siga, nuf, sigf, sigs, mat, &
       fsigtr, fsiga, fnuf, fsigf, fsigs, rftem
 
-      implicit none
 
       real(dp), dimension(:), intent(in) :: ftem
       integer :: n, g, h
@@ -444,7 +435,6 @@ module xsec
       use sdata, only: nnod, ng, sigtr, siga, nuf, sigf, sigs, mat, &
       msigtr, msiga, mnuf, msigf, msigs, rmtem
 
-      implicit none
 
       real(dp), dimension(:), intent(in) :: mtem
       integer :: n, g, h
@@ -476,7 +466,6 @@ module xsec
       use sdata, only: nnod, ng, sigtr, siga, nuf, sigf, sigs, mat, &
       lsigtr, lsiga, lnuf, lsigf, lsigs, rcden
 
-      implicit none
 
       real(dp), dimension(:), intent(in) :: cden
       integer :: n, g, h
@@ -505,9 +494,7 @@ module xsec
       ! ftem, mtem and cden
 
       use sdata, only: m, xbranch, ng
-      use io, only: ounit
 
-      implicit none
 
       integer, intent(in) :: rod, mn  ! CR indicator and material number
       real(dp), intent(in) :: xbcon, xftem, xmtem, xcden  ! TH Parameters
@@ -650,22 +637,22 @@ module xsec
          !interpolation on Moderator Temperature
          if (m(mn)%nm > 1) then
             radx = (xmtem - m(mn)%pm(v1)) / (m(mn)%pm(v2) - m(mn)%pm(v1))
-            xs(1) = m(mn)%xsec(s1, t1, u1, v1) .add. &
-            (radx .mult. (m(mn)%xsec(s1, t1, u1, v2) .subs. m(mn)%xsec(s1, t1, u1, v1)))
-            xs(2) = m(mn)%xsec(s1, t1, u2, v1) .add. &
-            (radx .mult. (m(mn)%xsec(s1, t1, u2, v2) .subs. m(mn)%xsec(s1, t1, u2, v1)))
-            xs(3) = m(mn)%xsec(s1, t2, u1, v1) .add. &
-            (radx .mult. (m(mn)%xsec(s1, t2, u1, v2) .subs. m(mn)%xsec(s1, t2, u1, v1)))
-            xs(4) = m(mn)%xsec(s1, t2, u2, v1) .add. &
-            (radx .mult. (m(mn)%xsec(s1, t2, u2, v2) .subs. m(mn)%xsec(s1, t2, u2, v1)))
-            xs(5) = m(mn)%xsec(s2, t1, u1, v1) .add. &
-            (radx .mult. (m(mn)%xsec(s2, t1, u1, v2) .subs. m(mn)%xsec(s2, t1, u1, v1)))
-            xs(6) = m(mn)%xsec(s2, t1, u2, v1) .add. &
-            (radx .mult. (m(mn)%xsec(s2, t1, u2, v2) .subs. m(mn)%xsec(s2, t1, u2, v1)))
-            xs(7) = m(mn)%xsec(s2, t2, u1, v1) .add. &
-            (radx .mult. (m(mn)%xsec(s2, t2, u1, v2) .subs. m(mn)%xsec(s2, t2, u1, v1)))
-            xs(8) = m(mn)%xsec(s2, t2, u2, v1) .add. &
-            (radx .mult. (m(mn)%xsec(s2, t2, u2, v2) .subs. m(mn)%xsec(s2, t2, u2, v1)))
+            xs(1) = m(mn)%xsec(s1, t1, u1, v1) + &
+            (radx * (m(mn)%xsec(s1, t1, u1, v2) - m(mn)%xsec(s1, t1, u1, v1)))
+            xs(2) = m(mn)%xsec(s1, t1, u2, v1) + &
+            (radx * (m(mn)%xsec(s1, t1, u2, v2) - m(mn)%xsec(s1, t1, u2, v1)))
+            xs(3) = m(mn)%xsec(s1, t2, u1, v1) + &
+            (radx * (m(mn)%xsec(s1, t2, u1, v2) - m(mn)%xsec(s1, t2, u1, v1)))
+            xs(4) = m(mn)%xsec(s1, t2, u2, v1) + &
+            (radx * (m(mn)%xsec(s1, t2, u2, v2) - m(mn)%xsec(s1, t2, u2, v1)))
+            xs(5) = m(mn)%xsec(s2, t1, u1, v1) + &
+            (radx * (m(mn)%xsec(s2, t1, u1, v2) - m(mn)%xsec(s2, t1, u1, v1)))
+            xs(6) = m(mn)%xsec(s2, t1, u2, v1) + &
+            (radx * (m(mn)%xsec(s2, t1, u2, v2) - m(mn)%xsec(s2, t1, u2, v1)))
+            xs(7) = m(mn)%xsec(s2, t2, u1, v1) + &
+            (radx * (m(mn)%xsec(s2, t2, u1, v2) - m(mn)%xsec(s2, t2, u1, v1)))
+            xs(8) = m(mn)%xsec(s2, t2, u2, v1) + &
+            (radx * (m(mn)%xsec(s2, t2, u2, v2) - m(mn)%xsec(s2, t2, u2, v1)))
          else
             xs(1) = m(mn)%xsec(s1, t1, u1, v1)
             xs(2) = m(mn)%xsec(s1, t1, u2, v1)
@@ -679,42 +666,42 @@ module xsec
          !interpolation on Fuel Temperature
          if (m(mn)%nf > 1) then
             radx = (xftem - m(mn)%pf(u1)) / (m(mn)%pf(u2) - m(mn)%pf(u1))
-            xs(1) = xs(1) .add. (radx .mult. (xs(2) .subs. xs(1)))
-            xs(3) = xs(3) .add. (radx .mult. (xs(4) .subs. xs(3)))
-            xs(5) = xs(5) .add. (radx .mult. (xs(6) .subs. xs(5)))
-            xs(7) = xs(7) .add. (radx .mult. (xs(8) .subs. xs(7)))
+            xs(1) = xs(1) + (radx * (xs(2) - xs(1)))
+            xs(3) = xs(3) + (radx * (xs(4) - xs(3)))
+            xs(5) = xs(5) + (radx * (xs(6) - xs(5)))
+            xs(7) = xs(7) + (radx * (xs(8) - xs(7)))
          end if
          !interpolation on Boron concentration
          if (m(mn)%nb > 1) then
             radx = (xbcon - m(mn)%pb(t1)) / (m(mn)%pb(t2) - m(mn)%pb(t1))
-            xs(1) = xs(1) .add. (radx .mult. (xs(3) .subs. xs(1)))
-            xs(5) = xs(5) .add. (radx .mult. (xs(7) .subs. xs(5)))
+            xs(1) = xs(1) + (radx * (xs(3) - xs(1)))
+            xs(5) = xs(5) + (radx * (xs(7) - xs(5)))
          end if
          !interpolation on coolant density
          if (m(mn)%nd > 1) then
-            xs(1) = xs(1) .add. ((xcden - m(mn)%pd(s1)) / (m(mn)%pd(s2) - m(mn)%pd(s1)) .mult. &
-            (xs(5) .subs. xs(1)))
+            xs(1) = xs(1) + ((xcden - m(mn)%pd(s1)) / (m(mn)%pd(s2) - m(mn)%pd(s1)) * &
+            (xs(5) - xs(1)))
          end if
       else   ! For Rodded XSEC
          !interpolation on Moderator Temperature
          if (m(mn)%nm > 1) then
             radx = (xmtem - m(mn)%pm(v1)) / (m(mn)%pm(v2) - m(mn)%pm(v1))
-            xs(1) = m(mn)%rxsec(s1, t1, u1, v1) .add. &
-            (radx .mult. (m(mn)%rxsec(s1, t1, u1, v2) .subs. m(mn)%rxsec(s1, t1, u1, v1)))
-            xs(2) = m(mn)%rxsec(s1, t1, u2, v1) .add. &
-            (radx .mult. (m(mn)%rxsec(s1, t1, u2, v2) .subs. m(mn)%rxsec(s1, t1, u2, v1)))
-            xs(3) = m(mn)%rxsec(s1, t2, u1, v1) .add. &
-            (radx .mult. (m(mn)%rxsec(s1, t2, u1, v2) .subs. m(mn)%rxsec(s1, t2, u1, v1)))
-            xs(4) = m(mn)%rxsec(s1, t2, u2, v1) .add. &
-            (radx .mult. (m(mn)%rxsec(s1, t2, u2, v2) .subs. m(mn)%rxsec(s1, t2, u2, v1)))
-            xs(5) = m(mn)%rxsec(s2, t1, u1, v1) .add. &
-            (radx .mult. (m(mn)%rxsec(s2, t1, u1, v2) .subs. m(mn)%rxsec(s2, t1, u1, v1)))
-            xs(6) = m(mn)%rxsec(s2, t1, u2, v1) .add. &
-            (radx .mult. (m(mn)%rxsec(s2, t1, u2, v2) .subs. m(mn)%rxsec(s2, t1, u2, v1)))
-            xs(7) = m(mn)%rxsec(s2, t2, u1, v1) .add. &
-            (radx .mult. (m(mn)%rxsec(s2, t2, u1, v2) .subs. m(mn)%rxsec(s2, t2, u1, v1)))
-            xs(8) = m(mn)%rxsec(s2, t2, u2, v1) .add. &
-            (radx .mult. (m(mn)%rxsec(s2, t2, u2, v2) .subs. m(mn)%rxsec(s2, t2, u2, v1)))
+            xs(1) = m(mn)%rxsec(s1, t1, u1, v1) + &
+            (radx * (m(mn)%rxsec(s1, t1, u1, v2) - m(mn)%rxsec(s1, t1, u1, v1)))
+            xs(2) = m(mn)%rxsec(s1, t1, u2, v1) + &
+            (radx * (m(mn)%rxsec(s1, t1, u2, v2) - m(mn)%rxsec(s1, t1, u2, v1)))
+            xs(3) = m(mn)%rxsec(s1, t2, u1, v1) + &
+            (radx * (m(mn)%rxsec(s1, t2, u1, v2) - m(mn)%rxsec(s1, t2, u1, v1)))
+            xs(4) = m(mn)%rxsec(s1, t2, u2, v1) + &
+            (radx * (m(mn)%rxsec(s1, t2, u2, v2) - m(mn)%rxsec(s1, t2, u2, v1)))
+            xs(5) = m(mn)%rxsec(s2, t1, u1, v1) + &
+            (radx * (m(mn)%rxsec(s2, t1, u1, v2) - m(mn)%rxsec(s2, t1, u1, v1)))
+            xs(6) = m(mn)%rxsec(s2, t1, u2, v1) + &
+            (radx * (m(mn)%rxsec(s2, t1, u2, v2) - m(mn)%rxsec(s2, t1, u2, v1)))
+            xs(7) = m(mn)%rxsec(s2, t2, u1, v1) + &
+            (radx * (m(mn)%rxsec(s2, t2, u1, v2) - m(mn)%rxsec(s2, t2, u1, v1)))
+            xs(8) = m(mn)%rxsec(s2, t2, u2, v1) + &
+            (radx * (m(mn)%rxsec(s2, t2, u2, v2) - m(mn)%rxsec(s2, t2, u2, v1)))
          else
             xs(1) = m(mn)%rxsec(s1, t1, u1, v1)
             xs(2) = m(mn)%rxsec(s1, t1, u2, v1)
@@ -728,22 +715,22 @@ module xsec
          !interpolation on Fuel Temperature
          if (m(mn)%nf > 1) then
             radx = (xftem - m(mn)%pf(u1)) / (m(mn)%pf(u2) - m(mn)%pf(u1))
-            xs(1) = xs(1) .add. (radx .mult. (xs(2) .subs. xs(1)))
-            xs(3) = xs(3) .add. (radx .mult. (xs(4) .subs. xs(3)))
-            xs(5) = xs(5) .add. (radx .mult. (xs(6) .subs. xs(5)))
-            xs(7) = xs(7) .add. (radx .mult. (xs(8) .subs. xs(7)))
+            xs(1) = xs(1) + (radx * (xs(2) - xs(1)))
+            xs(3) = xs(3) + (radx * (xs(4) - xs(3)))
+            xs(5) = xs(5) + (radx * (xs(6) - xs(5)))
+            xs(7) = xs(7) + (radx * (xs(8) - xs(7)))
          end if
          !interpolation on Boron concentration
          if (m(mn)%nb > 1) then
             radx = (xbcon - m(mn)%pb(t1)) / (m(mn)%pb(t2) - m(mn)%pb(t1))
-            xs(1) = xs(1) .add. (radx .mult. (xs(3) .subs. xs(1)))
-            xs(5) = xs(5) .add. (radx .mult. (xs(7) .subs. xs(5)))
+            xs(1) = xs(1) + (radx * (xs(3) - xs(1)))
+            xs(5) = xs(5) + (radx * (xs(7) - xs(5)))
          end if
 
          !interpolation on coolant density
          if (m(mn)%nd > 1) then
-            xs(1) = xs(1) .add. ((xcden - m(mn)%pd(s1)) / (m(mn)%pd(s2) - m(mn)%pd(s1)) .mult. &
-            (xs(5) .subs. xs(1)))
+            xs(1) = xs(1) + ((xcden - m(mn)%pd(s1)) / (m(mn)%pd(s2) - m(mn)%pd(s1)) * &
+            (xs(5) - xs(1)))
          end if
       end if
       sigtr = xs(1)%sigtr
@@ -773,7 +760,6 @@ module xsec
 
       use sdata, only: xbranch
 
-      implicit none
 
       type(xbranch), intent(in) :: a, b
       type(xbranch) :: c
@@ -795,7 +781,6 @@ module xsec
 
       use sdata, only: xbranch
 
-      implicit none
 
       type(xbranch), intent(in) :: a, b
       type(xbranch) :: c
@@ -817,7 +802,6 @@ module xsec
 
       use sdata, only: xbranch, dp
 
-      implicit none
 
       real(dp), intent(in) :: re
       type(xbranch), intent(in) :: a
@@ -833,8 +817,5 @@ module xsec
    end function brrealmult
 
    !******************************************************************************!
-
-
-
 
 end module
