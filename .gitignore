@@ -2,3 +2,5 @@ build/
 *.mod
 *.o
 *.out
+
+komodo
