@@ -87,6 +87,7 @@ integer :: nac = 5      ! Fission source extrapolation interval
 integer :: th_niter = 30   ! Maximum number of thermal-hydraulics iteration
 integer :: nth = 20     ! Maximum number of outer iterations per thermal-hydraulics iteration
 integer :: nupd         ! Nodal update interval
+character(16) :: matrix_solver = 'cg' ! Linear system solver ('cg', 'bicg')
 
 ! OUTPUT PRINT OPTION
 integer :: aprad=1, apaxi=1, afrad=1

@@ -436,7 +436,7 @@ module cmfd
 
 
       use sdata, only: ng, nnod, nout, nin, serc, ferc, fer, ser, f0, nupd, &
-      ke, nac, fs0, s0, ndmax, kern, get_time, fdm_time
+      ke, nac, fs0, s0, ndmax, kern, get_time, fdm_time, matrix_solver
       use io, only: ounit, scr, bther
       use nodal, only: nodal_update
 
@@ -490,7 +490,12 @@ module cmfd
             call tsrc(g, ke, bs)
 
             !!!Inner Iteration
-            call bicg(nin, g, bs)
+            select case (matrix_solver)
+               case ('cg')
+                  call cg(nin, g, bs)
+               case ('bicg')
+                   call bicg(nin, g, bs)
+            end select
          end do
          call fsrc (fs0)               !Update fission source
          errn = fs0 - fs0c
@@ -532,7 +537,7 @@ module cmfd
 
 
       use sdata, only: ng, nnod, nout, nin, serc, ferc, fer, ser, f0, nupd, &
-      ke, nac, fs0, s0, ndmax, kern, get_time, fdm_time
+      ke, nac, fs0, s0, ndmax, kern, get_time, fdm_time, matrix_solver
       use io, only: ounit, scr
       use nodal, only: nodal_update
 
@@ -581,7 +586,12 @@ module cmfd
             call tsrc(g, ke, bs)
 
             !!!Inner Iteration
-            call bicg(nin, g, bs)
+            select case (matrix_solver)
+               case ('cg')
+                  call cg(nin, g, bs)
+               case ('bicg')
+                   call bicg(nin, g, bs)
+            end select
          end do
          call fsrc (fs0)               !Update fission source
          errn = fs0 - fs0c
@@ -621,7 +631,7 @@ module cmfd
 
 
       use sdata, only: ng, nnod, nout, nin, serc, ferc, fer, ser, f0, nupd, &
-      ke, nac, fs0, s0, ndmax, kern, get_time, fdm_time
+      ke, nac, fs0, s0, ndmax, kern, get_time, fdm_time, matrix_solver
       use io, only: ounit, scr
       use nodal, only: nodal_update
 
@@ -675,7 +685,12 @@ module cmfd
             call tsrcad(g, ke, bs)
 
             !!!Inner Iteration
-            call bicg(nin, g, bs)
+            select case (matrix_solver)
+               case ('cg')
+                  call cg(nin, g, bs)
+               case ('bicg')
+                   call bicg(nin, g, bs)
+            end select
          end do
          call fsrcad (fs0)               !Update fission source
          errn = fs0 - fs0c
@@ -720,7 +735,7 @@ module cmfd
 
 
       use sdata, only: ng, nnod, nin, serc, ferc, fer, ser, f0, nupd, &
-      ke, nac, s0, fs0, ndmax, nth, kern, get_time, fdm_time
+      ke, nac, s0, fs0, ndmax, nth, kern, get_time, fdm_time, matrix_solver
       use io, only: ounit, biter
       use nodal, only: nodal_update
 
@@ -775,7 +790,12 @@ module cmfd
             call tsrc(g, ke, bs)
 
             !!!Inner Iteration
-            call bicg(nin, g, bs)
+            select case (matrix_solver)
+               case ('cg')
+                  call cg(nin, g, bs)
+               case ('bicg')
+                   call bicg(nin, g, bs)
+            end select
          end do
          call fsrc (fs0)               !Update fission source
          errn = fs0 - fs0c
@@ -815,7 +835,7 @@ module cmfd
 
 
       use sdata, only: ng, nnod, nout, nin, serc, ferc, fer, ser, f0, nupd, &
-      nac, fs0, ndmax, exsrc, kern, get_time, fdm_time
+      nac, fs0, ndmax, exsrc, kern, get_time, fdm_time, matrix_solver
       use nodal, only: nodal_update
 
       implicit none
@@ -853,7 +873,12 @@ module cmfd
             call tsrctr(g, bs)
 
             !!!Inner Iteration
-            call bicg(nin, g, bs)
+            select case (matrix_solver)
+               case ('cg')
+                  call cg(nin, g, bs)
+               case ('bicg')
+                   call bicg(nin, g, bs)
+            end select
          end do
          call fsrc (fs0)               !Update fission source
          errn = fs0 - fs0c
@@ -1207,6 +1232,90 @@ module cmfd
 
    !****************************************************************************!
 
+   subroutine cg(imax, g, b)
+
+      use sdata, only: r, rs, p, v, nnod, f0
+
+      !Purpose: to solve linear of system equation with Conjugate Gradient (CG) method
+      ! (without preconditioner). Sparse matrix saved in a and indexed in rc.
+      ! a dimension is (#non_zero_elements)
+      ! rc dimension is (2,#non_zero_elements+1)
+      ! adapted from:
+      ! "Iterative Methods for Linear and Nonlinear Equations" By: C. T. Kelley
+
+      implicit none
+
+      integer, intent(in) :: imax, g  ! Max. number of iteration and group number
+      real(dp), dimension(:), intent(in) :: b   ! source
+
+      real(dp) :: rho_k1, rho_k2
+      real(dp) :: alpha, beta
+      real(dp) :: converge, atol, rtol, xsto
+      integer :: i
+
+      logical, save :: first = .true.
+      logical, parameter :: verbose = .false.
+
+      ! TODO these should not be hard-wired
+      atol = 1d-8
+      rtol = 1d-5
+
+      if (first) then
+        call gpu_allocate(r, nnod)
+        call gpu_allocate(rs, nnod)
+        call gpu_allocate(p, nnod)
+        call gpu_allocate(v, nnod)
+        first = .false.
+      endif
+
+      ! 1)
+      call sp_matvec(g, f0(:, g), r)
+      call xpby(b, -1._dp, r, rs)
+      call xew(rs, r)
+
+      rho_k2 = 0.0_dp
+      rho_k1 = dproduct(r, r)
+      xsto = sqrt(rho_k1)
+
+      call gpu_initialize(v, 0.0_dp)
+      call gpu_initialize(p, 0.0_dp)
+
+      ! 2)
+      beta = 0.0_dp
+      do i = 1,imax
+         ! 2) (a)
+         call xpby(r, beta, p, rs)
+         call xew(rs, p)
+         ! 2) (b)
+         call sp_matvec(g, p, v)
+         ! 2) (c)
+         alpha = rho_k1 / dproduct(p, v)
+         ! 2) (d)
+         call xpby(f0(:, g), alpha, p, rs)
+         call xew(rs, f0(:, g))
+         ! 2) (e)
+         call xpby(r, -alpha, v, rs)
+         call xew(rs, r)
+         ! 2) (f)
+         ! store old values
+         rho_k2 = rho_k1
+         rho_k1 = dproduct(r, r)
+         beta = rho_k1 / rho_k2
+
+         converge = sqrt(rho_k1)
+         if (verbose) then
+           write(*,'(a,i0,1x,a,es13.6)') 'it=', i, 'converge=', converge
+         end if
+         if ((converge < atol) .or. (converge < rtol*xsto)) exit
+      end do
+
+      ! NOTE: consider checking if the solution actually converged before
+      ! the number of iterations reached imax.
+
+   end subroutine cg
+
+   !****************************************************************************!
+
    subroutine bicg(imax, g, b)
 
       use sdata, only: r, rs, v, p, s, t, tmp, nnod, f0
@@ -1225,8 +1334,15 @@ module cmfd
 
       real(dp) :: rho, rho_prev
       real(dp) :: alpha, omega, beta, theta
+      real(dp) :: converge, atol, rtol, xsto
       integer :: i
+
       logical :: first = .true.
+      logical, parameter :: verbose = .false.
+
+      ! TODO these should not be hard-wired
+      atol = 1d-8
+      rtol = 1d-5
 
       if (first) then
          call gpu_allocate(r, nnod)
@@ -1252,12 +1368,16 @@ module cmfd
       call xpby(b, -1._dp, r, rs)
       call xew(rs, r)
 
-      rho = 1.0_dp
+      rho = dproduct(rs, r)
+      xsto = sqrt(rho)
       alpha = 1.0_dp
       omega = 1.0_dp
       call gpu_initialize(v, 0.0_dp)
       call gpu_initialize(p, 0.0_dp)
 
+      ! NOTE: this algorithim can be modified to allow two "exit" points so that
+      ! it would be possible to quit early after the first mat*vec product.
+      ! It would require slightly reordering the operations.
       do i = 1, imax
          rho_prev = rho
          rho = dproduct(rs, r)
@@ -1274,9 +1394,17 @@ module cmfd
          call xpby(f0(:, g), 1.0_dp, tmp, r)
          call xew(r, f0(:, g))
          call xpby(s, -omega, t, r)
+         converge = sqrt(dproduct(r, r))
+         if (verbose) then
+           write(*,'(a,i0,1x,a,es13.6)') 'it=', i, 'converge=', converge
+         end if
+         if ((converge < atol) .or. (converge < rtol*xsto)) exit
       end do
       !$acc exit data delete(b)
       !$acc update self(f0(:,g))
+
+      ! NOTE: consider checking if the solution actually converged before
+      ! the number of iterations reached imax.
 
    end subroutine bicg
 
