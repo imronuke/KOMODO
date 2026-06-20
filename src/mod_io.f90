@@ -1671,6 +1671,7 @@ module io
       end if
 
       select case (matrix_solver)
+         case ('prec_cg')
          case ('cg')
          case ('bicg')
          case default

@@ -491,6 +491,8 @@ module cmfd
 
             !!!Inner Iteration
             select case (matrix_solver)
+               case ('prec_cg')
+                  call prec_cg(nin, g, bs)
                case ('cg')
                   call cg(nin, g, bs)
                case ('bicg')
@@ -587,6 +589,8 @@ module cmfd
 
             !!!Inner Iteration
             select case (matrix_solver)
+               case ('prec_cg')
+                  call prec_cg(nin, g, bs)
                case ('cg')
                   call cg(nin, g, bs)
                case ('bicg')
@@ -686,6 +690,8 @@ module cmfd
 
             !!!Inner Iteration
             select case (matrix_solver)
+               case ('prec_cg')
+                  call prec_cg(nin, g, bs)
                case ('cg')
                   call cg(nin, g, bs)
                case ('bicg')
@@ -791,6 +797,8 @@ module cmfd
 
             !!!Inner Iteration
             select case (matrix_solver)
+               case ('prec_cg')
+                  call prec_cg(nin, g, bs)
                case ('cg')
                   call cg(nin, g, bs)
                case ('bicg')
@@ -874,6 +882,8 @@ module cmfd
 
             !!!Inner Iteration
             select case (matrix_solver)
+               case ('prec_cg')
+                  call prec_cg(nin, g, bs)
                case ('cg')
                   call cg(nin, g, bs)
                case ('bicg')
@@ -1232,6 +1242,122 @@ module cmfd
 
    !****************************************************************************!
 
+   subroutine prec_cg(imax, g, b)
+
+      use sdata, only: r, rs, p, v, t, ng, nnod, f0, inner_atol, inner_rtol, &
+      ind, a
+
+      !Purpose: to solve linear of system equation with Conjugate Gradient (CG) method
+      ! with Jacobi (diagonal) preconditioner. Sparse matrix saved in a and indexed in rc.
+      ! a dimension is (#non_zero_elements)
+      ! rc dimension is (2,#non_zero_elements+1)
+      ! on first entry for each group, compute and store the inverse diagonal to use for preconditioner
+      ! adapted from:
+      ! "Iterative Methods for Linear and Nonlinear Equations" By: C. T. Kelley
+
+      implicit none
+
+      integer, intent(in) :: imax, g  ! Max. number of iteration and group number
+      real(dp), dimension(:), intent(in) :: b   ! source
+
+      real(dp) :: rho_k1, rho_k2
+      real(dp) :: tau_k1, tau_k2
+      real(dp) :: alpha, beta
+      real(dp) :: converge, xsto
+      integer :: i, j
+      integer :: row_start, row_end
+
+      real(dp), allocatable :: inv_diag(:)
+
+      logical, save :: first = .true.
+      logical, parameter :: verbose = .false.
+
+      if (first) then
+        call gpu_allocate(r, nnod)
+        call gpu_allocate(rs, nnod)
+        call gpu_allocate(p, nnod)
+        call gpu_allocate(v, nnod)
+        call gpu_allocate(t, nnod)
+        first = .false.
+      end if
+
+      ! Construct the preconditioner. This is done every time this subroutine is visited.
+      ! It may be possible to efficiently cache this information, but would require more knowledge of the algorithm.
+      ! Be cautious if this is used in association with Sutton's method for Wielandt shift or the matrix is updated
+      ! during CMFD iterations.
+      call gpu_allocate(inv_diag, nnod)
+      call gpu_initialize(inv_diag, 0.0_dp)
+      do i = 1,nnod
+        row_start = ind%row(i)
+        row_end   = ind%row(i + 1) - 1
+        do j = row_start, row_end
+           if (ind%col(j) == i) then
+              inv_diag(i) = 1.0_dp / a(g)%elmn(j)
+              exit
+           end if
+        end do
+      end do
+
+      ! 1)
+      call sp_matvec(g, f0(:, g), r)
+      call xpby(b, -1._dp, r, rs)
+      call xew(rs, r)
+
+      rho_k2 = 0.0_dp
+      rho_k1 = dproduct(r, r)
+      xsto = sqrt(rho_k1)
+
+      tau_k1 = 0.0_dp
+      tau_k2 = 0.0_dp
+
+      call gpu_initialize(v, 0.0_dp)
+      call gpu_initialize(p, 0.0_dp)
+      call gpu_initialize(t, 0.0_dp)
+
+      ! 2)
+      beta = 0.0_dp
+      do i = 1,imax
+         ! 2) (a) 
+         call xmuly(inv_diag, r, t)
+         ! 2) (b)
+         tau_k1 = dproduct(t, r)
+         ! 2) (c)
+         if (i == 1) then
+            beta = 0.0_dp
+         else
+            beta = tau_k1 / tau_k2
+         end if
+         call xpby(t, beta, p, rs)
+         call xew(rs, p)
+         ! 2) (d)
+         call sp_matvec(g, p, v)
+         ! 2) (e)
+         alpha = tau_k1 / dproduct(p, v)
+         ! 2) (f)
+         call xpby(f0(:, g), alpha, p, rs)
+         call xew(rs, f0(:, g))
+         ! 2) (g)
+         call xpby(r, -alpha, v, rs)
+         call xew(rs, r)
+         ! 2) (h)
+         rho_k2 = rho_k1
+         rho_k1 = dproduct(r, r)
+         tau_k2 = tau_k1
+
+         converge = sqrt(rho_k1)
+         if (verbose) then
+           write(*,'(a,i0,1x,a,es13.6)') 'it=', i, 'converge=', converge
+         end if
+         if ((converge < inner_atol) .or. (converge < inner_rtol*xsto)) exit
+      end do
+
+      ! NOTE: consider checking if the solution actually converged before
+      ! the number of iterations reached imax.
+
+   end subroutine prec_cg
+
+   !****************************************************************************!
+
    subroutine cg(imax, g, b)
 
       use sdata, only: r, rs, p, v, nnod, f0, inner_atol, inner_rtol
@@ -1485,6 +1611,23 @@ module cmfd
       !$acc kernels present(x,y,w)
       do i = 1, length
          w(i) = x(i) + beta * y(i)
+      enddo
+      !$acc end kernels
+
+   end subroutine
+
+   !****************************************************************************!
+
+   subroutine xmuly(x, y, z)
+      implicit none
+      real(dp), intent(in) :: x(:), y(:)
+      real(dp), intent(out) :: z(:)
+      integer :: i, length
+
+      length = size(x)
+      !$acc kernels present(x,y,z)
+      do i = 1, length
+        z(i) = x(i) * y(i)
       enddo
       !$acc end kernels
 

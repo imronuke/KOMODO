@@ -88,7 +88,7 @@ integer :: th_niter = 30   ! Maximum number of thermal-hydraulics iteration
 integer :: nth = 20     ! Maximum number of outer iterations per thermal-hydraulics iteration
 integer :: nupd         ! Nodal update interval
 
-character(16) :: matrix_solver = 'cg' ! Linear system solver ('cg', 'bicg')
+character(16) :: matrix_solver = 'prec_cg' ! Linear system solver ('prec_cg', 'cg', 'bicg')
 real(dp) :: inner_atol = 1d-8 ! Linear system solver absolute tolerance
 real(dp) :: inner_rtol = 1d-5 ! Linear system solver relative tolerance
 
