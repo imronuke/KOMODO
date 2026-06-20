@@ -1627,7 +1627,7 @@ module io
       !    To read iteration control if any
 
       use sdata, only: nout, nin, serc, ferc, nac, nupd, th_niter, nth, kern, &
-      matrix_solver
+      matrix_solver, inner_atol, inner_rtol
 
       implicit none
 
@@ -1637,7 +1637,7 @@ module io
       integer :: ios  ! IOSTAT status
 
       read(xbunit, *, iostat = ios) ind, ln, nout, nin, serc, ferc, nac, nupd, &
-      th_niter, nth, matrix_solver
+      th_niter, nth, matrix_solver, inner_atol, inner_rtol
       message = ' error in reading iteration control'
       call er_message(ounit, ios, ln, message, buf = xbunit)
 
@@ -1655,6 +1655,8 @@ module io
       write(ounit, '(A,I5)') '  MAX. NUMBER OF T-H ITERATION                          : ', th_niter
       write(ounit, '(A,I5)') '  MAX. NUMBER OF OUTER ITERATION PER T-H ITERATION      : ', nth
       write(ounit, '(A,A)')  '  LINEAR SYSTEM SOLVER METHOD                           : ', trim(adjustl(matrix_solver))
+      write(ounit, '(A,ES12.3)')  '  LINEAR SYSTEM INNER ABSOLUTE TOLERANCE           : ', inner_atol
+      write(ounit, '(A,ES12.3)')  '  LINEAR SYSTEM INNER RELATIVE TOLERANCE           : ', inner_rtol
 
       if (nout < nupd .and. kern /= ' FDM') then
          write(*, *) "ERROR: MAX. NUMBER OF OUTER ITERATION SHOULD BE BIGGER THAN NODAL UPDATE INTERVAL"

@@ -1234,7 +1234,7 @@ module cmfd
 
    subroutine cg(imax, g, b)
 
-      use sdata, only: r, rs, p, v, nnod, f0
+      use sdata, only: r, rs, p, v, nnod, f0, inner_atol, inner_rtol
 
       !Purpose: to solve linear of system equation with Conjugate Gradient (CG) method
       ! (without preconditioner). Sparse matrix saved in a and indexed in rc.
@@ -1250,15 +1250,11 @@ module cmfd
 
       real(dp) :: rho_k1, rho_k2
       real(dp) :: alpha, beta
-      real(dp) :: converge, atol, rtol, xsto
+      real(dp) :: converge, xsto
       integer :: i
 
       logical, save :: first = .true.
       logical, parameter :: verbose = .false.
-
-      ! TODO these should not be hard-wired
-      atol = 1d-8
-      rtol = 1d-5
 
       if (first) then
         call gpu_allocate(r, nnod)
@@ -1306,7 +1302,7 @@ module cmfd
          if (verbose) then
            write(*,'(a,i0,1x,a,es13.6)') 'it=', i, 'converge=', converge
          end if
-         if ((converge < atol) .or. (converge < rtol*xsto)) exit
+         if ((converge < inner_atol) .or. (converge < inner_rtol*xsto)) exit
       end do
 
       ! NOTE: consider checking if the solution actually converged before
@@ -1318,7 +1314,7 @@ module cmfd
 
    subroutine bicg(imax, g, b)
 
-      use sdata, only: r, rs, v, p, s, t, tmp, nnod, f0
+      use sdata, only: r, rs, v, p, s, t, tmp, nnod, f0, inner_atol, inner_rtol
 
       !Purpose: to solve linear of system equation with BiCGSTAB method
       ! (without preconditioner). Sparse matrix saved in a and indexed in rc.
@@ -1334,15 +1330,11 @@ module cmfd
 
       real(dp) :: rho, rho_prev
       real(dp) :: alpha, omega, beta, theta
-      real(dp) :: converge, atol, rtol, xsto
+      real(dp) :: converge, xsto
       integer :: i
 
       logical :: first = .true.
       logical, parameter :: verbose = .false.
-
-      ! TODO these should not be hard-wired
-      atol = 1d-8
-      rtol = 1d-5
 
       if (first) then
          call gpu_allocate(r, nnod)
@@ -1398,7 +1390,7 @@ module cmfd
          if (verbose) then
            write(*,'(a,i0,1x,a,es13.6)') 'it=', i, 'converge=', converge
          end if
-         if ((converge < atol) .or. (converge < rtol*xsto)) exit
+         if ((converge < inner_atol) .or. (converge < inner_rtol*xsto)) exit
       end do
       !$acc exit data delete(b)
       !$acc update self(f0(:,g))
