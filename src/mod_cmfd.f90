@@ -436,7 +436,8 @@ module cmfd
 
 
       use sdata, only: ng, nnod, nout, nin, serc, ferc, fer, ser, f0, nupd, &
-      ke, nac, fs0, s0, ndmax, kern, get_time, fdm_time, matrix_solver
+      ke, nac, fs0, s0, ndmax, kern, get_time, fdm_time, matrix_solver, &
+      use_wielandt_shift, wielandt_init_iter, wielandt_shift
       use io, only: ounit, scr, bther
       use nodal, only: nodal_update
 
@@ -488,6 +489,10 @@ module cmfd
          do g = 1, ng
             !!!Calculate total source
             call tsrc(g, ke, bs)
+
+            if ((use_wielandt_shift) .and. (p > wielandt_init_iter)) then
+               ! need to adjust the diagonal for the Wielandt shift
+            endif
 
             !!!Inner Iteration
             select case (matrix_solver)
