@@ -35,7 +35,7 @@ module io
    integer, parameter :: ucrod = 119, ubcon = 120, uftem = 121, umtem = 122
    integer, parameter :: ucden = 123, ucbcs = 124, uejct = 125, uther = 126
    integer, parameter :: uxtab = 127, ukern = 128, uextr = 129, uthet = 130
-   integer, parameter :: uoutp = 131, uvtk = 132
+   integer, parameter :: uoutp = 131, uvtk  = 132, uwiel = 133
    integer :: bunit
 
    ! Card active/inactive indicator (active = 1, inactive = 0)
@@ -43,18 +43,18 @@ module io
    integer :: biter = 0, bprnt = 0, badf = 0, bcrod = 0, bbcon = 0
    integer :: bftem = 0, bmtem = 0, bcden = 0, bcbcs = 0, bejct = 0
    integer :: bther = 0, bxtab = 0, bkern = 0, bextr = 0, bthet = 0
-   integer :: boutp = 0, bvtk = 0
+   integer :: boutp = 0, bvtk  = 0, bwiel = 0
 
    ! This declaration is to notify that the error in separated card file (in case so)
-   integer, parameter :: ncard = 22                  ! Number of card
+   integer, parameter :: ncard = 23                  ! Number of card
    integer, dimension(ncard) :: uarr = &             ! Array of buffer unit number
    (/umode, uxsec, ugeom, ucase, uesrc, uiter, uprnt, uadf, ucrod, ubcon, &
    uftem, umtem, ucden, ucbcs, uejct, uther, uxtab, ukern, uextr, uthet, &
-   uoutp, uvtk /)
+   uoutp, uvtk , uwiel /)
    character(len = 4), dimension(ncard) :: carr = &    ! Array of card name
    (/'MODE', 'XSEC', 'GEOM', 'CASE', 'ESRC', 'ITER', 'PRNT', 'ADF ', 'CROD', 'BCON', &
    'FTEM', 'MTEM', 'CDEN', 'CBCS', 'EJCT', 'THER', 'XTAB', 'KERN', 'EXTR', 'THET', &
-   'OUTP', 'VTK ' /)
+   'OUTP', 'VTK ', 'WIEL' /)
    character(len = 100), dimension(:), allocatable :: farr   ! Array of card file
 
    ! Geometry
@@ -118,6 +118,7 @@ module io
       open (unit = ucase, status = 'SCRATCH', action = 'READWRITE')
       open (unit = uesrc, status = 'SCRATCH', action = 'READWRITE')
       open (unit = uiter, status = 'SCRATCH', action = 'READWRITE')
+      open (unit = uwiel, status = 'SCRATCH', action = 'READWRITE')
       open (unit = uprnt, status = 'SCRATCH', action = 'READWRITE')
       open (unit = uadf, status = 'SCRATCH', action = 'READWRITE')
       open (unit = ucrod, status = 'SCRATCH', action = 'READWRITE')
@@ -155,6 +156,7 @@ module io
       rewind(ucase) ;
       rewind(uesrc)
       rewind(uiter) ;
+      rewind(uwiel) ;
       rewind(uprnt) ;
       rewind(uadf) ;
       rewind(ucrod) ;
@@ -287,6 +289,9 @@ module io
       ! Card ITER
       if (biter == 1) call inp_iter (uiter)
 
+      ! Card WIEL
+      if (bwiel == 1) call inp_wiel (uwiel)
+
       ! Card THET
       if (bthet == 1) call inp_thet (uthet)
 
@@ -396,6 +401,7 @@ module io
       close(unit = ucase)
       close(unit = uesrc) ;
       close(unit = uiter) ;
+      close(unit = uwiel) ;
       close(unit = uprnt) ;
       close(unit = uadf)
       close(unit = ucrod) ;
@@ -613,6 +619,9 @@ module io
                case('ITER') ;
                   bunit = uiter;
                   biter = 1
+               case('WIEL') ;
+                  bunit = uwiel;
+                  bwiel = 1
                case('PRNT') ;
                   bunit = uprnt;
                   bprnt = 1
@@ -1680,8 +1689,44 @@ module io
             stop
       end select
 
-
    end subroutine inp_iter
+
+   !******************************************************************************!
+
+   subroutine inp_wiel (xbunit)
+
+      !
+      ! Purpose:
+      !    To read iteration control if any
+
+      use sdata, only: use_wielandt_shift, wielandt_init_iter, wielandt_shift
+
+      implicit none
+
+      integer, intent(in) :: xbunit
+
+      integer :: ln   !Line number
+      integer :: ios  ! IOSTAT status
+
+      read(xbunit, *, iostat = ios) ind, ln, use_wielandt_shift, wielandt_init_iter, wielandt_shift
+      message = ' error in reading wielandt shift control'
+      call er_message(ounit, ios, ln, message, buf = xbunit)
+
+      write(ounit, *)
+      write(ounit, *)
+      write(ounit, *) '           >>>>>READING WIELANDT   CONTROL<<<<<'
+      write(ounit, *) '           ------------------------------------'
+
+      write(ounit, '(A,L1)') '  USE WIELANDT SHIFT                                    : ', use_wielandt_shift
+      write(ounit, '(A,I5)') '  WIELANDT SHIFT INITIAL ITERATIONS                     : ', wielandt_init_iter
+      write(ounit, '(A,ES12.3)') '  WIELANDT SHIFT VALUE                              : ', wielandt_shift
+      if (wielandt_shift < 0.0_dp) then
+         write(ounit, '(A,A)')  '  WIELANDT SHIFT OPTION                                 : ', 'RELATIVE'
+      else
+         write(ounit, '(A,A)')  '  WIELANDT SHIFT OPTION                                 : ', 'ABSOLUTE'
+      endif
+
+   end subroutine inp_wiel
 
    !******************************************************************************!
 
