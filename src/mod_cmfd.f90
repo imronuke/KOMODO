@@ -456,6 +456,9 @@ module cmfd
       logical :: first = .true.
       real(dp) :: st, fn
 
+      real(dp) :: shift
+      real(dp) :: beta, beta_old ! shifted eigenvalue
+
       st = get_time()
 
       !Setup CMFD matrix
@@ -475,6 +478,8 @@ module cmfd
       errn = 1._dp
       e1 = integrate(errn)
 
+      beta = ke
+
       fn = get_time()
       fdm_time = fdm_time + (fn - st) ! Get FDM time
 
@@ -485,12 +490,27 @@ module cmfd
          fs0c = fs0       ! Save old fission source
          f0c = f0        ! Save old flux
          keo = ke        ! Save old multiplication factor
+
+         ! update shifted eigenvalue
+         if ((use_wielandt_shift) .and. (p > wielandt_init_iter)) then
+            if (wielandt_shift < 0.0_dp) then
+               shift = ke - wielandt_shift
+            else
+               shift = wielandt_shift
+            endif
+            beta = shift * ke / (shift - ke)
+         else
+            beta = ke
+         endif
+         beta_old = beta
+
          erro = errn      ! Save old fission source error/difference
          do g = 1, ng
             !!!Calculate total source
-            call tsrc(g, ke, bs)
+            call tsrc(g, beta, bs)
 
             if ((use_wielandt_shift) .and. (p > wielandt_init_iter)) then
+               ! TODO
                ! need to adjust the diagonal for the Wielandt shift
             endif
 
@@ -510,7 +530,16 @@ module cmfd
          if (mod(p, nac) == 0) call fiss_extrp(popt, e1, e2, erro, errn, fs0)     ! Fission source extrapolation
          e1 = e2                       ! Save l2 norm of the fission source error
          f = integrate(fs0)            ! Integrate fission source
-         ke = keo * f / fc             ! Update Keff
+
+         ! update shifted eigenvalue
+         ! then, recompute keff
+         beta = beta * f / fc
+         if ((use_wielandt_shift) .and. (p > wielandt_init_iter)) then
+            ke = shift * beta / (shift - beta)
+         else
+            ke = beta
+         endif
+
          call rele(fs0, fs0c, ser)     ! Search maximum point wise fission source Relative Error
          call releg(f0, f0c, fer)      ! Search maximum point wise flux error
          fn = get_time()
