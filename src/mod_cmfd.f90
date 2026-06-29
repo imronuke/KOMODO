@@ -437,7 +437,7 @@ module cmfd
 
       use sdata, only: ng, nnod, nout, nin, serc, ferc, fer, ser, f0, nupd, &
       ke, nac, fs0, s0, ndmax, kern, get_time, fdm_time, matrix_solver, &
-      use_wielandt_shift, wielandt_init_iter, wielandt_shift
+      use_wielandt_shift, wielandt_init_iter, wielandt_shift, a, ind, nuf, chi, mat
       use io, only: ounit, scr, bther
       use nodal, only: nodal_update
 
@@ -457,7 +457,10 @@ module cmfd
       real(dp) :: st, fn
 
       real(dp) :: shift
-      real(dp) :: beta, beta_old ! shifted eigenvalue
+      real(dp) :: beta ! shifted eigenvalue
+      real(dp), allocatable :: shift_diag(:,:) ! (nnod, ng)
+      integer :: i, j, row_start, row_end
+      real(dp) :: xsum
 
       st = get_time()
 
@@ -479,12 +482,17 @@ module cmfd
       e1 = integrate(errn)
 
       beta = ke
+      if (use_wielandt_shift) then
+         allocate(shift_diag(nnod, ng))
+         shift_diag = 0.0_dp
+      end if
 
       fn = get_time()
       fdm_time = fdm_time + (fn - st) ! Get FDM time
 
       !Start outer iteration
       do p = 1, nout
+
          st = get_time()
          fc = f         ! Save old integrated fission source
          fs0c = fs0       ! Save old fission source
@@ -497,22 +505,37 @@ module cmfd
                shift = ke - wielandt_shift
             else
                shift = wielandt_shift
-            endif
+            end if
             beta = shift * ke / (shift - ke)
          else
             beta = ke
-         endif
-         beta_old = beta
+         end if
+
+         if ((use_wielandt_shift) .and. (p > wielandt_init_iter)) then
+            ! need to adjust the diagonal for the Wielandt shift
+            ! importantly, I also have to store the adjustment so that I can
+            ! undo it on the next iteration
+            do i = 1,nnod
+               row_start = ind%row(i)
+               row_end = ind%row(i + 1) - 1
+               do j = row_start, row_end
+                  if (ind%col(j) == i) then
+                     xsum = sum(nuf(i, :) * f0(i, :))
+                     do g = 1, ng
+                        a(g)%elmn(j) = a(g)%elmn(j) + shift_diag(i, g)
+                        shift_diag(i, g) = chi(mat(i), g) / (shift * f0(i, g)) * xsum
+                        a(g)%elmn(j) = a(g)%elmn(j) - shift_diag(i, g)
+                     end do
+                     exit
+                  endif
+               end do
+            end do
+         end if
 
          erro = errn      ! Save old fission source error/difference
          do g = 1, ng
             !!!Calculate total source
             call tsrc(g, beta, bs)
-
-            if ((use_wielandt_shift) .and. (p > wielandt_init_iter)) then
-               ! TODO
-               ! need to adjust the diagonal for the Wielandt shift
-            endif
 
             !!!Inner Iteration
             select case (matrix_solver)
@@ -535,10 +558,10 @@ module cmfd
          ! then, recompute keff
          beta = beta * f / fc
          if ((use_wielandt_shift) .and. (p > wielandt_init_iter)) then
-            ke = shift * beta / (shift - beta)
+            ke = shift * beta / (shift + beta)
          else
             ke = beta
-         endif
+         end if
 
          call rele(fs0, fs0c, ser)     ! Search maximum point wise fission source Relative Error
          call releg(f0, f0c, fer)      ! Search maximum point wise flux error
@@ -560,6 +583,10 @@ module cmfd
          write(*, *) '  KOMODO IS STOPING...'
          stop
       end if
+
+      if (use_wielandt_shift) then
+         deallocate(shift_diag)
+      endif
 
    end subroutine outer
 
@@ -1422,7 +1449,7 @@ module cmfd
         call gpu_allocate(p, nnod)
         call gpu_allocate(v, nnod)
         first = .false.
-      endif
+      end if
 
       ! 1)
       call sp_matvec(g, f0(:, g), r)
@@ -1628,7 +1655,7 @@ module cmfd
       !$acc kernels present(x,y,w)
       do i = 1, length
          w(i) = alpha * x(i) + beta * y(i)
-      enddo
+      end do
       !$acc end kernels
 
    end subroutine
@@ -1645,7 +1672,7 @@ module cmfd
       !$acc kernels present(x,y,w)
       do i = 1, length
          w(i) = x(i) + beta * y(i)
-      enddo
+      end do
       !$acc end kernels
 
    end subroutine
@@ -1662,7 +1689,7 @@ module cmfd
       !$acc kernels present(x,y,z)
       do i = 1, length
         z(i) = x(i) * y(i)
-      enddo
+      end do
       !$acc end kernels
 
    end subroutine
@@ -1679,7 +1706,7 @@ module cmfd
       !$acc kernels present(x,w)
       do i = 1, length
          w(i) = x(i)
-      enddo
+      end do
       !$acc end kernels
 
    end subroutine
