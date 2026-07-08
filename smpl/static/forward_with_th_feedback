@@ -8,6 +8,12 @@ FORWARD
 FORWARD CALCULATION WITH TH FEEDBACK
 10.803 CM NODE SIZE
 
+%ITER
+,, 1000 ,,,, 5 25 1000 'prec_cg' 1e-8 1e-8 /
+
+%WIEL
+F 3 -0.03 /
+
 ! XSEC CARD
 %XSEC
 2  11    ! Number of groups and number of materials

@@ -802,7 +802,8 @@ module cmfd
 
 
       use sdata, only: ng, nnod, nin, serc, ferc, fer, ser, f0, nupd, &
-      ke, nac, s0, fs0, ndmax, nth, kern, get_time, fdm_time, matrix_solver
+      ke, nac, s0, fs0, ndmax, nth, kern, get_time, fdm_time, matrix_solver, &
+      use_wielandt_shift, wielandt_init_iter, wielandt_shift, a, ind, nuf, chi, mat
       use io, only: ounit, biter
       use nodal, only: nodal_update
 
@@ -819,6 +820,12 @@ module cmfd
       logical :: first = .true.
       real(dp) :: st, fn
       logical :: lnupd = .true.
+
+      real(dp) :: shift
+      real(dp) :: beta ! shifted eigenvalue
+      real(dp), allocatable :: shift_diag(:,:) ! (nnod, ng)
+      integer :: i, j, row_start, row_end
+      real(dp) :: xsum
 
       st = get_time()
 
@@ -839,6 +846,12 @@ module cmfd
       errn = 1._dp
       e1 = integrate(errn)
 
+      beta = ke
+      if (use_wielandt_shift) then
+         allocate(shift_diag(nnod, ng))
+         shift_diag = 0.0_dp
+      end if
+
       fn = get_time()
       fdm_time = fdm_time + (fn - st) ! Get FDM time
 
@@ -846,15 +859,50 @@ module cmfd
 
       !Start outer iteration
       do p = 1, nth
+
          st = get_time()
          fc = f         ! Save old integrated fission source
          fs0c = fs0       ! Save old fission source
          f0c = f0        ! Save old flux
          keo = ke        ! Save old multiplication factor
-         erro = errn       ! Save old fission source error/difference
+
+         ! update shifted eigenvalue
+         if ((use_wielandt_shift) .and. (p > wielandt_init_iter)) then
+            if (wielandt_shift < 0.0_dp) then
+               shift = ke - wielandt_shift
+            else
+               shift = wielandt_shift
+            end if
+            beta = shift * ke / (shift - ke)
+         else
+            beta = ke
+         end if
+
+         if ((use_wielandt_shift) .and. (p > wielandt_init_iter)) then
+            ! need to adjust the diagonal for the Wielandt shift
+            ! importantly, I also have to store the adjustment so that I can
+            ! undo it on the next iteration
+            do i = 1,nnod
+               row_start = ind%row(i)
+               row_end = ind%row(i + 1) - 1
+               do j = row_start, row_end
+                  if (ind%col(j) == i) then
+                     xsum = sum(nuf(i, :) * f0(i, :))
+                     do g = 1, ng
+                        a(g)%elmn(j) = a(g)%elmn(j) + shift_diag(i, g)
+                        shift_diag(i, g) = chi(mat(i), g) / (shift * f0(i, g)) * xsum
+                        a(g)%elmn(j) = a(g)%elmn(j) - shift_diag(i, g)
+                     end do
+                     exit
+                  endif
+               end do
+            end do
+         end if
+
+         erro = errn      ! Save old fission source error/difference
          do g = 1, ng
             !!!Calculate total source
-            call tsrc(g, ke, bs)
+            call tsrc(g, beta, bs)
 
             !!!Inner Iteration
             select case (matrix_solver)
@@ -872,7 +920,16 @@ module cmfd
          if (mod(p, nac) == 0) call fiss_extrp(0, e1, e2, erro, errn, fs0)     ! Fission source extrapolation
          e1 = e2                       ! Save l2 norm of the fission source error
          f = integrate(fs0)            ! Integrate fission source
-         ke = keo * f / fc             ! Update Keff
+
+         ! update shifted eigenvalue
+         ! then, recompute keff
+         beta = beta * f / fc
+         if ((use_wielandt_shift) .and. (p > wielandt_init_iter)) then
+            ke = shift * beta / (shift + beta)
+         else
+            ke = beta
+         end if
+
          call rele(fs0, fs0c, ser)     ! Search maximum point wise fission source Relative Error
          call releg(f0, f0c, fer)      ! Search maximum point wise flux error
          fn = get_time()
@@ -880,7 +937,9 @@ module cmfd
          if (mod(p, nupd) == 0 .and. kern /= ' FDM') then
             lnupd = .false.
             call nodal_upd(0, 1)        ! Nodal coefficients update
+            shift_diag = 0.0_dp
          end if
+
          if ((ser < serc) .and. (fer < ferc) .and. (ndmax < 1.e-2)) exit
       end do
 
@@ -891,6 +950,10 @@ module cmfd
          write(ounit, *) 'CHANGE ITERATION CONTROL USING %ITER CARD'
          stop
       end if
+
+      if (use_wielandt_shift) then
+         deallocate(shift_diag)
+      endif
 
    end subroutine outer_th
 
