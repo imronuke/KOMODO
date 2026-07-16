@@ -436,7 +436,8 @@ module cmfd
 
 
       use sdata, only: ng, nnod, nout, nin, serc, ferc, fer, ser, f0, nupd, &
-      ke, nac, fs0, s0, ndmax, kern, get_time, fdm_time, matrix_solver
+      ke, nac, fs0, s0, ndmax, kern, get_time, fdm_time, matrix_solver, &
+      use_wielandt_shift, wielandt_init_iter, wielandt_shift, a, ind, nuf, chi, mat
       use io, only: ounit, scr, bther
       use nodal, only: nodal_update
 
@@ -454,6 +455,12 @@ module cmfd
       real(dp), dimension(nnod) :: errn, erro            ! current and past error vectors
       logical :: first = .true.
       real(dp) :: st, fn
+
+      real(dp) :: shift
+      real(dp) :: beta ! shifted eigenvalue
+      real(dp), allocatable :: shift_diag(:,:) ! (nnod, ng)
+      integer :: i, j, row_start, row_end
+      real(dp) :: xsum
 
       st = get_time()
 
@@ -474,23 +481,66 @@ module cmfd
       errn = 1._dp
       e1 = integrate(errn)
 
+      beta = ke
+      if (use_wielandt_shift) then
+         allocate(shift_diag(nnod, ng))
+         shift_diag = 0.0_dp
+      end if
+
       fn = get_time()
       fdm_time = fdm_time + (fn - st) ! Get FDM time
 
       !Start outer iteration
       do p = 1, nout
+
          st = get_time()
          fc = f         ! Save old integrated fission source
          fs0c = fs0       ! Save old fission source
          f0c = f0        ! Save old flux
          keo = ke        ! Save old multiplication factor
+
+         ! update shifted eigenvalue
+         if ((use_wielandt_shift) .and. (p > wielandt_init_iter)) then
+            if (wielandt_shift < 0.0_dp) then
+               shift = ke - wielandt_shift
+            else
+               shift = wielandt_shift
+            end if
+            beta = shift * ke / (shift - ke)
+         else
+            beta = ke
+         end if
+
+         if ((use_wielandt_shift) .and. (p > wielandt_init_iter)) then
+            ! need to adjust the diagonal for the Wielandt shift
+            ! importantly, I also have to store the adjustment so that I can
+            ! undo it on the next iteration
+            do i = 1,nnod
+               row_start = ind%row(i)
+               row_end = ind%row(i + 1) - 1
+               do j = row_start, row_end
+                  if (ind%col(j) == i) then
+                     xsum = sum(nuf(i, :) * f0(i, :))
+                     do g = 1, ng
+                        a(g)%elmn(j) = a(g)%elmn(j) + shift_diag(i, g)
+                        shift_diag(i, g) = chi(mat(i), g) / (shift * f0(i, g)) * xsum
+                        a(g)%elmn(j) = a(g)%elmn(j) - shift_diag(i, g)
+                     end do
+                     exit
+                  endif
+               end do
+            end do
+         end if
+
          erro = errn      ! Save old fission source error/difference
          do g = 1, ng
             !!!Calculate total source
-            call tsrc(g, ke, bs)
+            call tsrc(g, beta, bs)
 
             !!!Inner Iteration
             select case (matrix_solver)
+               case ('prec_cg')
+                  call prec_cg(nin, g, bs)
                case ('cg')
                   call cg(nin, g, bs)
                case ('bicg')
@@ -503,7 +553,16 @@ module cmfd
          if (mod(p, nac) == 0) call fiss_extrp(popt, e1, e2, erro, errn, fs0)     ! Fission source extrapolation
          e1 = e2                       ! Save l2 norm of the fission source error
          f = integrate(fs0)            ! Integrate fission source
-         ke = keo * f / fc             ! Update Keff
+
+         ! update shifted eigenvalue
+         ! then, recompute keff
+         beta = beta * f / fc
+         if ((use_wielandt_shift) .and. (p > wielandt_init_iter)) then
+            ke = shift * beta / (shift + beta)
+         else
+            ke = beta
+         end if
+
          call rele(fs0, fs0c, ser)     ! Search maximum point wise fission source Relative Error
          call releg(f0, f0c, fer)      ! Search maximum point wise flux error
          fn = get_time()
@@ -524,6 +583,10 @@ module cmfd
          write(*, *) '  KOMODO IS STOPING...'
          stop
       end if
+
+      if (use_wielandt_shift) then
+         deallocate(shift_diag)
+      endif
 
    end subroutine outer
 
@@ -587,6 +650,8 @@ module cmfd
 
             !!!Inner Iteration
             select case (matrix_solver)
+               case ('prec_cg')
+                  call prec_cg(nin, g, bs)
                case ('cg')
                   call cg(nin, g, bs)
                case ('bicg')
@@ -686,6 +751,8 @@ module cmfd
 
             !!!Inner Iteration
             select case (matrix_solver)
+               case ('prec_cg')
+                  call prec_cg(nin, g, bs)
                case ('cg')
                   call cg(nin, g, bs)
                case ('bicg')
@@ -735,7 +802,8 @@ module cmfd
 
 
       use sdata, only: ng, nnod, nin, serc, ferc, fer, ser, f0, nupd, &
-      ke, nac, s0, fs0, ndmax, nth, kern, get_time, fdm_time, matrix_solver
+      ke, nac, s0, fs0, ndmax, nth, kern, get_time, fdm_time, matrix_solver, &
+      use_wielandt_shift, wielandt_init_iter, wielandt_shift, a, ind, nuf, chi, mat
       use io, only: ounit, biter
       use nodal, only: nodal_update
 
@@ -752,6 +820,12 @@ module cmfd
       logical :: first = .true.
       real(dp) :: st, fn
       logical :: lnupd = .true.
+
+      real(dp) :: shift
+      real(dp) :: beta ! shifted eigenvalue
+      real(dp), allocatable :: shift_diag(:,:) ! (nnod, ng)
+      integer :: i, j, row_start, row_end
+      real(dp) :: xsum
 
       st = get_time()
 
@@ -772,6 +846,12 @@ module cmfd
       errn = 1._dp
       e1 = integrate(errn)
 
+      beta = ke
+      if (use_wielandt_shift) then
+         allocate(shift_diag(nnod, ng))
+         shift_diag = 0.0_dp
+      end if
+
       fn = get_time()
       fdm_time = fdm_time + (fn - st) ! Get FDM time
 
@@ -779,18 +859,55 @@ module cmfd
 
       !Start outer iteration
       do p = 1, nth
+
          st = get_time()
          fc = f         ! Save old integrated fission source
          fs0c = fs0       ! Save old fission source
          f0c = f0        ! Save old flux
          keo = ke        ! Save old multiplication factor
-         erro = errn       ! Save old fission source error/difference
+
+         ! update shifted eigenvalue
+         if ((use_wielandt_shift) .and. (p > wielandt_init_iter)) then
+            if (wielandt_shift < 0.0_dp) then
+               shift = ke - wielandt_shift
+            else
+               shift = wielandt_shift
+            end if
+            beta = shift * ke / (shift - ke)
+         else
+            beta = ke
+         end if
+
+         if ((use_wielandt_shift) .and. (p > wielandt_init_iter)) then
+            ! need to adjust the diagonal for the Wielandt shift
+            ! importantly, I also have to store the adjustment so that I can
+            ! undo it on the next iteration
+            do i = 1,nnod
+               row_start = ind%row(i)
+               row_end = ind%row(i + 1) - 1
+               do j = row_start, row_end
+                  if (ind%col(j) == i) then
+                     xsum = sum(nuf(i, :) * f0(i, :))
+                     do g = 1, ng
+                        a(g)%elmn(j) = a(g)%elmn(j) + shift_diag(i, g)
+                        shift_diag(i, g) = chi(mat(i), g) / (shift * f0(i, g)) * xsum
+                        a(g)%elmn(j) = a(g)%elmn(j) - shift_diag(i, g)
+                     end do
+                     exit
+                  endif
+               end do
+            end do
+         end if
+
+         erro = errn      ! Save old fission source error/difference
          do g = 1, ng
             !!!Calculate total source
-            call tsrc(g, ke, bs)
+            call tsrc(g, beta, bs)
 
             !!!Inner Iteration
             select case (matrix_solver)
+               case ('prec_cg')
+                  call prec_cg(nin, g, bs)
                case ('cg')
                   call cg(nin, g, bs)
                case ('bicg')
@@ -803,7 +920,16 @@ module cmfd
          if (mod(p, nac) == 0) call fiss_extrp(0, e1, e2, erro, errn, fs0)     ! Fission source extrapolation
          e1 = e2                       ! Save l2 norm of the fission source error
          f = integrate(fs0)            ! Integrate fission source
-         ke = keo * f / fc             ! Update Keff
+
+         ! update shifted eigenvalue
+         ! then, recompute keff
+         beta = beta * f / fc
+         if ((use_wielandt_shift) .and. (p > wielandt_init_iter)) then
+            ke = shift * beta / (shift + beta)
+         else
+            ke = beta
+         end if
+
          call rele(fs0, fs0c, ser)     ! Search maximum point wise fission source Relative Error
          call releg(f0, f0c, fer)      ! Search maximum point wise flux error
          fn = get_time()
@@ -811,7 +937,9 @@ module cmfd
          if (mod(p, nupd) == 0 .and. kern /= ' FDM') then
             lnupd = .false.
             call nodal_upd(0, 1)        ! Nodal coefficients update
+            shift_diag = 0.0_dp
          end if
+
          if ((ser < serc) .and. (fer < ferc) .and. (ndmax < 1.e-2)) exit
       end do
 
@@ -822,6 +950,10 @@ module cmfd
          write(ounit, *) 'CHANGE ITERATION CONTROL USING %ITER CARD'
          stop
       end if
+
+      if (use_wielandt_shift) then
+         deallocate(shift_diag)
+      endif
 
    end subroutine outer_th
 
@@ -874,6 +1006,8 @@ module cmfd
 
             !!!Inner Iteration
             select case (matrix_solver)
+               case ('prec_cg')
+                  call prec_cg(nin, g, bs)
                case ('cg')
                   call cg(nin, g, bs)
                case ('bicg')
@@ -1232,9 +1366,125 @@ module cmfd
 
    !****************************************************************************!
 
+   subroutine prec_cg(imax, g, b)
+
+      use sdata, only: r, rs, p, v, t, ng, nnod, f0, inner_atol, inner_rtol, &
+      ind, a
+
+      !Purpose: to solve linear of system equation with Conjugate Gradient (CG) method
+      ! with Jacobi (diagonal) preconditioner. Sparse matrix saved in a and indexed in rc.
+      ! a dimension is (#non_zero_elements)
+      ! rc dimension is (2,#non_zero_elements+1)
+      ! on first entry for each group, compute and store the inverse diagonal to use for preconditioner
+      ! adapted from:
+      ! "Iterative Methods for Linear and Nonlinear Equations" By: C. T. Kelley
+
+      implicit none
+
+      integer, intent(in) :: imax, g  ! Max. number of iteration and group number
+      real(dp), dimension(:), intent(in) :: b   ! source
+
+      real(dp) :: rho_k1, rho_k2
+      real(dp) :: tau_k1, tau_k2
+      real(dp) :: alpha, beta
+      real(dp) :: converge, xsto
+      integer :: i, j
+      integer :: row_start, row_end
+
+      real(dp), allocatable :: inv_diag(:)
+
+      logical, save :: first = .true.
+      logical, parameter :: verbose = .false.
+
+      if (first) then
+        call gpu_allocate(r, nnod)
+        call gpu_allocate(rs, nnod)
+        call gpu_allocate(p, nnod)
+        call gpu_allocate(v, nnod)
+        call gpu_allocate(t, nnod)
+        first = .false.
+      end if
+
+      ! Construct the preconditioner. This is done every time this subroutine is visited.
+      ! It may be possible to efficiently cache this information, but would require more knowledge of the algorithm.
+      ! Be cautious if this is used in association with Sutton's method for Wielandt shift or the matrix is updated
+      ! during CMFD iterations.
+      call gpu_allocate(inv_diag, nnod)
+      call gpu_initialize(inv_diag, 0.0_dp)
+      do i = 1,nnod
+        row_start = ind%row(i)
+        row_end   = ind%row(i + 1) - 1
+        do j = row_start, row_end
+           if (ind%col(j) == i) then
+              inv_diag(i) = 1.0_dp / a(g)%elmn(j)
+              exit
+           end if
+        end do
+      end do
+
+      ! 1)
+      call sp_matvec(g, f0(:, g), r)
+      call xpby(b, -1._dp, r, rs)
+      call xew(rs, r)
+
+      rho_k2 = 0.0_dp
+      rho_k1 = dproduct(r, r)
+      xsto = sqrt(rho_k1)
+
+      tau_k1 = 0.0_dp
+      tau_k2 = 0.0_dp
+
+      call gpu_initialize(v, 0.0_dp)
+      call gpu_initialize(p, 0.0_dp)
+      call gpu_initialize(t, 0.0_dp)
+
+      ! 2)
+      beta = 0.0_dp
+      do i = 1,imax
+         ! 2) (a) 
+         call xmuly(inv_diag, r, t)
+         ! 2) (b)
+         tau_k1 = dproduct(t, r)
+         ! 2) (c)
+         if (i == 1) then
+            beta = 0.0_dp
+         else
+            beta = tau_k1 / tau_k2
+         end if
+         call xpby(t, beta, p, rs)
+         call xew(rs, p)
+         ! 2) (d)
+         call sp_matvec(g, p, v)
+         ! 2) (e)
+         alpha = tau_k1 / dproduct(p, v)
+         ! 2) (f)
+         call xpby(f0(:, g), alpha, p, rs)
+         call xew(rs, f0(:, g))
+         ! 2) (g)
+         call xpby(r, -alpha, v, rs)
+         call xew(rs, r)
+         ! 2) (h)
+         rho_k2 = rho_k1
+         rho_k1 = dproduct(r, r)
+         tau_k2 = tau_k1
+
+         converge = sqrt(rho_k1)
+         if (verbose) then
+           write(*,'(a,i0,1x,a,es13.6)') 'it=', i, 'converge=', converge
+         end if
+         if ((converge < inner_atol) .or. (converge < inner_rtol*xsto)) exit
+      end do
+
+      ! NOTE: consider checking if the solution actually converged before
+      ! the number of iterations reached imax.
+
+   end subroutine prec_cg
+
+   !****************************************************************************!
+
    subroutine cg(imax, g, b)
 
-      use sdata, only: r, rs, p, v, nnod, f0
+      use sdata, only: r, rs, p, v, nnod, f0, inner_atol, inner_rtol
 
       !Purpose: to solve linear of system equation with Conjugate Gradient (CG) method
       ! (without preconditioner). Sparse matrix saved in a and indexed in rc.
@@ -1250,15 +1500,11 @@ module cmfd
 
       real(dp) :: rho_k1, rho_k2
       real(dp) :: alpha, beta
-      real(dp) :: converge, atol, rtol, xsto
+      real(dp) :: converge, xsto
       integer :: i
 
       logical, save :: first = .true.
       logical, parameter :: verbose = .false.
-
-      ! TODO these should not be hard-wired
-      atol = 1d-8
-      rtol = 1d-5
 
       if (first) then
         call gpu_allocate(r, nnod)
@@ -1266,7 +1512,7 @@ module cmfd
         call gpu_allocate(p, nnod)
         call gpu_allocate(v, nnod)
         first = .false.
-      endif
+      end if
 
       ! 1)
       call sp_matvec(g, f0(:, g), r)
@@ -1306,7 +1552,7 @@ module cmfd
          if (verbose) then
            write(*,'(a,i0,1x,a,es13.6)') 'it=', i, 'converge=', converge
          end if
-         if ((converge < atol) .or. (converge < rtol*xsto)) exit
+         if ((converge < inner_atol) .or. (converge < inner_rtol*xsto)) exit
       end do
 
       ! NOTE: consider checking if the solution actually converged before
@@ -1318,7 +1564,7 @@ module cmfd
 
    subroutine bicg(imax, g, b)
 
-      use sdata, only: r, rs, v, p, s, t, tmp, nnod, f0
+      use sdata, only: r, rs, v, p, s, t, tmp, nnod, f0, inner_atol, inner_rtol
 
       !Purpose: to solve linear of system equation with BiCGSTAB method
       ! (without preconditioner). Sparse matrix saved in a and indexed in rc.
@@ -1334,15 +1580,11 @@ module cmfd
 
       real(dp) :: rho, rho_prev
       real(dp) :: alpha, omega, beta, theta
-      real(dp) :: converge, atol, rtol, xsto
+      real(dp) :: converge, xsto
       integer :: i
 
       logical :: first = .true.
       logical, parameter :: verbose = .false.
-
-      ! TODO these should not be hard-wired
-      atol = 1d-8
-      rtol = 1d-5
 
       if (first) then
          call gpu_allocate(r, nnod)
@@ -1398,7 +1640,7 @@ module cmfd
          if (verbose) then
            write(*,'(a,i0,1x,a,es13.6)') 'it=', i, 'converge=', converge
          end if
-         if ((converge < atol) .or. (converge < rtol*xsto)) exit
+         if ((converge < inner_atol) .or. (converge < inner_rtol*xsto)) exit
       end do
       !$acc exit data delete(b)
       !$acc update self(f0(:,g))
@@ -1476,7 +1718,7 @@ module cmfd
       !$acc kernels present(x,y,w)
       do i = 1, length
          w(i) = alpha * x(i) + beta * y(i)
-      enddo
+      end do
       !$acc end kernels
 
    end subroutine
@@ -1493,7 +1735,24 @@ module cmfd
       !$acc kernels present(x,y,w)
       do i = 1, length
          w(i) = x(i) + beta * y(i)
-      enddo
+      end do
+      !$acc end kernels
+
+   end subroutine
+
+   !****************************************************************************!
+
+   subroutine xmuly(x, y, z)
+      implicit none
+      real(dp), intent(in) :: x(:), y(:)
+      real(dp), intent(out) :: z(:)
+      integer :: i, length
+
+      length = size(x)
+      !$acc kernels present(x,y,z)
+      do i = 1, length
+        z(i) = x(i) * y(i)
+      end do
       !$acc end kernels
 
    end subroutine
@@ -1510,7 +1769,7 @@ module cmfd
       !$acc kernels present(x,w)
       do i = 1, length
          w(i) = x(i)
-      enddo
+      end do
       !$acc end kernels
 
    end subroutine

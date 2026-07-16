@@ -13,7 +13,7 @@ IAEA2D Benchmark With  16x16 nodes/FA with FDM nodal kernel
 FDM
 
 %ITER
-1200 20 1.e-5 1.e-5 15 40 20 80 'cg' / ! Set fission interpolation interval every 10 outer iteration
+1200 100 1.e-5 1.e-5 15 40 20 80 / ! Set fission interpolation interval every 10 outer iteration
 
 ! Cross-sections card
 %XSEC

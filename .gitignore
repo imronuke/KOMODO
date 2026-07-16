@@ -2,3 +2,6 @@ build/
 *.mod
 *.o
 *.out
+
+# vim swap files
+**.*.swp
