@@ -5,7 +5,7 @@ module cmfd
    implicit none
    save
 
-   contains
+contains
 
    !****************************************************************************!
 
@@ -14,7 +14,7 @@ module cmfd
       !Purpose: to calculate FDM nodal coupling coefficients
 
       use sdata, only: ng, nnod, ix, iy, iz, xyz, d, xdel, ydel, zdel, &
-      ystag, xstag, nod, nzz, xeast, xwest, ysouth, ynorth, zbott, ztop
+         ystag, xstag, nod, nzz, xeast, xwest, ysouth, ynorth, zbott, ztop
 
       implicit none
 
@@ -46,7 +46,7 @@ module cmfd
             if (i == ystag(j)%smax) then
                if (xeast == 0) then
                   nod(n, g)%df(1) = 2._dp * alb * d(n, g) / &
-                  (2._dp * d(n, g) + alb * xdel(i))
+                     (2._dp * d(n, g) + alb * xdel(i))
                else if (xeast == 1) then
                   nod(n, g)%df(1) = d(n, g) / (2._dp * d(n, g) + 0.5_dp * xdel(i))
                else
@@ -55,13 +55,13 @@ module cmfd
             else
                d2 = d(xyz(i + 1, j, k), g)
                nod(n, g)%df(1) = 2._dp * d(n, g) * d2 / &
-               (d(n, g) * xdel(i + 1) + d2 * xdel(i))
+                  (d(n, g) * xdel(i + 1) + d2 * xdel(i))
             end if
 
             if (i == ystag(j)%smin) then
                if (xwest == 0) then
                   nod(n, g)%df(2) = 2._dp * alb * d(n, g) / &
-                  (2._dp * d(n, g) + alb * xdel(i))
+                     (2._dp * d(n, g) + alb * xdel(i))
                else if (xwest == 1) then
                   nod(n, g)%df(2) = d(n, g) / (2._dp * d(n, g) + 0.5_dp * xdel(i))
                else
@@ -70,14 +70,14 @@ module cmfd
             else
                d1 = d(xyz(i - 1, j, k), g)
                nod(n, g)%df(2) = 2._dp * d(n, g) * d1 / &
-               (d(n, g) * xdel(i - 1) + d1 * xdel(i))
+                  (d(n, g) * xdel(i - 1) + d1 * xdel(i))
             end if
 
             ! Set nodal coupling coefficients in y direction
             if (j == xstag(i)%smax) then
                if (ynorth == 0) then
                   nod(n, g)%df(3) = 2._dp * alb * d(n, g) / &
-                  (2._dp * d(n, g) + alb * ydel(j))
+                     (2._dp * d(n, g) + alb * ydel(j))
                else if (ynorth == 1) then
                   nod(n, g)%df(3) = d(n, g) / (2._dp * d(n, g) + 0.5_dp * ydel(j))
                else
@@ -86,13 +86,13 @@ module cmfd
             else
                d2 = d(xyz(i, j + 1, k), g)
                nod(n, g)%df(3) = 2._dp * d(n, g) * d2 / &
-               (d(n, g) * ydel(j + 1) + d2 * ydel(j))
+                  (d(n, g) * ydel(j + 1) + d2 * ydel(j))
             end if
 
             if (j == xstag(i)%smin) then
                if (ysouth == 0) then
                   nod(n, g)%df(4) = 2._dp * alb * d(n, g) / &
-                  (2._dp * d(n, g) + alb * ydel(j))
+                     (2._dp * d(n, g) + alb * ydel(j))
                else if (ysouth == 1) then
                   nod(n, g)%df(4) = d(n, g) / (2._dp * d(n, g) + 0.5_dp * ydel(j))
                else
@@ -101,14 +101,14 @@ module cmfd
             else
                d1 = d(xyz(i, j - 1, k), g)
                nod(n, g)%df(4) = 2._dp * d(n, g) * d1 / &
-               (d(n, g) * ydel(j - 1) + d1 * ydel(j))
+                  (d(n, g) * ydel(j - 1) + d1 * ydel(j))
             end if
 
             ! Set nodal coupling coefficients in z direction
             if (k == nzz) then
                if (ztop == 0) then
                   nod(n, g)%df(5) = 2._dp * alb * d(n, g) / &
-                  (2._dp * d(n, g) + alb * zdel(k))
+                     (2._dp * d(n, g) + alb * zdel(k))
                else if (ztop == 1) then
                   nod(n, g)%df(5) = d(n, g) / (2._dp * d(n, g) + 0.5_dp * zdel(k))
                else
@@ -117,13 +117,13 @@ module cmfd
             else
                d2 = d(xyz(i, j, k + 1), g)
                nod(n, g)%df(5) = 2._dp * d(n, g) * d2 / &
-               (d(n, g) * zdel(k + 1) + d2 * zdel(k))
+                  (d(n, g) * zdel(k + 1) + d2 * zdel(k))
             end if
 
             if (k == 1) then
                if (zbott == 0) then
                   nod(n, g)%df(6) = 2._dp * alb * d(n, g) / &
-                  (2._dp * d(n, g) + alb * zdel(k))
+                     (2._dp * d(n, g) + alb * zdel(k))
                else if (zbott == 1) then
                   nod(n, g)%df(6) = d(n, g) / (2._dp * d(n, g) + 0.5_dp * zdel(k))
                else
@@ -132,7 +132,7 @@ module cmfd
             else
                d1 = d(xyz(i, j, k - 1), g)
                nod(n, g)%df(6) = 2._dp * d(n, g) * d1 / &
-               (d(n, g) * zdel(k - 1) + d1 * zdel(k))
+                  (d(n, g) * zdel(k - 1) + d1 * zdel(k))
             end if
          end do
       end do
@@ -231,7 +231,7 @@ module cmfd
       ! two-dimensional vector ind and non-zero elements strored in A
 
       use sdata, only: nod, ix, iy, iz, xdel, ydel, zdel, &
-      ystag, xstag, nnod, sigr, nzz, ng, a
+         ystag, xstag, nnod, sigr, nzz, ng, a
 
       implicit none
 
@@ -280,12 +280,12 @@ module cmfd
             ! Diagonal matrix elementss
             rec = rec + 1
             a(g)%elmn(rec) = (nod(n, g)%df(1) + nod(n, g)%df(2) - &
-            nod(n, g)%dn(1) + nod(n, g)%dn(2)) / xdel(i) + &
-            (nod(n, g)%df(3) + nod(n, g)%df(4) - &
-            nod(n, g)%dn(3) + nod(n, g)%dn(4)) / ydel(j) + &
-            (nod(n, g)%df(5) + nod(n, g)%df(6) - &
-            nod(n, g)%dn(5) + nod(n, g)%dn(6)) / zdel(k) + &
-            sigr(n, g)
+               nod(n, g)%dn(1) + nod(n, g)%dn(2)) / xdel(i) + &
+               (nod(n, g)%df(3) + nod(n, g)%df(4) - &
+               nod(n, g)%dn(3) + nod(n, g)%dn(4)) / ydel(j) + &
+               (nod(n, g)%df(5) + nod(n, g)%df(6) - &
+               nod(n, g)%dn(5) + nod(n, g)%dn(6)) / zdel(k) + &
+               sigr(n, g)
 
             ! Upper diagonal matrix element for x-direction
             if (i /= ystag(j)%smax) then
@@ -398,7 +398,7 @@ module cmfd
       nod_time = nod_time + (fn - st)
 
       1145 format ('MAX. CHANGE IN NODAL COUPLING COEF.= ', es12.5, &
-      ' AT NODE I = ', i2, ', J = ', i2, ', K = ', i2)
+         ' AT NODE I = ', i2, ', J = ', i2, ', K = ', i2)
 
    end subroutine nodal_upd
 
@@ -436,7 +436,7 @@ module cmfd
 
 
       use sdata, only: ng, nnod, nout, nin, serc, ferc, fer, ser, f0, nupd, &
-      ke, nac, fs0, s0, ndmax, kern, get_time, fdm_time
+         ke, nac, fs0, s0, ndmax, kern, get_time, fdm_time
       use io, only: ounit, scr, bther
       use nodal, only: nodal_update
 
@@ -532,7 +532,7 @@ module cmfd
 
 
       use sdata, only: ng, nnod, nout, nin, serc, ferc, fer, ser, f0, nupd, &
-      ke, nac, fs0, s0, ndmax, kern, get_time, fdm_time
+         ke, nac, fs0, s0, ndmax, kern, get_time, fdm_time
       use io, only: ounit, scr
       use nodal, only: nodal_update
 
@@ -621,7 +621,7 @@ module cmfd
 
 
       use sdata, only: ng, nnod, nout, nin, serc, ferc, fer, ser, f0, nupd, &
-      ke, nac, fs0, s0, ndmax, kern, get_time, fdm_time
+         ke, nac, fs0, s0, ndmax, kern, get_time, fdm_time
       use io, only: ounit, scr
       use nodal, only: nodal_update
 
@@ -691,7 +691,7 @@ module cmfd
          ! For RODEJECT mode, adjoint calculation is approximated using
          ! nodal coefficients from forward calculation.
          if (mod(p, nupd) == 0 .and. kern /= ' FDM' &
-         .and. popt > 0) call nodal_upd(popt, 0)                       ! Nodal coefficients update
+            .and. popt > 0) call nodal_upd(popt, 0)                       ! Nodal coefficients update
          if (popt > 0) then
             write(ounit, '(I5,F13.6,2ES15.5)') p, ke, ser, fer           ! Write outer iteration evolution
             if (scr) write(*, '(I5,F13.6,2ES15.5)') p, ke, ser, fer      ! Write outer iteration evolution
@@ -720,7 +720,7 @@ module cmfd
 
 
       use sdata, only: ng, nnod, nin, serc, ferc, fer, ser, f0, nupd, &
-      ke, nac, s0, fs0, ndmax, nth, kern, get_time, fdm_time
+         ke, nac, s0, fs0, ndmax, nth, kern, get_time, fdm_time
       use io, only: ounit, biter
       use nodal, only: nodal_update
 
@@ -815,7 +815,7 @@ module cmfd
 
 
       use sdata, only: ng, nnod, nout, nin, serc, ferc, fer, ser, f0, nupd, &
-      nac, fs0, ndmax, exsrc, kern, get_time, fdm_time
+         nac, fs0, ndmax, exsrc, kern, get_time, fdm_time
       use nodal, only: nodal_update
 
       implicit none
@@ -882,8 +882,8 @@ module cmfd
    subroutine get_exsrc(ht, exsrc)
 
       use sdata, only: lamb, c0, ibeta, chi, mat, velo, &
-      fst, ft, nf, m, omeg, ng, nnod, dfis, nuf, &
-      bth, sth, s0, tbeta, sigrp, l
+         fst, ft, nf, m, omeg, ng, nnod, dfis, nuf, &
+         bth, sth, s0, tbeta, sigrp, l
       use io, only: bxtab
 
       ! Purpose:
@@ -916,17 +916,17 @@ module cmfd
                a1 = a1 - pxe
                dfis(n) = dfis(n) + m(mat(n))%ibeta(i) * a2
                dt = dt + m(mat(n))%lamb(i) * c0(n, i) * pxe &
-               + m(mat(n))%ibeta(i) * a1 * fst(n)
+                  + m(mat(n))%ibeta(i) * a1 * fst(n)
                dtp = dtp + m(mat(n))%lamb(i) * c0(n, i)
             end do
 
             do g = 1, ng
                pthet = -l(n, g) - sigrp(n, g) * ft(n, g) + s0(n, g) &
-               + (1._dp - tbeta(mat(n))) * chi(mat(n), g) * fst(n) &
-               + chi(mat(n), g) * dtp
+                  + (1._dp - tbeta(mat(n))) * chi(mat(n), g) * fst(n) &
+                  + chi(mat(n), g) * dtp
                exsrc(n, g) = chi(mat(n), g) * dt &
-               + exp(omeg(n, g) * ht) * ft(n, g) &
-                / (sth * m(mat(n))%velo(g) * ht) + bth * pthet
+                  + exp(omeg(n, g) * ht) * ft(n, g) &
+                  / (sth * m(mat(n))%velo(g) * ht) + bth * pthet
             end do
          end do
       else
@@ -941,17 +941,17 @@ module cmfd
                a1 = a1 - pxe
                dfis(n) = dfis(n) + ibeta(i) * a2
                dt = dt + lamb(i) * c0(n, i) * pxe &
-               + ibeta(i) * a1 * fst(n)
+                  + ibeta(i) * a1 * fst(n)
                dtp = dtp + lamb(i) * c0(n, i)
             end do
 
             do g = 1, ng
                pthet = -l(n, g) - sigrp(n, g) * ft(n, g) + s0(n, g) &
-               + (1._dp - tbeta(mat(n))) * chi(mat(n), g) * fst(n) &
-               + chi(mat(n), g) * dtp
+                  + (1._dp - tbeta(mat(n))) * chi(mat(n), g) * fst(n) &
+                  + chi(mat(n), g) * dtp
                exsrc(n, g) = chi(mat(n), g) * dt &
-               + exp(omeg(n, g) * ht) * ft(n, g) / (sth * velo(g) * ht) &
-               + bth * pthet
+                  + exp(omeg(n, g) * ht) * ft(n, g) / (sth * velo(g) * ht) &
+                  + bth * pthet
             end do
          end do
       end if
@@ -1079,7 +1079,7 @@ module cmfd
       !
 
       use sdata, only: chi, mat, nnod, fs0, f0, ng, sigs, chi, exsrc, &
-      tbeta, s0, dfis
+         tbeta, s0, dfis
 
       implicit none
 
@@ -1097,7 +1097,7 @@ module cmfd
 
       do n = 1, nnod
          bs(n) = (1._dp - tbeta(mat(n)) + dfis(n)) * chi(mat(n), g) * fs0(n) &
-         + s0(n, g) + exsrc(n, g)
+            + s0(n, g) + exsrc(n, g)
       end do
 
    end subroutine tsrctr
@@ -1223,8 +1223,10 @@ module cmfd
       integer, intent(in) :: imax, g  ! Max. number of iteration and group number
       real(dp), dimension(:), intent(in) :: b   ! source
 
+      real(dp), parameter :: btol = tiny(1._dp)
       real(dp) :: rho, rho_prev
       real(dp) :: alpha, omega, beta, theta
+      real(dp) :: denom
       integer :: i
       logical :: first = .true.
 
@@ -1260,15 +1262,30 @@ module cmfd
 
       do i = 1, imax
          rho_prev = rho
+         if (abs(rho_prev) <= btol .or. abs(omega) <= btol) then
+            call gpu_initialize(r, 0.0_dp)
+            exit
+         end if
          rho = dproduct(rs, r)
          beta = (rho / rho_prev) * (alpha / omega)
          call xpby(p, -omega, v, tmp)
          call xpby(r, beta, tmp, p)
          call sp_matvec(g, p, v)
-         alpha = rho / dproduct(rs, v)
+         denom = dproduct(rs, v)
+         if (abs(denom) <= btol) then
+            call gpu_initialize(r, 0.0_dp)
+            exit
+         end if
+         alpha = rho / denom
          call xpby(r, -alpha, v, s)
          call sp_matvec(g, s, t)
          theta = dproduct(t, t)
+         if (theta <= btol) then
+            call xpby(f0(:, g), alpha, p, tmp)
+            call xew(tmp, f0(:, g))
+            call gpu_initialize(r, 0.0_dp)
+            exit
+         end if
          omega = dproduct(t, s) / theta
          call axpby(alpha, p, omega, s, tmp)
          call xpby(f0(:, g), 1.0_dp, tmp, r)
