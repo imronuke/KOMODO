@@ -5,6 +5,7 @@ program main
    use io, only: ounit, scr, inp_read, bther
    use control, only: forward, adjoint, fixedsrc, cbsearch, cbsearcht
    use trans, only: rod_eject, rod_eject_th
+   use hdf5_output, only: hdf5_close
 
    implicit none
 
@@ -85,5 +86,7 @@ program main
 
    write(*, *)
    write(*, *) "  KOMODO EXIT NORMALLY"
+
+   call hdf5_close()
 
 end program

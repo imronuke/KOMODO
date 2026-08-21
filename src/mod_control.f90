@@ -19,6 +19,7 @@ module control
       bcon, bpos, npow, th_niter, npow
       use io, only: asmpow, axipow, asmflux, inp_read, bther, &
       boutp, print_outp, bvtk, print_vtk
+      use hdf5_output, only: hdf5_is_active, hdf5_write_step
       use xsec, only: xs_updt
       use cmfd, only: outer, print_keff
       use th, only: th_iter
@@ -53,6 +54,8 @@ module control
 
       if (boutp == 1) call print_outp(npow)
 
+      if (hdf5_is_active) call hdf5_write_step(0, 0._dp)
+
       if (bvtk == 1) call print_vtk(0)
 
    end subroutine forward
@@ -70,6 +73,7 @@ module control
       cden, bcon, bpos, npow
       use io, only: asmpow, axipow, asmflux, inp_read, &
       bvtk, print_vtk
+      use hdf5_output, only: hdf5_is_active, hdf5_write_step
       use xsec, only: xs_updt
       use cmfd, only: outer_ad, print_keff
 
@@ -95,6 +99,8 @@ module control
 
       if (afrad == 1) call asmflux(1.e0_dp)
 
+      if (hdf5_is_active) call hdf5_write_step(0, 0._dp)
+
       if (bvtk == 1) call print_vtk(0)
 
    end subroutine adjoint
@@ -111,6 +117,7 @@ module control
       use sdata, only: nnod, aprad, apaxi, afrad, ftem, mtem, cden, &
       bcon, bpos, powtot, npow
       use io, only: asmpow, axipow, asmflux, inp_read, bvtk, print_vtk
+      use hdf5_output, only: hdf5_is_active, hdf5_write_step
       use xsec, only: xs_updt
       use cmfd, only: outer_fs
 
@@ -135,6 +142,8 @@ module control
 
       if (afrad == 1) call asmflux()
 
+      if (hdf5_is_active) call hdf5_write_step(0, 0._dp)
+
       if (bvtk == 1) call print_vtk(0)
 
    end subroutine fixedsrc
@@ -152,6 +161,7 @@ module control
       aprad, apaxi, afrad, npow
       use io, only: ounit, asmflux, asmpow, axipow, bvtk, print_vtk, &
       print_outp, boutp
+      use hdf5_output, only: hdf5_is_active, hdf5_write_step
       use cmfd, only: outer
       use xsec, only: xs_updt
 
@@ -207,6 +217,8 @@ module control
 
       if (afrad == 1) call asmflux(1._dp)
 
+      if (hdf5_is_active) call hdf5_write_step(0, 0._dp, boron_concentration = bcon)
+
       if (bvtk == 1) call print_vtk(0)
 
       if (boutp == 1) call print_outp(npow)
@@ -229,6 +241,7 @@ module control
       serc, ferc
       use io, only: ounit, asmflux, asmpow, axipow, bvtk, print_vtk, &
       print_outp, boutp
+      use hdf5_output, only: hdf5_is_active, hdf5_write_step
       use cmfd, only: outer
       use th, only : th_iter
       ! use trans, only: vtk_out
@@ -287,6 +300,8 @@ module control
       if (apaxi == 1) call axipow(npow)
 
       if (afrad == 1) call asmflux(1._dp)
+
+      if (hdf5_is_active) call hdf5_write_step(0, 0._dp, boron_concentration = bcon)
 
       if (bvtk == 1) call print_vtk(0)
 

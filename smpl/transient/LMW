@@ -84,3 +84,5 @@ LMW  TRANSIENT
 0.5
 
 %VTK
+
+%HDF5

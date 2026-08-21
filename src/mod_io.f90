@@ -35,7 +35,7 @@ module io
    integer, parameter :: ucrod = 119, ubcon = 120, uftem = 121, umtem = 122
    integer, parameter :: ucden = 123, ucbcs = 124, uejct = 125, uther = 126
    integer, parameter :: uxtab = 127, ukern = 128, uextr = 129, uthet = 130
-   integer, parameter :: uoutp = 131, uvtk = 132
+   integer, parameter :: uoutp = 131, uvtk = 132, uhf5 = 133
    integer :: bunit
 
    ! Card active/inactive indicator (active = 1, inactive = 0)
@@ -43,18 +43,18 @@ module io
    integer :: biter = 0, bprnt = 0, badf = 0, bcrod = 0, bbcon = 0
    integer :: bftem = 0, bmtem = 0, bcden = 0, bcbcs = 0, bejct = 0
    integer :: bther = 0, bxtab = 0, bkern = 0, bextr = 0, bthet = 0
-   integer :: boutp = 0, bvtk = 0
+   integer :: boutp = 0, bvtk = 0, bhf5 = 0
 
    ! This declaration is to notify that the error in separated card file (in case so)
-   integer, parameter :: ncard = 22                  ! Number of card
+   integer, parameter :: ncard = 23                  ! Number of card
    integer, dimension(ncard) :: uarr = &             ! Array of buffer unit number
    (/umode, uxsec, ugeom, ucase, uesrc, uiter, uprnt, uadf, ucrod, ubcon, &
    uftem, umtem, ucden, ucbcs, uejct, uther, uxtab, ukern, uextr, uthet, &
-   uoutp, uvtk /)
+   uoutp, uvtk, uhf5 /)
    character(len = 4), dimension(ncard) :: carr = &    ! Array of card name
    (/'MODE', 'XSEC', 'GEOM', 'CASE', 'ESRC', 'ITER', 'PRNT', 'ADF ', 'CROD', 'BCON', &
    'FTEM', 'MTEM', 'CDEN', 'CBCS', 'EJCT', 'THER', 'XTAB', 'KERN', 'EXTR', 'THET', &
-   'OUTP', 'VTK ' /)
+   'OUTP', 'VTK ', 'HDF5' /)
    character(len = 100), dimension(:), allocatable :: farr   ! Array of card file
 
    ! Geometry
@@ -134,6 +134,7 @@ module io
       open (unit = uthet, status = 'SCRATCH', action = 'READWRITE')
       open (unit = uoutp, status = 'SCRATCH', action = 'READWRITE')
       open (unit = uvtk, status = 'SCRATCH', action = 'READWRITE')
+      open (unit = uhf5, status = 'SCRATCH', action = 'READWRITE')
 
       ! By default, card file names are the input file name
       allocate (farr(ncard)) ;
@@ -171,6 +172,7 @@ module io
       rewind(uthet)
       rewind(uoutp) ;
       rewind(uvtk)
+      rewind(uhf5)
 
       ! Start reading buffer files for each input card buffer
 
@@ -371,6 +373,9 @@ module io
 
       ! card VTK
       if (bvtk == 1) call inp_vtk()
+
+      ! card HDF5
+      if (bhf5 == 1) call inp_hdf5(uhf5)
 
       deallocate(mnum)
       do i = 1, np
@@ -661,6 +666,9 @@ module io
                case('VTK') ;
                   bunit = uvtk ;
                   bvtk = 1
+               case('HDF5') ;
+                  bunit = uhf5 ;
+                  bhf5 = 1
                case default
 
                   write(ounit, 1014) ln, iline
@@ -4236,6 +4244,58 @@ module io
 
    !****************************************************************************!
 
+   subroutine inp_hdf5(xbunit)
+
+      !
+      ! Purpose:
+      !    To read HDF5 output card in input.
+      !
+
+      use sdata, only: mode
+      use hdf5_output, only: hdf5_configure, hdf5_is_compiled
+
+      implicit none
+
+      integer, intent(in) :: xbunit
+
+      integer :: ln
+      integer :: ios
+      character(len = 200) :: h5_file
+
+      h5_file = trim(iname) // '.h5'
+
+      read(xbunit, '(A2,I5,A200)', iostat = ios) ind, ln, h5_file
+      if (ios == 0) then
+         h5_file = trim(adjustl(h5_file))
+      else
+         h5_file = trim(iname) // '.h5'
+      end if
+
+      write(ounit, *)
+      write(ounit, *)
+      write(ounit, *) '                  >>>>>READING HDF5<<<<<'
+      write(ounit, *) '           -------------------------------------'
+
+      if (.not. hdf5_is_compiled()) then
+         write(ounit, *) '  ERROR: %HDF5 CARD REQUIRES BUILDING WITH HDF5_OUTPUT=ON'
+         write(*, *) '  ERROR: %HDF5 CARD REQUIRES BUILDING WITH HDF5_OUTPUT=ON'
+         stop
+      end if
+
+      call hdf5_configure(trim(h5_file), trim(iname), bther == 1, &
+      trim(mode) == 'RODEJECT', bcrod == 1, &
+      bbcon == 1 .or. bcbcs == 1 .or. trim(mode) == 'BCSEARCH')
+
+      write(ounit, '(2x, A, A)') 'HDF5 FILE WILL BE GENERATED : ', trim(h5_file)
+      if (scr) then
+         write(*, *)
+         write(*, '(2x, A, A)') 'HDF5 FILE WILL BE GENERATED : ', trim(h5_file)
+      end if
+
+   end subroutine inp_hdf5
+
+   !****************************************************************************!
+
    subroutine flux_atpower(flux)
 
       !
@@ -4848,6 +4908,12 @@ module io
       end do
 
       write(vunit, 3005) 'CELL_DATA', nnod
+
+      write(vunit, *) 'SCALARS xyz int'
+      write(vunit, *) 'LOOKUP_TABLE default'
+      do n = 1, nnod
+         write(vunit, '(I8)') n
+      end do
 
       deallocate(cell)
 

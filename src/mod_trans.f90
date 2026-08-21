@@ -25,6 +25,7 @@ module trans
       bcon, ftem, mtem, cden, bpos, nb, &
       ibeta, f0, ft, c0, tbeta, omeg, ctbeta, l, npow
       use io, only: ounit, bextr, scr, bvtk, print_vtk
+      use hdf5_output, only: hdf5_is_active, hdf5_write_step
       use xsec, only: xs_updt
       use cmfd, only: outer_tr, outer, outer_ad
       use th, only : powdis
@@ -98,6 +99,7 @@ module trans
       ! print vtk
       allocate(npow(nnod))
       call powdis(npow)
+      if (hdf5_is_active) call hdf5_write_step(0, 0._dp, reactivity = rho)
       if (bvtk == 1) call print_vtk(0)
 
       ! File output
@@ -178,6 +180,7 @@ module trans
       tfm, ppow, m, ftem, mtem, bpos, nb, ibeta, &
       f0, ft, c0, tbeta, omeg, npow, ctbeta, nmat, l, th_niter
       use io, only: ounit, bextr, bxtab, scr, bvtk, print_vtk
+      use hdf5_output, only: hdf5_is_active, hdf5_write_step
       use xsec, only: xs_updt
       use cmfd, only: outer_tr, outer, outer_ad
       use th, only : th_iter, par_ave, par_max
@@ -269,6 +272,8 @@ module trans
       call par_ave(mtem, tm)
       call par_max(mtem, mtm)
 
+      if (hdf5_is_active) call hdf5_write_step(0, 0._dp, reactivity = rho)
+
       if (bvtk == 1) call print_vtk(0)
 
       ! File output
@@ -354,6 +359,7 @@ module trans
       f0, ft, fst, fs0, omeg, tranw, ix, iy, iz, pow, &
       tfm, zdel, ppow, node_nf, m, mat, dfis, ctbeta, sth, sigrp
       use io, only: ounit, bxtab, bvtk, print_vtk
+      use hdf5_output, only: hdf5_is_active, hdf5_write_step
       use xsec, only: xs_updt
       use cmfd, only: outer_tr, outer
       use th, only : th_trans, par_ave, par_max, powdis
@@ -479,6 +485,14 @@ module trans
          else
             write(ounit, '(I4, F10.3, F10.4, ES15.4)') step, t2, rho / ctbeta, &
             tpow2 / tpow1
+         end if
+      end if
+
+      if (hdf5_is_active) then
+         if (thc == 1) then
+            call hdf5_write_step(step, t2, reactivity = rho, power_w = pow * xppow)
+         else
+            call hdf5_write_step(step, t2, reactivity = rho)
          end if
       end if
 

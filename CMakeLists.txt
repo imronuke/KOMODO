@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.15)
 
 option(GPU    "Use OpenACC GPU          "  OFF)
 option(DEBUG  "DEBUGGING MODE           "  OFF)
+option(HDF5_OUTPUT "Write reactor state to HDF5 files" ON)
 
 # Set for debug only
 if(GPU)
@@ -21,6 +22,13 @@ project(komodo Fortran)
 
 file(GLOB SRC_sc ${PROJECT_SOURCE_DIR}/src/*.f90 )
 add_executable(komodo ${SRC_sc})
+
+if(HDF5_OUTPUT)
+   find_package(HDF5 REQUIRED COMPONENTS Fortran)
+   target_compile_definitions(komodo PRIVATE HDF5_OUTPUT)
+   target_include_directories(komodo PRIVATE ${HDF5_Fortran_INCLUDE_DIRS})
+   target_link_libraries(komodo PRIVATE ${HDF5_Fortran_LIBRARIES})
+endif()
 
 # Check git and get commit id and branch name
 if(EXISTS ${PROJECT_SOURCE_DIR}/.git)
