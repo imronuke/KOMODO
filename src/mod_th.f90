@@ -465,7 +465,7 @@ module th
 
    !****************************************************************************!
 
-   real(dp) function geths(xden, tc, kv, pr)
+   real(dp) function geths(xden, pr, kv, tc)
       !
       ! Purpose:
       !    To calculate heat transfer coef.
