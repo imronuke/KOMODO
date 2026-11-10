@@ -274,8 +274,10 @@ module io
          write(*, 1041) 'CROD', 'CONTROL ROD'
          stop
       else if (mode /= 'RODEJECT' .and. bejct == 1) then
-         write(ounit, *) '   EJCT CARD IS NOT NECESSARY FOR THIS CALCULATION MODE'
-         write(*, *) '   EJCT CARD IS NOT NECESSARY FOR THIS CALCULATION MODE'
+         write(ounit, *) '   CALCULATION MODE: ' // trim(mode) // &
+         '. EJCT CARD IS NOT NECESSARY FOR THIS CALCULATION MODE'
+         write(*, *) '   CALCULATION MODE: ' // trim(mode) // &
+         '. EJCT CARD IS NOT NECESSARY FOR THIS CALCULATION MODE'
          stop
       else
          continue
@@ -305,8 +307,12 @@ module io
          call inp_ther (uther)
       else if (bther == 1 .and. bxtab == 1) then
          call inp_ther (uther)
-      else if (bther == 0) then
-         continue
+      else if (bther == 0 .and. bxtab == 1) then
+         if (bftem == 0 .or. bmtem == 0 .or. bcden == 0) then
+            write(ounit, *) '   ERROR: %FTEM %MTEM and %CDEN MUST BE ACTIVE'
+            write(*, *) '   ERROR: %FTEM %MTEM and %CDEN MUST BE ACTIVE'
+            stop
+         end if
       else
          if (bxtab /= 1) then
             write(ounit, *) '   ERROR: WHEN %THER CARD PRESENT %FTEM AND,' // &
