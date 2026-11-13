@@ -69,7 +69,7 @@ contains
 
    !******************************************************************************!
 
-   subroutine hdf5_write_step(step, time_s, reactivity, boron_concentration, power_w)
+   subroutine hdf5_write_step(step, time_s, reactivity, boron_concentration, power_w, node_burnup)
 
 #ifdef HDF5_OUTPUT
       use sdata, only: ng, nnod, mode, ke, bcon, bpos, pos0, ssize, ctbeta, &
@@ -81,6 +81,7 @@ contains
       real(dp), optional, intent(in) :: reactivity
       real(dp), optional, intent(in) :: boron_concentration
       real(dp), optional, intent(in) :: power_w
+      real(dp), dimension(:), optional, intent(in) :: node_burnup
 
 #ifdef HDF5_OUTPUT
       integer(HID_T) :: steps_id, step_id, global_id, node_id
@@ -193,6 +194,9 @@ contains
       end if
 
       call write_real_2d(node_id, 'flux', flux)
+      if (present(node_burnup)) then
+         call write_real_1d(node_id, 'burnup_MWd_kgHM', node_burnup)
+      end if
 
       allocate(power_density(nnod))
       if (h5_has_thermal) then

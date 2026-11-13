@@ -14,7 +14,7 @@ This card is used to describe the calculation mode. It has several options as fo
 
 There are some conditions for some calculation modes.
 1. When calculation mode is `FIXEDSRC`, then the [`%ESRC`](https://imronuke.github.io/KOMODO/esrc) card must be present
-2. When calculation mode is `BCSEARCH`, then the [`%CBCS`](https://imronuke.github.io/KOMODO/cbcs) OR [`%XTAB`](https://imronuke.github.io/KOMODO/xtab) card must be present
+2. When calculation mode is `BCSEARCH`, the [`%CBCS`](https://imronuke.github.io/KOMODO/cbcs) card must be present
 3. When calculation mode is `RODEJECT`, then the [`%EJCT`](https://imronuke.github.io/KOMODO/ejct) card must be present
 
 Example:

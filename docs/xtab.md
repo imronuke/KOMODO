@@ -6,7 +6,7 @@ filename: xtab
 
 # %XTAB Card
 
-This card is used for branch calculations. The format library used in KOMODO is in tabular form similar to the ones used in [UO2/MOX Transient Benchmark](https://www.oecd-nea.org/science/wprs/MOX-UOX-transients/benchmark_documents/final_report/mox-uo2-bench.pdf). An example of this library can be seen [here](https://github.com/imronuke/KOMODO/blob/master/smpl/xsec/SERPENT_CMM/m40.tab). This card is conditional : either `%XSEC` or `XTAB` card must be present
+This card is used for branch calculations. The format library used in KOMODO is in tabular form similar to the ones used in [UO2/MOX Transient Benchmark](https://www.oecd-nea.org/science/wprs/MOX-UOX-transients/benchmark_documents/final_report/mox-uo2-bench.pdf). An example of this library can be seen [here](https://github.com/imronuke/KOMODO/blob/master/smpl/xsec/SERPENT_CMM/m40.tab). Exactly one of `%XSEC`, `%XTAB`, or [`%DLIB`](https://imronuke.github.io/KOMODO/dlib) must be present as the cross-section source.
 
 | `%XTAB` | Variable | Description | Remarks |
 | --- | --- | --- | --- |

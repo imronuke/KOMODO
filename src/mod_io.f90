@@ -5,10 +5,13 @@ module io
    ! =======================
 
    use sdata, only: dp
+   use cycle, only: cycle_read_card
+   use refuel, only: refuel_read_card
 
    implicit none
 
    save
+   private :: dlib_names_equal
 
    character(len = 100) :: iname, oname
 
@@ -36,25 +39,28 @@ module io
    integer, parameter :: ucden = 123, ucbcs = 124, uejct = 125, uther = 126
    integer, parameter :: uxtab = 127, ukern = 128, uextr = 129, uthet = 130
    integer, parameter :: uoutp = 131, uvtk = 132, uhf5 = 133
+   integer, parameter :: udlib = 134, udepl = 135, ucycl = 136, urefu = 137
    integer :: bunit
 
    ! Card active/inactive indicator (active = 1, inactive = 0)
    integer :: bmode = 0, bxsec = 0, bgeom = 0, bcase = 0, besrc = 0
    integer :: biter = 0, bprnt = 0, badf = 0, bcrod = 0, bbcon = 0
    integer :: bftem = 0, bmtem = 0, bcden = 0, bcbcs = 0, bejct = 0
-   integer :: bther = 0, bxtab = 0, bkern = 0, bextr = 0, bthet = 0
+   integer :: bther = 0, bxtab = 0, bdlib = 0, bdepl = 0, bcycl = 0, brefu = 0
+   integer :: bkern = 0, bextr = 0, bthet = 0
    integer :: boutp = 0, bvtk = 0, bhf5 = 0
+   logical :: has_lib = .false.
 
    ! This declaration is to notify that the error in separated card file (in case so)
-   integer, parameter :: ncard = 23                  ! Number of card
+   integer, parameter :: ncard = 27                  ! Number of card
    integer, dimension(ncard) :: uarr = &             ! Array of buffer unit number
-   (/umode, uxsec, ugeom, ucase, uesrc, uiter, uprnt, uadf, ucrod, ubcon, &
-   uftem, umtem, ucden, ucbcs, uejct, uther, uxtab, ukern, uextr, uthet, &
-   uoutp, uvtk, uhf5 /)
+      (/umode, uxsec, ugeom, ucase, uesrc, uiter, uprnt, uadf, ucrod, ubcon, &
+      uftem, umtem, ucden, ucbcs, uejct, uther, uxtab, ukern, uextr, uthet, &
+      uoutp, uvtk, uhf5, udlib, udepl, ucycl, urefu /)
    character(len = 4), dimension(ncard) :: carr = &    ! Array of card name
-   (/'MODE', 'XSEC', 'GEOM', 'CASE', 'ESRC', 'ITER', 'PRNT', 'ADF ', 'CROD', 'BCON', &
-   'FTEM', 'MTEM', 'CDEN', 'CBCS', 'EJCT', 'THER', 'XTAB', 'KERN', 'EXTR', 'THET', &
-   'OUTP', 'VTK ', 'HDF5' /)
+      (/'MODE', 'XSEC', 'GEOM', 'CASE', 'ESRC', 'ITER', 'PRNT', 'ADF ', 'CROD', 'BCON', &
+      'FTEM', 'MTEM', 'CDEN', 'CBCS', 'EJCT', 'THER', 'XTAB', 'KERN', 'EXTR', 'THET', &
+      'OUTP', 'VTK ', 'HDF5', 'DLIB', 'DEPL', 'CYCL', 'REFU' /)
    character(len = 100), dimension(:), allocatable :: farr   ! Array of card file
 
    ! Geometry
@@ -87,7 +93,7 @@ module io
       !
 
 
-      use sdata, only: ng, nnod, mode, dc, exsrc
+      use sdata, only: ng, nnod, nx, ny, mode, dc, exsrc
 
       implicit none
 
@@ -135,6 +141,10 @@ module io
       open (unit = uoutp, status = 'SCRATCH', action = 'READWRITE')
       open (unit = uvtk, status = 'SCRATCH', action = 'READWRITE')
       open (unit = uhf5, status = 'SCRATCH', action = 'READWRITE')
+      open (unit = udlib, status = 'SCRATCH', action = 'READWRITE')
+      open (unit = udepl, status = 'SCRATCH', action = 'READWRITE')
+      open (unit = ucycl, status = 'SCRATCH', action = 'READWRITE')
+      open (unit = urefu, status = 'SCRATCH', action = 'READWRITE')
 
       ! By default, card file names are the input file name
       allocate (farr(ncard)) ;
@@ -148,6 +158,33 @@ module io
 
       ! Break the buffer file and re-write into different input card buffer
       call inp_rewrite(buff)
+
+      if (bxsec + bxtab + bdlib /= 1) then
+         write(ounit, *) '   ERROR: EXACTLY ONE OF %XSEC, %XTAB, OR %DLIB MUST BE PRESENT'
+         write(*, *) '   ERROR: EXACTLY ONE OF %XSEC, %XTAB, OR %DLIB MUST BE PRESENT'
+         stop
+      end if
+      if (bdepl == 1 .and. bdlib == 0) then
+         write(ounit, *) '   ERROR: %DEPL REQUIRES %DLIB'
+         write(*, *) '   ERROR: %DEPL REQUIRES %DLIB'
+         stop
+      end if
+      if (bdepl == 1 .and. bther == 0) then
+         write(ounit, *) '   ERROR: %DEPL REQUIRES %THER TO DEFINE FULL REACTOR POWER'
+         write(*, *) '   ERROR: %DEPL REQUIRES %THER TO DEFINE FULL REACTOR POWER'
+         stop
+      end if
+      if (bcycl == 1 .and. (bdepl == 0 .or. bdlib == 0)) then
+         write(ounit, *) '   ERROR: %CYCL REQUIRES %DEPL AND %DLIB'
+         write(*, *) '   ERROR: %CYCL REQUIRES %DEPL AND %DLIB'
+         stop
+      end if
+      if (brefu == 1 .and. bdlib == 0) then
+         write(ounit, *) '   ERROR: %REFU REQUIRES %DLIB'
+         write(*, *) '   ERROR: %REFU REQUIRES %DLIB'
+         stop
+      end if
+      has_lib = (bxtab == 1 .or. bdlib == 1)
 
       ! Back to the first line for all input card buffer
       rewind(umode) ;
@@ -173,6 +210,10 @@ module io
       rewind(uoutp) ;
       rewind(uvtk)
       rewind(uhf5)
+      rewind(udlib)
+      rewind(udepl)
+      rewind(ucycl)
+      rewind(urefu)
 
       ! Start reading buffer files for each input card buffer
 
@@ -187,6 +228,18 @@ module io
          call inp_mode(umode)
       else
          write(ounit, 1021) '%MODE'
+         stop
+      end if
+
+      if (bdlib == 1 .and. mode == 'RODEJECT') then
+         write(ounit, *) '   ERROR: %DLIB IS NOT SUPPORTED IN RODEJECT MODE'
+         write(*, *) '   ERROR: %DLIB IS NOT SUPPORTED IN RODEJECT MODE'
+         stop
+      end if
+
+      if (bdepl == 1 .and. mode /= 'FORWARD' .and. mode /= 'BCSEARCH') then
+         write(ounit, *) '   ERROR: %DEPL IS ONLY VALID FOR FORWARD OR BCSEARCH MODE'
+         write(*, *) '   ERROR: %DEPL IS ONLY VALID FOR FORWARD OR BCSEARCH MODE'
          stop
       end if
 
@@ -208,10 +261,8 @@ module io
          call inp_xsec(uxsec)
       else if (bxtab == 1) then
          call inp_xtab(uxtab)
-      else
-         write(ounit, 1021) '%XSEC OR %XTAB'
-         write(*, 1021) '%XSEC OR %XTAB'
-         stop
+      else if (bdlib == 1) then
+         call inp_dlib(udlib)
       end if
 
       ! Card GEOM
@@ -230,7 +281,7 @@ module io
       ! Card CBCS
       if (mode == 'BCSEARCH' .and. bcbcs == 1) then
          call inp_cbcs(ucbcs)
-      else if (mode == 'BCSEARCH' .and. bcbcs == 0 .and. bxtab == 0) then
+      else if (mode == 'BCSEARCH' .and. bcbcs == 0) then
          write(ounit, *) '   ERROR: CALCULATION MODE IS CRITICAL BORON CONCENTRATION SEARCH'
          write(ounit, 1041) 'CBCS', 'CRITICAL BORON CONCENTRATION SEARCH'
          write(*, *) '   ERROR: CALCULATION MODE IS CRITICAL BORON CONCENTRATION SEARCH'
@@ -257,6 +308,7 @@ module io
 
       !CARD CROD
       if (bcrod == 1) call inp_crod (ucrod)
+      if (bdepl == 1) call inp_depl(udepl)
 
       ! Card EJCT (Rod Ejection)
       if (mode == 'RODEJECT' .and. bejct == 1 .and. bcrod == 1) then
@@ -288,6 +340,12 @@ module io
       ! Miscellaneous things
       call misc()
 
+      ! Card CYCL: retain the map and output path for the final cycle state.
+      if (bcycl == 1) call cycle_read_card(ucycl, nx, ny, ounit, scr)
+
+      ! Card REFU: read the prior-cycle path and the assembly source map.
+      if (brefu == 1) call refuel_read_card(urefu, nx, ny, ounit, scr)
+
       ! Card ITER
       if (biter == 1) call inp_iter (uiter)
 
@@ -305,24 +363,22 @@ module io
          stop
       else if (bther == 1 .and. bftem == 1 .and. (bmtem == 1 .or. bcden == 1)) then
          call inp_ther (uther)
-      else if (bther == 1 .and. bxtab == 1) then
+      else if (bther == 1 .and. has_lib) then
          call inp_ther (uther)
-      else if (bther == 0 .and. bxtab == 1) then
+      else if (bther == 0 .and. has_lib) then
          if (bftem == 0 .or. bmtem == 0 .or. bcden == 0) then
             write(ounit, *) '   ERROR: %FTEM %MTEM and %CDEN MUST BE ACTIVE'
             write(*, *) '   ERROR: %FTEM %MTEM and %CDEN MUST BE ACTIVE'
             stop
          end if
-      else
-         if (bxtab /= 1) then
-            write(ounit, *) '   ERROR: WHEN %THER CARD PRESENT %FTEM AND,' // &
-            'AT LEAST ONE OF THE FOLLOWING CARDS MUST PRESENT'
-            write(ounit, *) '   1. %MTEM   2. %CDEN'
-            write(*, *) '   ERROR: WHEN %THER CARD PRESENT %FTEM AND,' // &
-            'AT LEAST ONE OF THE FOLLOWING CARDS MUST PRESENT'
-            write(*, *) '   1. %MTEM   2. %CDEN'
-            stop
-         end if
+      else if (bther == 1 .and. .not. has_lib) then
+         write(ounit, *) '   ERROR: WHEN %THER CARD PRESENT, %FTEM AND,' // &
+         'AT LEAST ONE OF THE FOLLOWING CARDS MUST PRESENT'
+         write(ounit, *) '   1. %MTEM   2. %CDEN'
+         write(*, *) '   ERROR: WHEN %THER CARD PRESENT, %FTEM AND,' // &
+         'AT LEAST ONE OF THE FOLLOWING CARDS MUST PRESENT'
+         write(*, *) '   1. %MTEM   2. %CDEN'
+         stop
       end if
 
       if (bextr == 1) call inp_extr()
@@ -348,11 +404,11 @@ module io
          end do
       end do
 
-      if (badf == 1 .and. bxtab == 0) then
+      if (badf == 1 .and. .not. has_lib) then
          call inp_adf (uadf)
-      else if (badf == 1 .and. bxtab == 1) then
-         write(ounit, *) '  BOTH %ADF AND %XTAB CARDS CANNOT PRESENT TOGETHER'
-         write(*, *) '  BOTH %ADF AND %XTAB CARDS CANNOT PRESENT TOGETHER'
+      else if (badf == 1 .and. has_lib) then
+         write(ounit, *) '  %ADF CANNOT BE USED WITH %XTAB OR %DLIB'
+         write(*, *) '  %ADF CANNOT BE USED WITH %XTAB OR %DLIB'
          stop
       else
          continue
@@ -423,6 +479,10 @@ module io
       close(unit = uthet)
       close(unit = uoutp) ;
       close(unit = uvtk)
+      close(unit = udlib)
+      close(unit = udepl)
+      close(unit = ucycl)
+      close(unit = urefu)
       close(unit = buff)
 
 
@@ -572,16 +632,19 @@ module io
       integer :: eof, per, comm
       character(len = 100) :: fname    ! Card File name
       character(len = 4) :: card    ! Card name
+      logical, dimension(ncard) :: seen_cards
       integer, parameter :: cunit = 996  !XTAB file unit number
       integer, parameter :: xunit = 997  !XTAB Buffer unit number
 
+      seen_cards = .false.
       do
          per = 0
          read (buffer, '(A2,I5,A200)', iostat = eof) ind, ln, iline
          if (eof < 0) exit                                                   !Check end of file
 
          ! If the card is placed in a separated file as indicated by keyword FILE
-         if (index(iline, 'FILE') > 0 .or. index(iline, 'file') > 0) then
+         if (index(adjustl(iline), 'FILE ') == 1 .or. &
+             index(adjustl(iline), 'file ') == 1) then
             backspace(buffer)
             read (buffer, '(A2,I5,A200)') ind, ln, iline
             iline = adjustl(iline)                                             ! Adjust to left
@@ -605,6 +668,7 @@ module io
             iline = iline(per + 1:200)
             iline = trim(adjustl(iline))
             card = trim(iline)
+            call check_card_once(card, seen_cards)
             select case (card)
                case('MODE') ;
                   bunit = umode;
@@ -657,6 +721,18 @@ module io
                case('XTAB') ;
                   bunit = uxtab;
                   bxtab = 1
+               case('DLIB') ;
+                  bunit = udlib;
+                  bdlib = 1
+               case('DEPL') ;
+                  bunit = udepl;
+                  bdepl = 1
+               case('CYCL') ;
+                  bunit = ucycl;
+                  bcycl = 1
+               case('REFU') ;
+                  bunit = urefu;
+                  brefu = 1
                case('KERN') ;
                   bunit = ukern;
                   bkern = 1
@@ -690,6 +766,28 @@ module io
       1019 format(a2, i5, ' ', a200)
 
    end subroutine inp_rewrite
+
+   !******************************************************************************!
+
+   subroutine check_card_once(card, seen_cards)
+      implicit none
+
+      character(len = *), intent(in) :: card
+      logical, dimension(ncard), intent(inout) :: seen_cards
+      integer :: i
+
+      do i = 1, ncard
+         if (trim(card) /= trim(carr(i))) cycle
+         if (seen_cards(i)) then
+            write(ounit, *) '   ERROR: CARD %' // trim(card) // ' MAY ONLY APPEAR ONCE'
+            write(*, *) '   ERROR: CARD %' // trim(card) // ' MAY ONLY APPEAR ONCE'
+            stop
+         end if
+         seen_cards(i) = .true.
+         return
+      end do
+
+   end subroutine check_card_once
 
    !******************************************************************************!
 
@@ -2384,7 +2482,7 @@ module io
          end do
       end do
 
-      if (bxtab == 1) then  !IF XTAB FILE PRESENT
+      if (has_lib) then  ! External XS library present
          allocate(dsigtr(nnod, ng))
          allocate(dsiga (nnod, ng))
          allocate(dnuf (nnod, ng))
@@ -2433,7 +2531,7 @@ module io
             write(ounit, '(100I3)') (bmap(i, j), i = 1, nx)
          end do
 
-         if (bxtab == 0) then  ! If xtab file present
+         if (.not. has_lib) then
             write(ounit, *)
             write(ounit, *) ' MATERIAL CX INCREMENT OR DECREMENT DUE TO CR INSERTION : '
             do i = 1, nmat
@@ -2676,7 +2774,7 @@ module io
       message = ' error in reading bc guess and bc reference'
       call er_message(ounit, ios, ln, message, buf = xbunit)
 
-      if (bxtab == 0) then  ! IF XTAB File does not present
+      if (.not. has_lib) then
          allocate(csigtr(nmat, ng))
          allocate(csiga (nmat, ng))
          allocate(cnuf (nmat, ng))
@@ -2699,7 +2797,7 @@ module io
       if (ios == 0 .and. popt > 0) then
 
          write(ounit, 1422) rbcon
-         if (bxtab == 0) then  ! IF XTAB File does not present
+         if (.not. has_lib) then
             write(ounit, *)
             write(ounit, *) ' MATERIAL CX CHANGES PER PPM BORON CHANGES : '
             do i = 1, nmat
@@ -2764,7 +2862,7 @@ module io
       message = ' error in reading boron concentration and boron concentration reference'
       call er_message(ounit, ios, ln, message, buf = xbunit)
 
-      if (bxtab == 0) then  ! If xtab file present
+      if (.not. has_lib) then
          ! Read CX changes per ppm born change
          allocate(csigtr(nmat, ng))
          allocate(csiga (nmat, ng))
@@ -2788,7 +2886,7 @@ module io
          write(ounit, 1221) bcon
          write(ounit, 1222) rbcon
 
-         if (bxtab == 0) then  ! If xtab file present
+         if (.not. has_lib) then
             write(ounit, *)
             write(ounit, *) ' MATERIAL CX CHANGES PER PPM BORON CHANGES : '
             do i = 1, nmat
@@ -2860,7 +2958,7 @@ module io
       if (bther == 0) allocate (ftem(nnod))
       ftem = cftem   !Initial guess for fuel temperature
 
-      if (bxtab == 0) then  ! IF XTAB File does not present
+      if (.not. has_lib) then
          ! Read CX changes fuel temperature change
          allocate(fsigtr(nmat, ng), fsiga(nmat, ng), fnuf(nmat, ng), fsigf(nmat, ng), fsigs(nmat, ng, ng))
          do i = 1, nmat
@@ -2884,7 +2982,7 @@ module io
          end if
          write(ounit, 1242) rftem
 
-         if (bxtab == 0) then  ! IF XTAB File does not present
+         if (.not. has_lib) then
             write(ounit, *)
             write(ounit, *) ' MATERIAL CX CHANGES PER FUEL TEMPERATURE CHANGES : '
             do i = 1, nmat
@@ -2957,7 +3055,7 @@ module io
       if (bther == 0) allocate (mtem(nnod))
       mtem = cmtem
 
-      if (bxtab == 0) then  ! IF XTAB File does not present
+      if (.not. has_lib) then
          ! Read CX changes per moderator temperature change
          allocate(msigtr(nmat, ng), msiga(nmat, ng), mnuf(nmat, ng), msigf(nmat, ng), msigs(nmat, ng, ng))
          do i = 1, nmat
@@ -2980,7 +3078,7 @@ module io
             write(ounit, 1276) cmtem
          end if
          write(ounit, 1262) rmtem
-         if (bxtab == 0) then  ! IF XTAB File does not present
+         if (.not. has_lib) then
             write(ounit, *)
             write(ounit, *) ' MATERIAL CX CHANGES PER MODERATOR TEMPERATURE CHANGES : '
             do i = 1, nmat
@@ -3054,7 +3152,7 @@ module io
       if (bther == 0) allocate (cden(nnod))
       cden = ccden
 
-      if (bxtab == 0) then  ! IF XTAB File does not present
+      if (.not. has_lib) then
          ! Read CX changes per Coolant Density change
          allocate(lsigtr(nmat, ng), lsiga(nmat, ng), lnuf(nmat, ng), lsigf(nmat, ng), lsigs(nmat, ng, ng))
          do i = 1, nmat
@@ -3077,7 +3175,7 @@ module io
             write(ounit, 1376) ccden
          end if
          write(ounit, 1362) rcden
-         if (bxtab == 0) then  ! IF XTAB File does not present
+         if (.not. has_lib) then
             write(ounit, *)
             write(ounit, *) ' MATERIAL CX CHANGES PER COOLANT DENSITY CHANGES : '
             do i = 1, nmat
@@ -3264,7 +3362,7 @@ module io
       ! Guess fuel and moderator temperature
       allocate(tfm(nnod, nt + 1)) ! Allocate fuel pin mesh temperature
       tfm = 900.                !Initial guess for radial fuel pin temperature distribution
-      if (bxtab == 1) then
+      if (has_lib) then
          ftem = 900. ;
          cden = 0.711;
          mtem = 500.
@@ -4334,6 +4432,301 @@ module io
       end do
 
    end subroutine flux_atpower
+
+   !******************************************************************************!
+
+   subroutine inp_dlib(xbunit)
+      !
+      ! Purpose:
+      !    To read %DLIB library and material mapping data before geometry.
+      !
+
+      use sdata, only: ng, nmat, dlib_library, dlib_composition_id, dlib_initial_burnup
+
+      implicit none
+
+      integer, intent(in) :: xbunit
+      integer :: ln, ios, i, j, library_ng, name_matches
+      integer, dimension(:), allocatable :: library_compositions
+      character(len = 64), dimension(:), allocatable :: library_composition_names
+      character(len = 64) :: composition_name
+
+      write(ounit, *)
+      write(ounit, *) '           >>>> READING DEPLETION LIBRARY INPUT <<<<'
+      write(ounit, *) '           ----------------------------------------'
+
+      read(xbunit, '(A2,I5,A200)', iostat = ios) ind, ln, iline
+      message = ' error in reading depletion library path'
+      call er_message(ounit, ios, ln, message, buf = xbunit)
+      dlib_library = trim(adjustl(iline))
+      if (len_trim(dlib_library) == 0) call dlib_error('library path cannot be empty')
+
+      call read_dlib_library_header(dlib_library, library_ng, library_compositions, &
+         library_composition_names)
+      ng = library_ng
+
+      read(xbunit, *, iostat = ios) ind, ln, nmat
+      message = ' error in reading number of depletion material mappings'
+      call er_message(ounit, ios, ln, message, buf = xbunit)
+      if (nmat < 1) call dlib_error('NMAT must be positive')
+
+      allocate(dlib_composition_id(nmat), dlib_initial_burnup(nmat))
+      do i = 1, nmat
+         read(xbunit, *, iostat = ios) ind, ln, &
+            composition_name, dlib_initial_burnup(i)
+         message = ' error in reading depletion material name and initial burnup'
+         call er_message(ounit, ios, ln, message, buf = xbunit)
+
+         name_matches = 0
+         do j = 1, size(library_composition_names)
+            if (.not. dlib_names_equal(composition_name, library_composition_names(j))) cycle
+            dlib_composition_id(i) = library_compositions(j)
+            name_matches = name_matches + 1
+         end do
+         if (name_matches == 0) then
+            call dlib_error('material name is not present in the depletion library')
+         else if (name_matches > 1) then
+            call dlib_error('material name is ambiguous in the depletion library')
+         end if
+         if (.not. (dlib_initial_burnup(i) >= 0._dp .and. &
+            dlib_initial_burnup(i) <= huge(dlib_initial_burnup(i)))) then
+            call dlib_error('initial burnup must be finite and nonnegative')
+         end if
+      end do
+      deallocate(library_compositions)
+      deallocate(library_composition_names)
+
+      write(ounit, *) ' DEPLETION LIBRARY  : ', trim(dlib_library)
+      write(ounit, *) ' ENERGY GROUPS      : ', ng
+      write(ounit, *) ' MATERIAL MAPPINGS  : ', nmat
+      write(ounit, *) ' ...Depletion library input is successfully read...'
+
+   end subroutine inp_dlib
+
+   !******************************************************************************!
+
+   subroutine inp_depl(xbunit)
+      ! Read and validate the %DEPL schedule after %CROD establishes NB.
+
+      use sdata, only: nb, nstep, n_depl_intervals, depl_days, depl_power_percent, depl_bank_step
+
+      implicit none
+
+      integer, intent(in) :: xbunit
+      integer :: ln
+      integer :: nbank, i, j, ios, extra_ios
+      real(dp) :: extra_value
+      character(len = 200) :: row
+
+      read(xbunit, *, iostat = ios) ind, ln, n_depl_intervals
+      message = ' error in reading number of depletion intervals'
+      call er_message(ounit, ios, ln, message, buf = xbunit)
+      if (n_depl_intervals < 1) call depl_error('N-INTERVALS must be positive')
+
+      nbank = 0
+      if (bcrod == 1) nbank = nb
+
+      allocate(depl_days(n_depl_intervals), depl_power_percent(n_depl_intervals))
+      allocate(depl_bank_step(nbank, n_depl_intervals))
+
+      do i = 1, n_depl_intervals
+         read(xbunit, '(A2,I5,A200)', iostat = ios) ind, ln, iline
+         message = ' error in reading depletion interval schedule'
+         call er_message(ounit, ios, ln, message, buf = xbunit)
+         row = trim(adjustl(iline))
+         if (index(row, '/') > 0) call depl_error('slash is not valid in a schedule row')
+
+         read(row, *, iostat = ios) depl_days(i), depl_power_percent(i), &
+            (depl_bank_step(j, i), j = 1, nbank)
+         if (ios /= 0) call depl_error('schedule row has too few or invalid values')
+
+         ! The extra read detects rows with more bank positions than %CROD declares.
+         read(row, *, iostat = extra_ios) depl_days(i), depl_power_percent(i), &
+            (depl_bank_step(j, i), j = 1, nbank), extra_value
+         if (extra_ios == 0) call depl_error('schedule row has more values than expected')
+         if (extra_ios > 0) call depl_error('schedule row contains an invalid value')
+
+         if (.not. (depl_days(i) > 0._dp .and. depl_days(i) <= huge(depl_days(i)))) then
+            call depl_error('interval duration must be finite and positive')
+         end if
+         if (.not. (depl_power_percent(i) > 0._dp .and. depl_power_percent(i) <= 100._dp)) then
+            call depl_error('power level must be greater than 0 and no more than 100 percent')
+         end if
+         do j = 1, nbank
+            if (.not. (depl_bank_step(j, i) >= 0._dp .and. &
+               depl_bank_step(j, i) <= nstep)) then
+               call depl_error('bank position is outside the %CROD step range')
+            end if
+         end do
+      end do
+
+      write(ounit, *) ' DEPLETION INTERVALS: ', n_depl_intervals
+      write(ounit, *) ' ...Depletion schedule input is successfully read...'
+
+   end subroutine inp_depl
+
+   !******************************************************************************!
+
+   subroutine read_dlib_library_header(path, library_ng, compositions, composition_names)
+      ! Read the version, group count, material IDs, and names without parsing XS curves.
+
+      implicit none
+
+      character(len = *), intent(in) :: path
+      integer, intent(out) :: library_ng
+      integer, dimension(:), allocatable, intent(out) :: compositions
+      character(len = 64), dimension(:), allocatable, intent(out) :: composition_names
+
+      integer, parameter :: dlib_unit = 998
+      integer :: ios, version, ncomposition, composition_id, i, j, line_ng
+      logical :: found_magic, found_groups, found_end
+      integer, dimension(:), allocatable :: composition_buffer
+      character(len = 64), dimension(:), allocatable :: composition_name_buffer
+      character(len = 4096) :: line
+      character(len = 64) :: keyword, composition_name, material_kind
+
+      open(unit = dlib_unit, file = trim(path), status = 'OLD', &
+         action = 'READ', iostat = ios)
+      if (ios /= 0) call dlib_error('cannot open depletion library: ' // trim(path))
+
+      found_magic = .false.
+      found_groups = .false.
+      found_end = .false.
+      ncomposition = 0
+      library_ng = 0
+      allocate(compositions(16), composition_names(16))
+
+      do
+         read(dlib_unit, '(A)', iostat = ios) line
+         if (ios < 0) exit
+         if (ios /= 0) call dlib_error('error reading depletion library header')
+         line = adjustl(line)
+         if (len_trim(line) == 0 .or. line(1:1) == '#') cycle
+
+         if (.not. found_magic) then
+            read(line, *, iostat = ios) keyword, version
+            if (ios /= 0) call dlib_error('invalid depletion library signature')
+            if (trim(keyword) /= 'KOMODO_DEPL' .or. version /= 1) then
+               call dlib_error('unsupported library format; expected KOMODO_DEPL 1')
+            end if
+            found_magic = .true.
+            cycle
+         end if
+
+         read(line, *, iostat = ios) keyword
+         if (ios /= 0) cycle
+         select case (trim(keyword))
+          case ('GROUPS')
+            if (found_groups) call dlib_error('duplicate GROUPS entry in library')
+            read(line, *, iostat = ios) keyword, line_ng
+            if (ios /= 0) call dlib_error('invalid GROUPS entry in library')
+            if (line_ng < 1) call dlib_error('GROUPS must be positive')
+            library_ng = line_ng
+            found_groups = .true.
+          case ('MATERIAL')
+            if (.not. found_groups) call dlib_error('GROUPS must precede MATERIAL entries')
+            read(line, *, iostat = ios) keyword, composition_id, &
+               composition_name, material_kind
+            if (ios /= 0) call dlib_error('invalid MATERIAL entry in library')
+            if (composition_id < 1) call dlib_error('library composition IDs must be positive')
+            if (trim(material_kind) /= 'FUEL' .and. trim(material_kind) /= 'REFLECTOR') then
+               call dlib_error('MATERIAL kind must be FUEL or REFLECTOR')
+            end if
+            if (len_trim(composition_name) == 0) call dlib_error('MATERIAL name cannot be empty')
+            if (ncomposition == size(compositions)) then
+               allocate(composition_buffer(2 * size(compositions)))
+               composition_buffer(1:ncomposition) = compositions(1:ncomposition)
+               call move_alloc(composition_buffer, compositions)
+               allocate(composition_name_buffer(2 * size(composition_names)))
+               composition_name_buffer(1:ncomposition) = composition_names(1:ncomposition)
+               call move_alloc(composition_name_buffer, composition_names)
+            end if
+            ncomposition = ncomposition + 1
+            compositions(ncomposition) = composition_id
+            composition_names(ncomposition) = composition_name
+          case ('END_LIBRARY')
+            found_end = .true.
+            exit
+          case default
+            continue
+         end select
+      end do
+
+      if (.not. found_magic) call dlib_error('depletion library is empty')
+      if (.not. found_groups) call dlib_error('GROUPS entry is missing from library')
+      if (.not. found_end) call dlib_error('END_LIBRARY entry is missing from library')
+      if (ncomposition < 1) call dlib_error('library has no MATERIAL entries')
+      close(dlib_unit)
+
+      if (ncomposition < size(compositions)) then
+         allocate(composition_buffer(ncomposition))
+         composition_buffer = compositions(1:ncomposition)
+         call move_alloc(composition_buffer, compositions)
+         allocate(composition_name_buffer(ncomposition))
+         composition_name_buffer = composition_names(1:ncomposition)
+         call move_alloc(composition_name_buffer, composition_names)
+      end if
+
+      do i = 1, ncomposition
+         do j = 1, i - 1
+            if (compositions(i) == compositions(j)) then
+               call dlib_error('duplicate MATERIAL composition ID in library')
+            end if
+            if (dlib_names_equal(composition_names(i), composition_names(j))) then
+               call dlib_error('duplicate MATERIAL composition name in library')
+            end if
+         end do
+      end do
+
+   end subroutine read_dlib_library_header
+
+   !******************************************************************************!
+
+   logical function dlib_names_equal(left_name, right_name)
+      implicit none
+
+      character(len = *), intent(in) :: left_name, right_name
+      character(len = len(left_name)) :: normalized_left
+      character(len = len(right_name)) :: normalized_right
+      integer :: i, left_char, right_char, name_length
+
+      normalized_left = adjustl(left_name)
+      normalized_right = adjustl(right_name)
+      name_length = len_trim(normalized_left)
+      dlib_names_equal = .false.
+      if (name_length /= len_trim(normalized_right)) return
+
+      do i = 1, name_length
+         left_char = iachar(normalized_left(i:i))
+         right_char = iachar(normalized_right(i:i))
+         if (left_char >= iachar('A') .and. left_char <= iachar('Z')) left_char = left_char + 32
+         if (right_char >= iachar('A') .and. right_char <= iachar('Z')) right_char = right_char + 32
+         if (left_char /= right_char) return
+      end do
+      dlib_names_equal = .true.
+   end function dlib_names_equal
+
+   !******************************************************************************!
+
+   subroutine depl_error(error_text)
+      implicit none
+      character(len = *), intent(in) :: error_text
+
+      write(ounit, *) '   ERROR: %DEPL ', trim(error_text)
+      write(*, *) '   ERROR: %DEPL ', trim(error_text)
+      stop
+   end subroutine depl_error
+
+   !******************************************************************************!
+
+   subroutine dlib_error(error_text)
+      implicit none
+      character(len = *), intent(in) :: error_text
+
+      write(ounit, *) '   ERROR: %DLIB ', trim(error_text)
+      write(*, *) '   ERROR: %DLIB ', trim(error_text)
+      stop
+   end subroutine dlib_error
 
    !******************************************************************************!
 

@@ -10,7 +10,7 @@ if(GPU)
    set(CMAKE_Fortran_COMPILER nvfortran )
 else()
    if(DEBUG)
-      set(CMAKE_Fortran_FLAGS "-cpp -fbacktrace -g -pedantic -fbounds-check -ffpe-trap=invalid,overflow,underflow")
+      set(CMAKE_Fortran_FLAGS "-cpp -fbacktrace -Wall -g -pedantic -fbounds-check -ffpe-trap=invalid,overflow,underflow")
       set(CMAKE_Fortran_COMPILER gfortran )
    else()
       set(CMAKE_Fortran_FLAGS "-cpp -O4")
@@ -20,7 +20,7 @@ endif()
 
 project(komodo Fortran)
 
-file(GLOB SRC_sc ${PROJECT_SOURCE_DIR}/src/*.f90 )
+file(GLOB SRC_sc CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/src/*.f90 )
 add_executable(komodo ${SRC_sc})
 
 if(HDF5_OUTPUT)
