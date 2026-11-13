@@ -11,6 +11,14 @@ character(LEN=100) :: mode
 integer :: ng     ! number of groups
 integer :: nmat   ! number of materials
 
+! %DLIB and %DEPL inputs shared with the depletion calculation.
+character(len = 200) :: dlib_library
+integer :: n_depl_intervals = 0
+integer, dimension(:), allocatable :: dlib_composition_id
+real(dp), dimension(:), allocatable :: dlib_initial_burnup
+real(dp), dimension(:), allocatable :: depl_days, depl_power_percent
+real(dp), dimension(:, :), allocatable :: depl_bank_step
+
 ! XSECs Assigned to Nodes
 real(dp), dimension(:,:), allocatable :: sigtr          ! Transport macroscopic XSEC
 real(dp), dimension(:,:), allocatable :: siga           ! Absorption macroscopic XSEC
@@ -110,15 +118,15 @@ real(dp), dimension(:,:), allocatable :: lsigtr, lsiga, lnuf, lsigf   ! XSEC cha
 real(dp), dimension(:,:,:), allocatable :: lsigs
 
 ! Crod changes
-integer :: nb                                                     ! Number of CR banks
-real(dp), dimension(:), allocatable :: bpos  ! CR bank position
-real(dp), dimension(:), allocatable :: fbpos    ! Final CR bank position
+integer :: nb = 0                                ! Number of CR banks
+real(dp), dimension(:), allocatable :: bpos      ! CR bank position
+real(dp), dimension(:), allocatable :: fbpos     ! Final CR bank position
 real(dp), dimension(:,:), allocatable :: dsigtr, dsiga, dnuf, dsigf   ! XSEC incerement or decrement due to CR insertion
 real(dp), dimension(:,:,:), allocatable :: dsigs
 real(dp), dimension(:,:,:), allocatable :: ddc   ! increment or decreent for ADF
-real(dp), dimension(:), allocatable :: tmove    ! Time when CR bank starts moving
-real(dp), dimension(:), allocatable :: bspeed   ! CR bank movement speed
-integer, dimension(:), allocatable :: mdir  ! To indicate CR movement direction (0=do not move, 1=down, 2 = up)
+real(dp), dimension(:), allocatable :: tmove     ! Time when CR bank starts moving
+real(dp), dimension(:), allocatable :: bspeed    ! CR bank movement speed
+integer, dimension(:), allocatable :: mdir       ! To indicate CR movement direction (0=do not move, 1=down, 2 = up)
 real(dp) :: nstep                                         ! Number of steps
 real(dp)    :: coreh                                      ! Core Height
 integer, dimension(:,:), allocatable :: fbmap             ! Radial control rod bank map (node wise)

@@ -2,8 +2,11 @@ program main
 
    use sdata, only: dp, mode, tranw, fdm_time, nod_time, xs_time, &
    inp_time, th_time, get_time
-   use io, only: ounit, scr, inp_read, bther
+   use io, only: ounit, scr, inp_read, bther, bdlib, bdepl, bcycl, brefu
    use control, only: forward, adjoint, fixedsrc, cbsearch, cbsearcht
+   use dlib, only: dlib_initialize
+   use cycle, only: cycle_prepare
+   use depletion, only: depletion_run
    use trans, only: rod_eject, rod_eject_th
    use hdf5_output, only: hdf5_close
 
@@ -22,26 +25,33 @@ program main
       write(*, *) ' reading input ... done'
    end if
 
-   select case(mode)
-      case('FIXEDSRC')
-         call fixedsrc()
-      case('ADJOINT')
-         call adjoint()
-      case('RODEJECT')
-         if (bther == 0) then
-            call rod_eject()
-         else
-            call rod_eject_th()
-         end if
-      case('BCSEARCH')
-         if (bther == 0) then
-            call cbsearch()
-         else
-            call cbsearcht()
-         end if
-      case default
-         call forward()
-   end select
+   if (bdlib == 1) call dlib_initialize(ounit)
+   call cycle_prepare(bcycl == 1, brefu == 1, ounit, scr)
+
+   if (bdepl == 1) then
+      call depletion_run()
+   else
+      select case(mode)
+         case('FIXEDSRC')
+            call fixedsrc()
+         case('ADJOINT')
+            call adjoint()
+         case('RODEJECT')
+            if (bther == 0) then
+               call rod_eject()
+            else
+               call rod_eject_th()
+            end if
+         case('BCSEARCH')
+            if (bther == 0) then
+               call cbsearch()
+            else
+               call cbsearcht()
+            end if
+         case default
+            call forward()
+      end select
+   end if
 
    if (tranw) then
       write(ounit, *)

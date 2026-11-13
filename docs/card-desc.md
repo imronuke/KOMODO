@@ -79,8 +79,12 @@ KOMODO has several input cards. Card is a keyword marked with `%`. Each card can
 | 15. | [`%CBCS`](https://imronuke.github.io/KOMODO/cbcs) | Critical boron concentration input card | Conditional |
 | 16. | [`%THER`](https://imronuke.github.io/KOMODO/ther) | TH input card | Conditional |
 | 17. | [`%XTAB`](https://imronuke.github.io/KOMODO/xtab) | XSEC library for branch calculations | Conditional |
-| 18. | [`%KERN`](https://imronuke.github.io/KOMODO/kern) | Nodal kernel options | Optional |
-| 19. | [`%EXTR`](https://imronuke.github.io/KOMODO/extr) | Exponential flux transformation option card for transient problem | Optional |
-| 20. | [`%THET`](https://imronuke.github.io/KOMODO/thet) | Used to set theta value for transient problem | Optional |
-| 21. | [`%OUTP`](https://imronuke.github.io/KOMODO/outp) | Used to produce detailed 3D power | Optional |
-| 22. | [`%VTK`](https://imronuke.github.io/KOMODO/vtk) | Used to generate a vtk file for visualization | Optional |
+| 18. | [`%DLIB`](https://imronuke.github.io/KOMODO/dlib) | Depletion cross-section library and material mapping | Conditional |
+| 19. | [`%DEPL`](https://imronuke.github.io/KOMODO/depl) | Depletion operating schedule | Conditional |
+| 20. | [`%CYCL`](https://imronuke.github.io/KOMODO/cycl) | Save a depletion cycle state and assembly burnup map | Requires `%DEPL` and `%DLIB` |
+| 21. | [`%REFU`](https://imronuke.github.io/KOMODO/refu) | Load and transfer a previous cycle's node-wise fuel state | Requires `%DLIB` |
+| 22. | [`%KERN`](https://imronuke.github.io/KOMODO/kern) | Nodal kernel options | Optional |
+| 23. | [`%EXTR`](https://imronuke.github.io/KOMODO/extr) | Exponential flux transformation option card for transient problem | Optional |
+| 24. | [`%THET`](https://imronuke.github.io/KOMODO/thet) | Used to set theta value for transient problem | Optional |
+| 25. | [`%OUTP`](https://imronuke.github.io/KOMODO/outp) | Used to produce detailed 3D power | Optional |
+| 26. | [`%VTK`](https://imronuke.github.io/KOMODO/vtk) | Used to generate a vtk file for visualization | Optional |

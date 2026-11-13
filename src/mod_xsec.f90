@@ -1,7 +1,8 @@
 module xsec
 
    use sdata, only: dp
-   use io, only: bbcon, bftem, bmtem, bcden, bcrod, bcbcs, bxtab, ounit
+   use io, only: bbcon, bftem, bmtem, bcden, bcrod, bcbcs, bxtab, bdlib, ounit
+   use dlib, only: dlib_xs_updt
    implicit none
    save
 
@@ -42,23 +43,24 @@ module xsec
 
       st = get_time()
 
-      if (bxtab == 0) then
+      if (bdlib == 1) then
+         call dlib_xs_updt(xbcon, xftem, xmtem, xbpos)
+      else if (bxtab == 0) then
          call base_updt()
          if (bbcon == 1 .or. bcbcs == 1) call bcon_updt(xbcon)
          if (bftem == 1) call ftem_updt(xftem)
          if (bmtem == 1) call mtem_updt(xmtem)
          if (bcden == 1) call cden_updt(xcden)
          if (bcrod == 1) call crod_updt(xbpos)
-         call dsigr_updt()
       else
          do n = 1, nnod
             call brinterp(0, mat(n), xcden(n), xbcon, xftem(n), xmtem(n), sigtr(n, :), &
             siga(n, :), nuf(n, :), sigf(n, :), sigs(n, :, :), dc(n, :, :))
          end do
          if (bcrod == 1) call crod_tab_updt(xbpos)
-         call dsigr_updt()
       end if
 
+      call dsigr_updt()
       call check_xs()
 
       fn = get_time()
